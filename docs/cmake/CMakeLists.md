@@ -158,9 +158,9 @@ PSTK_BUILD_PACKET_TOOL=OFF
 
 현재 `tools/packet/CMakeLists.txt`에 실제 target이 없다면 Packet Tool 옵션이 `ON`이어도 아직 DLL은 생성되지 않는다.
 
-## 루트에 아직 작성하지 않은 설정
+## Packet target에 둔 설정
 
-다음 설정은 각 target의 요구사항이므로 루트 전역 설정보다 `tools/packet/CMakeLists.txt`의 Packet target에 지정할 예정이다.
+다음 설정은 각 target의 요구사항이므로 루트 전역 설정이 아니라 `tools/packet/CMakeLists.txt`의 Packet target에 지정한다.
 
 ```cmake
 add_library(pstk_packet SHARED ...)
@@ -176,6 +176,8 @@ target_compile_features(
 - `target_compile_features(... cxx_std_17)`: Packet target이 요구하는 최소 C++ 표준 선언
 
 전역 `CMAKE_CXX_STANDARD`나 `BUILD_SHARED_LIBS`에 의존하지 않고 target별 요구사항을 명시하면, 앞으로 추가될 다른 툴과 내부 라이브러리의 설정이 불필요하게 결합되지 않는다.
+
+현재 Packet target의 전체 구성은 [`PacketTarget.md`](PacketTarget.md)에서 설명한다.
 
 ## 복기 체크
 

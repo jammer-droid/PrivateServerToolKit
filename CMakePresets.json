@@ -13,6 +13,7 @@
             "binaryDir": "${sourceDir}/out/build/${presetName}",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
                 "PSTK_BUILD_PACKET_TOOL": "ON",
                 "BUILD_TESTING": "ON"
             }

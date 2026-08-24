@@ -2,6 +2,7 @@
 
 - [`CMakeLists.md`](CMakeLists.md): 루트 `CMakeLists.txt`에 작성한 명령의 의미
 - [`CMakePreset.md`](CMakePreset.md): `CMakePresets.json`에 작성한 프리셋의 의미
+- [`PacketTarget.md`](PacketTarget.md): Packet DLL target, export header, visibility와 DLL 소비 흐름
 
 ## CMake가 담당하는 것
 
@@ -141,7 +142,7 @@ ctest --preset test-dev --output-on-failure
 - Packet Tool을 `PSTK_BUILD_PACKET_TOOL` 옵션으로 포함하거나 제외할 수 있다.
 - 테스트는 `BUILD_TESTING` 옵션으로 포함하거나 제외할 수 있다.
 
-아직 Packet DLL target과 테스트 실행 파일이 정의되지 않았다면 build와 test 단계에서 생성하거나 실행할 대상이 없는 것이 정상이다.
+현재 Packet DLL target은 정의되어 있으므로 build 단계에서 플랫폼에 맞는 shared library가 생성되어야 한다. 테스트 실행 파일은 별도 test target이 등록된 뒤부터 CTest로 실행할 수 있다.
 
 ## 공식 참고 자료
 
