@@ -54,12 +54,12 @@ project(
 
 프로젝트의 기본 정보를 CMake에 등록한다.
 
-| 항목 | 의미 |
-|---|---|
-| `PrivateServerToolKit` | 프로젝트 이름 |
-| `VERSION 0.1.0` | 프로젝트 버전 |
-| `DESCRIPTION` | 프로젝트 설명 |
-| `LANGUAGES CXX` | C++ 컴파일러가 필요한 프로젝트임을 선언 |
+| 항목                   | 의미                                    |
+| ---------------------- | --------------------------------------- |
+| `PrivateServerToolKit` | 프로젝트 이름                           |
+| `VERSION 0.1.0`        | 프로젝트 버전                           |
+| `DESCRIPTION`          | 프로젝트 설명                           |
+| `LANGUAGES CXX`        | C++ 컴파일러가 필요한 프로젝트임을 선언 |
 
 이 명령 이후 CMake는 현재 환경에서 사용할 C++ 컴파일러를 탐색한다. 버전 정보는 `PROJECT_VERSION`, `PROJECT_VERSION_MAJOR` 같은 CMake 변수로도 사용할 수 있다.
 
@@ -83,11 +83,11 @@ option(<변수 이름> <사용자 설명> <최초 기본값>)
 
 현재 값의 의미는 다음과 같다.
 
-| 항목 | 값 |
-|---|---|
-| 변수 이름 | `PSTK_BUILD_PACKET_TOOL` |
-| 설명 | `Build the packet tool` |
-| 최초 기본값 | `ON` |
+| 항목        | 값                       |
+| ----------- | ------------------------ |
+| 변수 이름   | `PSTK_BUILD_PACKET_TOOL` |
+| 설명        | `Build the packet tool`  |
+| 최초 기본값 | `ON`                     |
 
 `ON`은 Packet Tool을 즉시 컴파일하라는 뜻이 아니다. 이번 CMake 구성에 Packet Tool 하위 프로젝트를 포함할지를 결정한다.
 
