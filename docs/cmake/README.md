@@ -2,7 +2,8 @@
 
 - [`CMakeLists.md`](CMakeLists.md): 루트 `CMakeLists.txt`에 작성한 명령의 의미
 - [`CMakePreset.md`](CMakePreset.md): `CMakePresets.json`에 작성한 프리셋의 의미
-- [`PacketTarget.md`](PacketTarget.md): Packet DLL target, export header, visibility와 DLL 소비 흐름
+- [`PacketTarget.md`](PacketTarget.md): Packet DLL target, public include와 export header 구성
+- [`SharedLibraryBinaryModel.md`](SharedLibraryBinaryModel.md): shared library의 compile-link-load-call 흐름, symbol visibility와 inline 모델
 
 ## CMake가 담당하는 것
 

@@ -7,6 +7,8 @@
 - 현재 build tree의 테스트와 이후 설치된 외부 consumer가 public header를 찾을 수 있는 경계를 준비한다.
 - 내부 C++ symbol을 public ABI에서 제외한다.
 
+번역 단위, object symbol, import library, DLL Export Table, executable IAT와 inline 함수의 일반 원리는 [`SharedLibraryBinaryModel.md`](SharedLibraryBinaryModel.md)에서 별도로 설명한다. 이 문서는 해당 원리가 현재 Packet target에 어떻게 적용됐는지만 다룬다.
+
 ## 현재 target 구성
 
 ```cmake
@@ -313,70 +315,22 @@ C:/PSTK/include
 
 현재 target은 build-tree 사용까지만 구성되어 있고 install/package 규칙은 아직 추가되지 않았다.
 
-### 외부 Consumer에게 실제로 필요한 결과물
+### Packet SDK로 배포할 때 필요한 결과물
 
-Consumer 입장에서 핵심은 producer의 `CMakeLists.txt`가 아니라 다음 binary SDK 결과물이다.
+현재 target을 Windows binary SDK로 패키징하려면 다음 결과물이 필요하다.
 
 ```text
 PSTK Packet SDK/
 ├─ include/
 │  ├─ pstk_packet_export.h
-│  └─ pstk/
-│     └─ packet/
-│        └─ PacketToolApi.h
-├─ lib/
-│  └─ pstk_packet.lib
-└─ bin/
-   └─ pstk_packet.dll
+│  └─ pstk/packet/PacketToolApi.h
+├─ lib/pstk_packet.lib
+└─ bin/pstk_packet.dll
 ```
 
-| 결과물 | Consumer에서 사용하는 단계 | 역할 |
-|---|---|---|
-| `PacketToolApi.h` | Compile | 공개 함수와 타입 선언 제공 |
-| `pstk_packet_export.h` | Compile | Consumer에서 `PSTK_PACKET_API`를 import 선언으로 변환 |
-| `pstk_packet.lib` | Link | DLL 이름과 import symbol 연결 정보 제공 |
-| `pstk_packet.dll` | Runtime | 실제 함수 구현 제공 |
+수동 SDK, 설치된 CMake package와 동일 build tree consumer의 binary 관계는 [`SharedLibraryBinaryModel.md`](SharedLibraryBinaryModel.md)에서 설명한다. 현재 target에는 아직 `install()`과 package export 규칙이 없다.
 
-따라서 Visual Studio Consumer가 SDK 경로를 직접 설정한다면 `INSTALL_INTERFACE` 없이도 DLL을 사용할 수 있다.
-
-```text
-C/C++ Additional Include Directories
-    -> SDK/include
-
-Linker Additional Library Directories
-    -> SDK/lib
-
-Linker Additional Dependencies
-    -> pstk_packet.lib
-
-Runtime
-    -> consumer.exe가 찾을 수 있는 위치에 pstk_packet.dll 배치
-```
-
-이 방식에서 Consumer는 `PrivateServerToolKit`의 원본 `CMakeLists.txt`를 알 필요가 없다.
-
-### 수동 Binary SDK와 CMake package 비교
-
-| 배포 방식 | `INSTALL_INTERFACE` | Consumer 설정 |
-|---|---:|---|
-| Binary SDK 수동 연결 | 필요 없음 | Include 경로, `.lib`, `.dll` 위치를 직접 설정 |
-| 설치된 CMake package | 필요 | `find_package()`와 exported target이 경로를 자동 전달 |
-| 동일 build tree 내부 사용 | 사용하지 않음 | `BUILD_INTERFACE`와 `PSTK::Packet` 사용 |
-
-CMake package 방식에서도 Consumer가 producer의 원본 `CMakeLists.txt`를 읽는 것은 아니다. 설치 과정에서 생성된 `PSTKConfig.cmake`, `PSTKTargets.cmake` 같은 package metadata를 읽고, `INSTALL_INTERFACE`에 기록된 usage requirement를 전달받는다.
-
-정리하면 다음과 같다.
-
-```text
-INSTALL_INTERFACE
-    -> 외부 DLL 사용 자체의 필수 조건이 아님
-    -> 설치된 CMake target의 include 경로 자동 전달에 필요
-
-Public header + generated export header + .lib + .dll
-    -> Windows Consumer가 DLL을 사용하는 핵심 결과물
-```
-
-## 기본 symbol visibility
+## Packet target의 symbol visibility 설정
 
 ```cmake
 set_target_properties(
@@ -387,52 +341,9 @@ set_target_properties(
 )
 ```
 
-주의할 점은 `set_target_properties()` 안에서는 다음 target property 이름을 사용한다는 것이다.
+`pstk_packet`은 지원하는 컴파일러에서 일반 C++ symbol과 inline symbol을 기본적으로 숨기고, `PSTK_PACKET_API`가 붙은 C API만 명시적으로 공개한다. 두 property는 보안 기능이 아니라 Packet DLL의 public ABI 표면을 제한하는 설정이다.
 
-```cmake
-CXX_VISIBILITY_PRESET
-VISIBILITY_INLINES_HIDDEN
-```
-
-`CMAKE_CXX_VISIBILITY_PRESET`과 `CMAKE_VISIBILITY_INLINES_HIDDEN`은 target property가 아니라 여러 target의 초기값으로 사용할 수 있는 CMake 변수 이름이다.
-
-### `CXX_VISIBILITY_PRESET hidden`
-
-지원하는 컴파일러에서 일반 C++ symbol을 기본적으로 외부 dynamic symbol로 공개하지 않게 한다. 개념적으로 `-fvisibility=hidden`과 연결된다.
-
-```text
-일반 내부 함수
-    -> hidden
-
-PSTK_PACKET_API를 붙인 함수
-    -> 명시적으로 public export
-```
-
-이는 보안 기능이 아니라 public ABI를 제한하는 링커 visibility 정책이다.
-
-### `VISIBILITY_INLINES_HIDDEN TRUE`
-
-지원하는 컴파일러에서 inline 함수의 실제 사본이 binary에 생성되더라도 그 symbol을 기본적으로 외부에 공개하지 않게 한다. 개념적으로 `-fvisibility-inlines-hidden`과 연결된다.
-
-C++의 `inline`은 강제 최적화 명령이 아니다. 동일한 정의가 여러 translation unit에 존재하는 것을 허용하며, 컴파일러는 다음 중 하나를 선택할 수 있다.
-
-- 호출 위치에 함수 본문을 삽입한다.
-- object file 또는 최종 binary에 실제 호출 가능한 함수 사본을 생성한다.
-- 외부 linkage reference를 남기고 링크 단계에서 해결한다.
-
-DLL과 consumer가 같은 public header를 포함하면 양쪽에서 inline 정의를 컴파일할 수 있다.
-
-```text
-DLL
-├─ 호출 위치에 inline 삽입
-└─ DLL 내부용 hidden 함수 사본 생성 가능
-
-Consumer
-├─ 호출 위치에 inline 삽입
-└─ Consumer 자체 함수 사본 생성 가능
-```
-
-`VISIBILITY_INLINES_HIDDEN`은 consumer에게 강제 inline 최적화를 적용하지 않는다. DLL에 생성된 inline 함수 symbol을 외부 symbol 해석 대상으로 공개하지 않는 것이 핵심이다. 특정 symbol을 명시적으로 export하면 기본 hidden 정책을 다시 재정의할 수 있다.
+`CXX_VISIBILITY_PRESET`, `VISIBILITY_INLINES_HIDDEN`, 일반 public inline과 exported/imported inline의 차이는 [`SharedLibraryBinaryModel.md`](SharedLibraryBinaryModel.md)의 symbol visibility와 inline 절에서 설명한다.
 
 ## Export header 생성
 
@@ -516,86 +427,9 @@ uint32_t PstkPacketGetApiVersion(void)
 }
 ```
 
-## Windows의 compile-link-load 흐름
+## Packet Public API의 소비 흐름
 
-Windows에서 public header, import library와 DLL을 사용하는 일반적인 implicit linking 흐름은 다음과 같다.
-
-### 1. Compile
-
-Consumer compiler는 public header에서 함수 이름, 타입, calling convention과 `dllimport` 정보를 확인한다. 실제 함수 구현이나 runtime 주소는 알지 못하며 object file에 외부 symbol reference를 남긴다.
-
-```text
-Consumer.obj
-└─ PstkPacketGetApiVersion symbol 필요
-```
-
-Public header만으로 어떤 `.lib` 파일을 사용할지는 결정되지 않는다. CMake의 `target_link_libraries()`가 링크 입력을 제공한다.
-
-### 2. Link
-
-Windows linker는 consumer object와 `pstk_packet.lib` import library를 연결한다.
-
-```text
-Consumer.obj
-    -> PstkPacketGetApiVersion 필요
-
-pstk_packet.lib
-    -> 해당 symbol은 pstk_packet.dll에서 제공
-```
-
-링커는 consumer executable에 다음 정보를 기록한다.
-
-- 필요한 DLL 이름
-- 필요한 import symbol 이름
-- 실제 함수 주소가 기록될 Import Address Table slot
-
-`.lib` 자체가 완성된 executable Import Table인 것은 아니다. Import library의 정보를 바탕으로 링커가 consumer executable의 Import Directory와 IAT를 만든다.
-
-### 3. Load
-
-프로그램을 실행하면 Windows Loader가 필요한 DLL을 프로세스 주소 공간에 로드한다. DLL의 Export Table에서 요청된 symbol을 찾고 실제 함수 주소를 consumer의 IAT에 기록한다.
-
-```text
-consumer.exe Import Directory
-    -> pstk_packet.dll 필요
-
-pstk_packet.dll Export Table
-    -> PstkPacketGetApiVersion 실제 주소
-
-consumer.exe IAT
-    -> 실제 DLL 함수 주소 기록
-```
-
-### 4. Call
-
-Consumer는 IAT에 기록된 주소를 통해 DLL 함수를 호출한다.
-
-```text
-Consumer 코드
-    -> Import Address Table
-    -> pstk_packet.dll 내부 함수 주소
-    -> 함수 실행
-```
-
-실행할 때마다 Export Table을 직접 다시 검색하는 구조가 아니라 Loader가 연결해 둔 IAT를 통한 간접 호출이다.
-
-Linux와 macOS는 파일 형식과 동적 연결 기구의 이름이 다르지만, compile/link/load 단계를 분리하고 public symbol만 외부 ABI로 제공한다는 설계는 동일하다.
-
-## Static `.lib`와 Import `.lib`
-
-Windows의 `.lib`는 이름만으로 용도를 판단하면 안 된다.
-
-```text
-Static library
-    -> 실제 object code 포함
-    -> 링크 시 구현이 executable에 포함
-
-Import library
-    -> DLL 이름과 import symbol 연결 정보 제공
-    -> 실제 구현은 DLL에 존재
-```
-
-`pstk_packet`을 `SHARED`로 빌드할 때 생성되는 `pstk_packet.lib`는 `pstk_packet.dll`과 연결하기 위한 import library다.
+Windows consumer는 `PacketToolApi.h`와 생성된 export header로 선언을 컴파일하고, `pstk_packet.lib`를 링크한 뒤 runtime에 `pstk_packet.dll`을 로드한다. `.lib`, executable Import Directory/IAT와 DLL Export Table의 정확한 역할은 [`SharedLibraryBinaryModel.md`](SharedLibraryBinaryModel.md)의 compile-link-load-call 절에서 설명한다.
 
 ## 현재 경계와 이후 작업
 
@@ -626,9 +460,8 @@ Import library
 2. `PUBLIC cxx_std_17`이 consumer에게도 영향을 주는 이유
 3. source include 경로와 binary include 경로가 모두 필요한 이유
 4. `BUILD_INTERFACE`와 `INSTALL_INTERFACE`가 적용되는 시점과 `INSTALL_INTERFACE`가 필수가 아닌 이유
-5. `hidden` visibility와 `PSTK_PACKET_API`가 함께 필요한 이유
-6. Inline 함수가 실제 symbol을 만들 수 있는 이유
-7. Windows에서 `.lib`, DLL Export Table과 executable IAT의 역할
+5. Packet target에서 기본 visibility를 숨기고 `PSTK_PACKET_API`만 공개하는 이유
+6. Packet SDK에 public header, 생성 export header, import library와 DLL이 필요한 이유
 
 ## 공식 참고 자료
 
