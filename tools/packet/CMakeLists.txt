@@ -1,9 +1,12 @@
 include (GenerateExportHeader)
 
+# SHARED 라이브리러 빌드
+# CMake에서 자동으로 compiler define에
+# pstk_packet_EXPORTS 같은 export macro를 같이 정의
 add_library(
     pstk_packet
     SHARED # 동적 라이브러리
-    src/PacketToolApi.cpp
+    src/TkPacketTool.cpp
 )
 
 add_library(
@@ -16,6 +19,12 @@ target_compile_features(
     pstk_packet
     PUBLIC
     cxx_std_17
+)
+
+target_link_libraries(
+    pstk_packet
+    PUBLIC
+    PSTK::Common
 )
 
 # public header와 생성된 export header 공개

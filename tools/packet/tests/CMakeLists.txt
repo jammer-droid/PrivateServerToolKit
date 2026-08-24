@@ -1,7 +1,7 @@
 # 소스 파일로 실행 파일 target을 생성
 add_executable(
     pstk_packet_smoke # 논리 target 이름
-    PacketToolApiSmoke.cpp # 소스 파일 경로
+    TkPacketToolSmoke.cpp # 소스 파일 경로
 )
 
 # 링커가 사용할 라이브러리 지정
