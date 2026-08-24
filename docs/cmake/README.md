@@ -2,8 +2,8 @@
 
 - [`CMakeLists.md`](CMakeLists.md): 루트 `CMakeLists.txt`에 작성한 명령의 의미
 - [`CMakePreset.md`](CMakePreset.md): `CMakePresets.json`에 작성한 프리셋의 의미
-- [`PacketTarget.md`](PacketTarget.md): Packet DLL target, public include와 export header 구성
-- [`SharedLibraryBinaryModel.md`](SharedLibraryBinaryModel.md): shared library의 compile-link-load-call 흐름, symbol visibility와 inline 모델
+- [`PacketTarget.md`](PacketTarget.md): Packet DLL target, public include, export header와 smoke test 구성
+- [`SharedLibraryBinaryModel.md`](../cpp/SharedLibraryBinaryModel.md): shared library의 compile-link-load-call 흐름, symbol visibility와 inline 모델
 
 ## CMake가 담당하는 것
 
@@ -128,6 +128,9 @@ cmake --build --list-presets
 # 사용할 수 있는 test 프리셋 확인
 ctest --list-presets
 
+# 등록된 테스트 이름만 확인
+ctest --preset test-dev -N
+
 # 실패한 테스트의 출력 확인
 ctest --preset test-dev --output-on-failure
 ```
@@ -142,8 +145,9 @@ ctest --preset test-dev --output-on-failure
 - 빌드 결과가 소스 트리 대신 `out/build/dev` 아래에 생성된다.
 - Packet Tool을 `PSTK_BUILD_PACKET_TOOL` 옵션으로 포함하거나 제외할 수 있다.
 - 테스트는 `BUILD_TESTING` 옵션으로 포함하거나 제외할 수 있다.
+- `pstk_packet_smoke`가 public API를 호출하고 CTest가 결과를 집계한다.
 
-현재 Packet DLL target은 정의되어 있으므로 build 단계에서 플랫폼에 맞는 shared library가 생성되어야 한다. 테스트 실행 파일은 별도 test target이 등록된 뒤부터 CTest로 실행할 수 있다.
+현재 Packet DLL과 smoke executable target이 정의되어 있다. Build 단계에서 플랫폼에 맞는 shared library와 테스트 실행 파일을 생성하고, Test 단계에서 `pstk.packet.api.version` 테스트를 실행한다.
 
 ## 공식 참고 자료
 

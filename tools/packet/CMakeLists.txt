@@ -54,3 +54,8 @@ generate_export_header(
     "${CMAKE_CURRENT_BINARY_DIR}/pstk_packet_export.h"
     EXPORT_MACRO_NAME PSTK_PACKET_API
 )
+
+
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()

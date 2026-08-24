@@ -255,6 +255,82 @@ Build preset과 마찬가지로 `dev`가 생성한 `out/build/dev`를 사용하�
 ctest --test-dir out/build/dev --output-on-failure
 ```
 
+## CTest 테스트 목록 확인
+
+Configure가 생성한 test metadata만 확인하려면 `-N` 또는 `--show-only`를 사용한다. 이 옵션은 테스트를 실행하지 않는다.
+
+```shell
+ctest --preset test-dev -N
+```
+
+현재 Packet smoke test가 등록되어 있다면 다음 이름이 표시된다.
+
+```text
+Test #1: pstk.packet.api.version
+Total Tests: 1
+```
+
+Preset을 사용하지 않고 build directory를 직접 지정할 수도 있다.
+
+```shell
+ctest --test-dir out/build/dev -N
+```
+
+또는 build directory로 이동한 뒤 실행한다.
+
+```shell
+cd out/build/dev
+ctest -N
+```
+
+CTest는 기본적으로 현재 디렉터리의 `CTestTestfile.cmake`를 읽는다. 따라서 프로젝트의 source root에서 경로 지정 없이 다음 명령만 실행하면:
+
+```shell
+ctest -N
+```
+
+source root에 test metadata가 없기 때문에 등록된 테스트가 있어도 `Total Tests: 0`으로 보일 수 있다. `test-dev` preset은 연결된 `dev` configure preset의 `binaryDir`을 사용하므로 프로젝트 루트에서도 올바른 build directory를 선택한다.
+
+테스트를 새로 추가하거나 `CMakeLists.txt`의 `add_test()`를 변경했다면 목록 확인 전에 configure를 다시 수행한다.
+
+```shell
+cmake --preset dev
+ctest --preset test-dev -N
+```
+
+`-N`은 테스트 실행 파일을 실행하지 않지만 test metadata가 configure 과정에서 생성되어 있어야 한다.
+
+## CTest 테스트 실행
+
+등록된 전체 테스트는 다음 명령으로 실행한다.
+
+```shell
+ctest --preset test-dev
+```
+
+특정 테스트만 이름으로 선택하려면 `-R` 정규식 필터를 사용한다.
+
+```shell
+ctest --preset test-dev -R '^pstk\.packet\.api\.version$'
+```
+
+Preset 없이 동일한 build directory를 직접 지정할 수도 있다.
+
+```shell
+ctest \
+  --test-dir out/build/dev \
+  -R '^pstk\.packet\.api\.version$' \
+  --output-on-failure
+```
+
+CTest는 테스트 실행 파일을 일반적으로 자동 빌드하지 않는다. 먼저 build preset으로 DLL과 smoke executable을 최신 상태로 만든 뒤 실행한다.
+
+```shell
+cmake --preset dev
+cmake --build --preset build-dev
+ctest --preset test-dev
+```
+
 ## 전체 실행 흐름
 
 ```shell
@@ -285,6 +361,9 @@ ctest --preset test-dev
 cmake --list-presets
 cmake --build --list-presets
 ctest --list-presets
+
+# 등록된 테스트 이름만 확인
+ctest --preset test-dev -N
 ```
 
 각 명령은 configure, build, test 종류에 해당하는 프리셋을 보여준다. 세 종류에서 같은 이름을 사용해도 명령 종류가 다르기 때문에 충돌하지 않지만, 현재 프로젝트는 역할을 바로 구분할 수 있도록 `dev`, `build-dev`, `test-dev`를 사용한다.
@@ -298,6 +377,8 @@ ctest --list-presets
 3. `cacheVariables`와 명령행 `-D`의 관계
 4. `CMAKE_BUILD_TYPE`과 `configuration`이 모두 존재하는 이유
 5. `outputOnFailure`가 테스트 실패 시 무엇을 바꾸는지
+6. source root의 `ctest -N`과 `ctest --preset test-dev -N` 결과가 다를 수 있는 이유
+7. `ctest -N`이 테스트를 빌드하거나 실행하지 않는 이유
 
 ## 공식 참고 자료
 

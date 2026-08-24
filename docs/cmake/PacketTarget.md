@@ -7,7 +7,7 @@
 - 현재 build tree의 테스트와 이후 설치된 외부 consumer가 public header를 찾을 수 있는 경계를 준비한다.
 - 내부 C++ symbol을 public ABI에서 제외한다.
 
-번역 단위, object symbol, import library, DLL Export Table, executable IAT와 inline 함수의 일반 원리는 [`SharedLibraryBinaryModel.md`](SharedLibraryBinaryModel.md)에서 별도로 설명한다. 이 문서는 해당 원리가 현재 Packet target에 어떻게 적용됐는지만 다룬다.
+번역 단위, object symbol, import library, DLL Export Table, executable IAT와 inline 함수의 일반 원리는 [`SharedLibraryBinaryModel.md`](../cpp/SharedLibraryBinaryModel.md)에서 별도로 설명한다. 이 문서는 해당 원리가 현재 Packet target에 어떻게 적용됐는지만 다룬다.
 
 ## 현재 target 구성
 
@@ -53,6 +53,10 @@ generate_export_header(
     EXPORT_MACRO_NAME
         PSTK_PACKET_API
 )
+
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()
 ```
 
 ## `include(GenerateExportHeader)`
@@ -109,7 +113,7 @@ PSTK::Packet
 
 ```cmake
 target_link_libraries(
-    pstk_packet_tests
+    pstk_packet_smoke
     PRIVATE
     PSTK::Packet
 )
@@ -224,7 +228,7 @@ PrivateServerToolKit/               PrivateServerToolKit/out/build/dev/
 
 여기서 **같은 build tree**라는 말은 target들이 같은 `CMakeLists.txt` 파일에 정의되어 있다는 뜻이 아니다. 루트에서 시작한 한 번의 configure 과정에 `add_subdirectory()`로 연결되어, 같은 CMake target graph에 포함되었다는 뜻이다.
 
-예를 들어 이후 Packet test를 다음처럼 분리할 수 있다.
+현재 Packet smoke test는 다음 구조로 분리되어 있다.
 
 ```text
 Root CMakeLists.txt
@@ -233,17 +237,15 @@ Root CMakeLists.txt
       ├─ add_library(pstk_packet ...)
       └─ add_subdirectory(tests)
          └─ tools/packet/tests/CMakeLists.txt
-            ├─ add_executable(pstk_packet_tests ...)
+            ├─ add_executable(pstk_packet_smoke ...)
             └─ target_link_libraries(
-                   pstk_packet_tests
+                   pstk_packet_smoke
                    PRIVATE
                    PSTK::Packet
                )
 ```
 
-두 target은 서로 다른 `CMakeLists.txt`에 정의되어도 모두 `out/build/dev`에 생성된 하나의 target graph에 속한다. 따라서 `pstk_packet_tests`가 `PSTK::Packet`을 링크하면, CMake는 `pstk_packet`의 build-tree usage requirement를 test target에 전달한다.
-
-현재 프로젝트에는 `pstk_packet_tests`가 아직 정의되어 있지 않으며, 위 구조는 이후 test target을 추가했을 때의 예시다.
+두 target은 서로 다른 `CMakeLists.txt`에 정의되어도 모두 `out/build/dev`에 생성된 하나의 target graph에 속한다. 따라서 `pstk_packet_smoke`가 `PSTK::Packet`을 링크하면, CMake는 `pstk_packet`의 build-tree usage requirement를 smoke target에 전달한다.
 
 ### `BUILD_INTERFACE`
 
@@ -260,17 +262,17 @@ $<BUILD_INTERFACE:...>
 | `${CMAKE_CURRENT_SOURCE_DIR}/include` | source tree에 있는 `PacketToolApi.h` 제공 |
 | `${CMAKE_CURRENT_BINARY_DIR}` | build tree에 생성된 `pstk_packet_export.h` 제공 |
 
-예를 들어 이후 `pstk_packet_tests`에 다음 연결을 추가한다고 가정한다.
+현재 `pstk_packet_smoke`는 다음 연결을 사용한다.
 
 ```cmake
 target_link_libraries(
-    pstk_packet_tests
+    pstk_packet_smoke
     PRIVATE
     PSTK::Packet
 )
 ```
 
-CMake는 `PSTK::Packet`이 가리키는 `pstk_packet` target의 `PUBLIC` include directory를 test target에 전파한다. 따라서 test의 compile 명령에는 위 두 include 경로가 자동으로 추가된다.
+CMake는 `PSTK::Packet`이 가리키는 `pstk_packet` target의 `PUBLIC` include directory를 smoke target에 전파한다. 따라서 smoke target의 compile 명령에는 위 두 include 경로가 자동으로 추가된다.
 
 같은 저장소에 있어야만 하는 것은 아니다. 다른 source directory를 `add_subdirectory()`로 현재 configure에 참여시켰다면 그 target도 같은 build tree에서 `BUILD_INTERFACE`를 사용할 수 있다. 핵심은 파일의 물리적 위치가 아니라 같은 configure와 target graph에 참여하는지다.
 
@@ -328,7 +330,7 @@ PSTK Packet SDK/
 └─ bin/pstk_packet.dll
 ```
 
-수동 SDK, 설치된 CMake package와 동일 build tree consumer의 binary 관계는 [`SharedLibraryBinaryModel.md`](SharedLibraryBinaryModel.md)에서 설명한다. 현재 target에는 아직 `install()`과 package export 규칙이 없다.
+수동 SDK, 설치된 CMake package와 동일 build tree consumer의 binary 관계는 [`SharedLibraryBinaryModel.md`](../cpp/SharedLibraryBinaryModel.md)에서 설명한다. 현재 target에는 아직 `install()`과 package export 규칙이 없다.
 
 ## Packet target의 symbol visibility 설정
 
@@ -343,7 +345,7 @@ set_target_properties(
 
 `pstk_packet`은 지원하는 컴파일러에서 일반 C++ symbol과 inline symbol을 기본적으로 숨기고, `PSTK_PACKET_API`가 붙은 C API만 명시적으로 공개한다. 두 property는 보안 기능이 아니라 Packet DLL의 public ABI 표면을 제한하는 설정이다.
 
-`CXX_VISIBILITY_PRESET`, `VISIBILITY_INLINES_HIDDEN`, 일반 public inline과 exported/imported inline의 차이는 [`SharedLibraryBinaryModel.md`](SharedLibraryBinaryModel.md)의 symbol visibility와 inline 절에서 설명한다.
+`CXX_VISIBILITY_PRESET`, `VISIBILITY_INLINES_HIDDEN`, 일반 public inline과 exported/imported inline의 차이는 [`SharedLibraryBinaryModel.md`](../cpp/SharedLibraryBinaryModel.md)의 symbol visibility와 inline 절에서 설명한다.
 
 ## Export header 생성
 
@@ -429,7 +431,135 @@ uint32_t PstkPacketGetApiVersion(void)
 
 ## Packet Public API의 소비 흐름
 
-Windows consumer는 `PacketToolApi.h`와 생성된 export header로 선언을 컴파일하고, `pstk_packet.lib`를 링크한 뒤 runtime에 `pstk_packet.dll`을 로드한다. `.lib`, executable Import Directory/IAT와 DLL Export Table의 정확한 역할은 [`SharedLibraryBinaryModel.md`](SharedLibraryBinaryModel.md)의 compile-link-load-call 절에서 설명한다.
+Windows consumer는 `PacketToolApi.h`와 생성된 export header로 선언을 컴파일하고, `pstk_packet.lib`를 링크한 뒤 runtime에 `pstk_packet.dll`을 로드한다. `.lib`, executable Import Directory/IAT와 DLL Export Table의 정확한 역할은 [`SharedLibraryBinaryModel.md`](../cpp/SharedLibraryBinaryModel.md)의 compile-link-load-call 절에서 설명한다.
+
+## Packet smoke test target
+
+Packet smoke test는 public header만 사용하는 작은 executable을 빌드하고 Packet shared library에 연결한다. 테스트의 목적은 내부 구현을 직접 검사하는 것이 아니라 외부 consumer와 같은 경계에서 public API symbol을 호출할 수 있는지 확인하는 것이다.
+
+### `BUILD_TESTING` 조건
+
+```cmake
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()
+```
+
+루트 `CMakeLists.txt`의 `include(CTest)`가 `BUILD_TESTING` option을 제공하고, 이 값이 `ON`일 때 `tools/packet/tests/CMakeLists.txt`를 현재 target graph에 포함한다.
+
+```text
+BUILD_TESTING=ON
+    -> tests/CMakeLists.txt 처리
+    -> smoke executable target 생성
+    -> CTest 테스트 등록
+
+BUILD_TESTING=OFF
+    -> tests 하위 디렉터리 제외
+```
+
+현재 `dev` configure preset은 `BUILD_TESTING=ON`을 명시한다.
+
+### `add_executable()`
+
+```cmake
+add_executable(
+    pstk_packet_smoke
+    PacketToolApiSmoke.cpp
+)
+```
+
+`PacketToolApiSmoke.cpp`를 컴파일해 `pstk_packet_smoke`라는 executable target을 생성한다. 여기서 `pstk_packet_smoke`는 파일 경로가 아니라 CMake가 관리하는 논리 target 이름이다.
+
+```text
+pstk_packet_smoke target
+├─ 종류: executable
+├─ source: PacketToolApiSmoke.cpp
+├─ compile/link 설정
+└─ 플랫폼과 configuration별 실제 실행 파일 경로
+```
+
+대표 결과물 이름은 Windows에서 `pstk_packet_smoke.exe`, macOS와 Linux에서 `pstk_packet_smoke`다. 실제 디렉터리는 generator, configuration과 output property에 따라 결정된다.
+
+### `target_link_libraries()`
+
+```cmake
+target_link_libraries(
+    pstk_packet_smoke
+    PRIVATE
+    PSTK::Packet
+)
+```
+
+첫 번째 인자인 `pstk_packet_smoke`는 링크 설정을 변경할 executable target이다. `PSTK::Packet`은 실제 library target `pstk_packet`의 alias다.
+
+```text
+pstk_packet_smoke
+    -> PSTK::Packet alias
+    -> pstk_packet shared library
+```
+
+CMake는 이 target 관계에서 다음 정보를 사용한다.
+
+- `pstk_packet`을 smoke executable보다 먼저 최신 상태로 만드는 build 순서
+- 플랫폼에 맞는 실제 link artifact 경로
+- `pstk_packet`의 `PUBLIC` include directory
+- `pstk_packet`의 `PUBLIC cxx_std_17` 요구사항
+
+Windows에서는 smoke executable이 Packet import library와 링크하고 실행할 때 Packet DLL을 로드한다. macOS와 Linux에서는 각각 생성된 dynamic library에 연결된다.
+
+`PRIVATE`은 `pstk_packet_smoke` 자신만 Packet을 직접 링크하고 이 의존성을 smoke target의 link interface로 전파하지 않는다는 뜻이다. Packet target의 `PUBLIC` usage requirement는 직접 consumer인 smoke target에 그대로 적용된다.
+
+### `add_test()`
+
+```cmake
+add_test(
+    NAME pstk.packet.api.version
+    COMMAND pstk_packet_smoke
+)
+```
+
+`NAME`과 `COMMAND`는 서로 다른 이름 공간을 사용한다.
+
+| 항목 | 값 | 역할 |
+|---|---|---|
+| CMake executable target | `pstk_packet_smoke` | 빌드할 실행 프로그램을 표현 |
+| CTest test 이름 | `pstk.packet.api.version` | CTest가 목록, 필터와 결과에 사용하는 식별자 |
+| `COMMAND` | `pstk_packet_smoke` | CTest가 실행할 executable target 지정 |
+
+`COMMAND`의 첫 항목이 `add_executable()`로 만든 target이면 CMake는 test metadata를 생성할 때 configuration에 맞는 실제 실행 파일 경로로 변환한다.
+
+```text
+COMMAND pstk_packet_smoke
+    -> executable target 정보 조회
+    -> Debug/Release와 플랫폼에 맞는 실행 파일 경로 생성
+    -> CTestTestfile.cmake에 테스트 명령 기록
+```
+
+`add_test()`는 executable을 빌드하지 않는다. Configure 단계에서 CTest 실행 정보를 등록할 뿐이므로 실제 테스트 전에는 build 단계가 필요하다.
+
+### Smoke test의 성공 계약
+
+현재 `PacketToolApiSmoke.cpp`는 public header를 포함해 `PstkPacketGetApiVersion()`을 호출한다.
+
+```text
+API version == 1U
+    -> main() returns 0
+    -> CTest PASS
+
+API version != 1U
+    -> 오류를 stderr에 출력
+    -> main() returns 1
+    -> CTest FAIL
+```
+
+이 테스트가 통과하면 최소한 다음 경계가 연결되었다는 증거가 된다.
+
+- Consumer source가 public header와 생성 export header를 찾는다.
+- Smoke executable이 Packet shared library에 링크된다.
+- Runtime에 public API symbol을 호출할 수 있다.
+- API version 결과가 현재 계약과 일치한다.
+
+테스트 목록 확인과 실행 명령은 [`CMakePreset.md`](CMakePreset.md)의 CTest 절에서 설명한다.
 
 ## 현재 경계와 이후 작업
 
@@ -440,12 +570,13 @@ Windows consumer는 `PacketToolApi.h`와 생성된 export header로 선언을 �
 - hidden-by-default symbol visibility
 - `PSTK_PACKET_API` 생성 header
 - C ABI API version 함수
+- Public API를 호출하는 `pstk_packet_smoke` executable target
+- `pstk.packet.api.version` CTest 등록
 
-기본 DLL 검증을 위해 아직 필요한 작업은 다음과 같다.
+추가 검증으로 남은 작업은 다음과 같다.
 
-- Public API를 실제로 호출하는 smoke test target
-- CTest 등록
 - Windows에서 import library와 DLL 소비 검증
+- 실제 packet schema, encode와 decode API가 추가된 뒤 기능 테스트 확장
 
 배포 자동화 범위는 선택한 소비 방식에 따라 나뉜다.
 
@@ -462,6 +593,9 @@ Windows consumer는 `PacketToolApi.h`와 생성된 export header로 선언을 �
 4. `BUILD_INTERFACE`와 `INSTALL_INTERFACE`가 적용되는 시점과 `INSTALL_INTERFACE`가 필수가 아닌 이유
 5. Packet target에서 기본 visibility를 숨기고 `PSTK_PACKET_API`만 공개하는 이유
 6. Packet SDK에 public header, 생성 export header, import library와 DLL이 필요한 이유
+7. `pstk_packet_smoke`가 파일 경로가 아니라 CMake target 이름인 이유
+8. `PSTK::Packet`을 링크할 때 include 경로와 C++17 요구사항도 전달되는 이유
+9. `add_test()`가 build를 수행하지 않고 executable target을 실제 경로로 변환하는 시점
 
 ## 공식 참고 자료
 
@@ -471,3 +605,7 @@ Windows consumer는 `PacketToolApi.h`와 생성된 export header로 선언을 �
 - [GenerateExportHeader](https://cmake.org/cmake/help/latest/module/GenerateExportHeader.html)
 - [CXX_VISIBILITY_PRESET](https://cmake.org/cmake/help/latest/prop_tgt/LANG_VISIBILITY_PRESET.html)
 - [VISIBILITY_INLINES_HIDDEN](https://cmake.org/cmake/help/latest/prop_tgt/VISIBILITY_INLINES_HIDDEN.html)
+- [add_executable](https://cmake.org/cmake/help/latest/command/add_executable.html)
+- [target_link_libraries](https://cmake.org/cmake/help/latest/command/target_link_libraries.html)
+- [add_test](https://cmake.org/cmake/help/latest/command/add_test.html)
+- [CTest command-line tool](https://cmake.org/cmake/help/latest/manual/ctest.1.html)
