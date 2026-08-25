@@ -35,7 +35,7 @@ Protobuf wire format, runtime reflection, schema hot reload, gRPC/HTTP2 호환�
 4. Phase 3 — Packet catalog과 build integration
 5. Phase 4 — Async unary RPC 계층
 
-현재 design은 Phase 0과 Phase 1 진입 계약까지 확정되었다. Phase 2~4는 Issue #1의 상위 범위를 따르며 해당 구현에 진입할 때 이 문서에 세부 design을 추가한다.
+Phase 0 common contract 선행 slice는 구현과 검증을 완료했다. 다음 작업은 Phase 1 진입 전 남은 schema/parser/IR/generator 계약을 확정하는 것이다. Phase 2~4는 Issue #1의 상위 범위를 따르며 해당 구현에 진입할 때 이 문서에 세부 design을 추가한다.
 
 ## Phase 0 — Common contract 선행 slice
 
@@ -87,15 +87,15 @@ Common이 소유하지 않는 것:
 - `TkDiagnosticSeverity`: Info, Warning, Error 분류
 - `TkDiagnosticLocation`: optional `sourceName`, 0-based UTF-8 `byteOffset`, 1-based `line`, 1-based byte 기준 `column`
 - `TkDiagnostic`: severity, stable `id`, UTF-8 `message`, location을 가지는 borrowed POD
-- `TkDiagnosticSink`: callback function pointer와 `userData`를 가지는 POD
-- `callback == nullptr`은 diagnostic을 버리는 유효한 disabled sink
+- `TkDiagnosticCallbacks`: callback function pointer와 `userData`를 가지는 POD
+- `callback == nullptr`은 diagnostic을 버리는 유효한 disabled callbacks
 - Callback은 tool API를 호출한 thread에서 API 반환 전에 동기적으로 실행
 - Diagnostic과 문자열은 callback 동안만 유효하며 consumer가 필요한 정보를 복사
-- 하나의 API 호출은 callback을 순차 실행하지만, 동일 sink를 사용한 별도 API 호출들은 동시에 callback을 실행할 수 있음
+- 하나의 API 호출은 callback을 순차 실행하지만, 동일 callbacks를 사용한 별도 API 호출들은 동시에 callback을 실행할 수 있음
 - `id`는 non-empty ASCII `PSTK-<TOOL>-<NAME>` 형식의 안정적인 식별자
 - Common은 diagnostic 타입만 제공하고 호출, 저장, 필터링, logging, allocation과 thread를 소유하지 않음
 
-상세: [ADR 0004](../adr/0004-use-common-diagnostic-sink.md)
+상세: [ADR 0004](../adr/0004-use-common-diagnostic-callbacks.md)
 
 ### 완료 기준과 현재 상태
 
@@ -103,11 +103,11 @@ Common이 소유하지 않는 것:
 
 1. `TkResult.h`가 확정된 공용 result 값과 `TK_ERROR_INVALID_DATA`를 정의한다.
 2. `TkByteView.h`가 C-compatible byte view POD와 `TkIsValidByteRange`를 정의한다.
-3. `TkDiagnostic.h`가 diagnostic, location, callback과 sink POD를 정의한다.
+3. `TkDiagnostic.h`가 diagnostic, location, callback과 callbacks POD를 정의한다.
 4. Common header를 별도 binary 연결 없이 C와 C++ translation unit에서 각각 compile한다.
-5. Test가 byte range의 null/empty 규칙, disabled diagnostic sink 표현과 공용 enum/POD의 기본 계약을 검증한다.
+5. Test가 공용 result 값, byte range의 null/empty 규칙과 byte view의 복사·쓰기 계약을 검증한다.
 
-공용 계약의 design은 확정되었다. Header 구현과 compile/test 검증은 아직 남아 있으며 이 조건을 충족하기 전에 Phase 0를 완료로 판정하지 않는다.
+Phase 0은 2026-08-25 완료했다. `TkDiagnostic.h`는 동작을 소유하지 않는 type-only 계약이므로 별도 runtime test를 추가하지 않고 C11/C++17 translation unit의 독립 compile로 호환성을 확인했다.
 
 ### 구현 가이드
 
@@ -115,7 +115,7 @@ Phase 0은 Packet Tool 기능을 추가하지 않고 common header와 계약 테
 
 #### 1. `TkResult` 어휘 완성
 
-`include/pstk/TkResult.h`에 `TK_ERROR_INVALID_DATA = -5`를 추가한다. 기존 숫자값은 변경하지 않고 예제로 남은 주석은 제거한다.
+`include/pstk/TkResult.h`에 `TK_ERROR_INVALID_DATA = -5`를 추가한다. 기존 숫자값은 변경하지 않는다.
 
 확정된 값:
 
@@ -166,25 +166,26 @@ TkDiagnostic
 TkDiagnosticCallback
   void (*)(const TkDiagnostic* diagnostic, void* userData)
 
-TkDiagnosticSink
+TkDiagnosticCallbacks
   TkDiagnosticCallback callback
   void*                userData
 ```
 
-Common에 emit 함수, null-check helper, logger, registry, allocation 또는 thread 코드를 추가하지 않는다. Disabled sink는 `{ NULL, NULL }`로 표현할 수 있어야 한다.
+Common에 emit 함수, null-check helper, logger, registry, allocation 또는 thread 코드를 추가하지 않는다. Disabled callbacks는 `{ NULL, NULL }`로 표현할 수 있어야 한다.
 
 #### 4. Common C/C++ 계약 테스트 추가
 
-루트 CMake project를 `LANGUAGES C CXX`로 구성하고 `PSTK::Common`에 C11/C++17 요구사항을 전파한다. `tests/common/`에 `pstk_common_contract_c`, `pstk_common_contract_cpp` 테스트 target을 두고, 루트의 `if(BUILD_TESTING)`에서 Packet Tool option과 관계없이 해당 디렉터리를 추가한다. Common 테스트는 `PSTK_BUILD_PACKET_TOOL=OFF`인 build에서도 구성·빌드·실행되어야 한다.
+루트 CMake project를 `LANGUAGES C CXX`로 구성하고 `common/tests/`에 `pstk_common_contract_c`, `pstk_common_contract_cpp` 테스트 target을 둔다. Common은 header-only `INTERFACE` target이므로 언어 표준을 consumer에게 전파하지 않고, C11/C++17 요구사항은 각 테스트 target에 `PRIVATE`로 지정한다. Common 테스트는 `PSTK_BUILD_PACKET_TOOL=OFF`인 build에서도 구성·빌드·실행되어야 한다.
+
+개발 의존성은 root `vcpkg.json`의 `tests` feature로 관리한다. C 계약 테스트는 CTest 실행 파일로 유지하고 C++ 계약 테스트는 GoogleTest와 `gtest_discover_tests()`를 사용한다. GoogleTest 탐색은 `common/tests/` 안에서만 수행하여 `BUILD_TESTING=OFF`인 Common consumer가 테스트 의존성을 요구하지 않게 한다.
 
 테스트 구조:
 
-- C translation unit이 각 common header를 첫 include로 사용해 self-contained C 호환성을 검증한다.
-- C++17 translation unit이 각 common header를 첫 include로 사용한다.
-- C++ test에서 view와 diagnostic struct의 standard-layout/trivially-copyable 조건을 `static_assert`한다.
+- C와 C++17 translation unit에서 공용 result와 byte view header를 compile한다.
+- C++ test에서 byte view struct의 standard-layout/trivially-copyable 조건을 `static_assert`한다.
 - C test에서 view 복사·대입을 compile해 `size`가 const field로 회귀하지 않도록 한다.
-- Result와 severity의 숫자값을 검증한다.
-- Disabled sink를 구성하고 callback/user data가 null인지 검증한다.
+- Result 숫자값을 검증한다.
+- `TkDiagnostic.h`는 별도 C11/C++17 translation unit compile로 self-contained C 호환성을 확인한다.
 
 Byte range 필수 case:
 
@@ -208,12 +209,16 @@ Byte range 필수 case:
 Packet Tool을 빌드하지 않고 common header와 테스트가 독립적으로 성립하는지 확인한다.
 
 ```sh
-cmake -S . -B out/build/common-only \
+cmake -S . -B out/build/phase0-common-only \
+  -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" \
+  -DVCPKG_MANIFEST_FEATURES=tests \
   -DPSTK_BUILD_PACKET_TOOL=OFF \
   -DBUILD_TESTING=ON
-cmake --build out/build/common-only
-ctest --test-dir out/build/common-only --output-on-failure
+cmake --build out/build/phase0-common-only
+ctest --test-dir out/build/phase0-common-only --output-on-failure
 ```
+
+2026-08-25 실행 결과는 Common C/C++ 계약 테스트 4개 중 4개 통과다.
 
 #### Gate B — Full regression
 
@@ -226,12 +231,14 @@ git diff --check
 
 Gate B에서 기존 `pstk.packet.api.version`과 새 common C/C++ 테스트가 모두 통과해야 한다.
 
+2026-08-25 실행 결과는 Common 계약 테스트와 `pstk.packet.api.version`을 포함한 5개 중 5개 통과이며 `git diff --check`도 통과했다.
+
 ### Phase 0 완료 판정
 
-Phase 0은 다음 상태에서만 완료로 판정한다.
+Phase 0은 다음 조건을 충족하여 완료됐다.
 
 - 세 common header가 확정된 계약과 일치한다.
-- C/C++ 양쪽의 self-contained header compile과 runtime contract test가 통과한다.
+- C/C++ 양쪽의 self-contained header compile과 공용 result/byte view contract test가 통과했다.
 - Common-only와 full build/test gate가 모두 통과한다.
 - Common에 tool-specific helper, storage, allocation 또는 runtime dependency가 추가되지 않았다.
 - 남은 작업이 Phase 1의 schema/parser/IR/generator design으로 한정된다.

@@ -4,7 +4,7 @@ PrivateServerToolKit의 public API와 내부 C++ 함수는 호출자에게 성�
 
 이 결정은 Vulkan API와 Khronos Vulkan Loader가 공유 `VkResult`로 전파 가능한 실패를 표현하고 predicate에는 `bool`을 사용하는 구분을 따른다. 모듈별 result 변환과 분기 증가를 피하고 consumer가 하나의 결과 어휘를 사용하게 하는 것이 목적이다.
 
-`TkResult`는 상세 diagnostic 저장소가 아니다. 위치, 안정적인 diagnostic code, 관련 입력과 설명은 common 계층이 소유하는 Diagnostic과 Diagnostic Sink 계약으로 분리한다.
+`TkResult`는 상세 diagnostic 저장소가 아니다. 위치, 안정적인 diagnostic code, 관련 입력과 설명은 common 계층이 소유하는 Diagnostic과 Diagnostic Callbacks 계약으로 분리한다.
 
 Schema, encoded payload 또는 다른 입력 형식을 해석할 수 없는 경우는 공용 `TK_ERROR_INVALID_DATA`로 분류한다. Packet별 invalid length나 unsupported version result를 추가하지 않고 구체적인 원인은 Diagnostic으로 전달하며, 잘못된 호출 인자는 `TK_ERROR_INVALID_ARGUMENT`, 출력 용량 부족은 `TK_ERROR_BUFFER_TOO_SMALL`을 사용한다.
 

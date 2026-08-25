@@ -43,6 +43,6 @@ size_t CalculatePayloadBytes(/* ... */); // value calculation
 
 `TkResult`는 호출자의 제어 흐름을 위한 작은 분류다. Schema의 line/column, 안정적인 diagnostic code, 관련 입력 위치와 설명 같은 상세 정보는 diagnostic output 또는 context를 통해 별도로 전달한다.
 
-상세 정보를 보존하기 위해 모듈별 result 타입을 만들거나 모든 세부 원인을 `TkResult` 값으로 추가하지 않는다. Tool별 diagnostic callback이나 포맷도 만들지 않으며 common 계층의 Diagnostic과 Diagnostic Sink 계약을 사용한다.
+상세 정보를 보존하기 위해 모듈별 result 타입을 만들거나 모든 세부 원인을 `TkResult` 값으로 추가하지 않는다. Tool별 diagnostic callback이나 포맷도 만들지 않으며 common 계층의 Diagnostic과 Diagnostic Callbacks 계약을 사용한다.
 
-Common diagnostic의 필드, lifetime과 tool별 ID 규칙은 [`docs/adr/0004-use-common-diagnostic-sink.md`](../adr/0004-use-common-diagnostic-sink.md)를 따른다.
+Common diagnostic의 필드, lifetime과 tool별 ID 규칙은 [`docs/adr/0004-use-common-diagnostic-callbacks.md`](../adr/0004-use-common-diagnostic-callbacks.md)를 따른다.

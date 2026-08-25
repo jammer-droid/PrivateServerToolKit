@@ -28,7 +28,7 @@ _Avoid_: Module result, layer result
 `TkResult`와 분리하여 오류나 경고의 안정적인 식별자, 심각도, 위치와 설명을 전달하는 tool 공용 정보다. 개별 tool은 공통 포맷을 다시 정의하지 않는다.
 _Avoid_: Tool diagnostic format, detailed result
 
-**Diagnostic Sink**:
+**Diagnostic Callbacks**:
 Callback signature와 user data를 묶어 Tool이 생성한 borrowed Diagnostic을 전달하기 위한 common 계층의 type이다. Common은 호출 구현을 제공하지 않으며 각 Tool이 Callback을 호출하고, Callback 이후 보관할 정보는 consumer가 복사한다.
 _Avoid_: Tool logger, diagnostic owner
 
