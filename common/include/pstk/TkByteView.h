@@ -16,7 +16,7 @@ typedef struct TkMutableByteView
     size_t size;
 } TkMutableByteView;
 
-static inline bool TkIsValidByteRange(const uint8_t *data, size_t size)
+static inline bool TkIsValidByteRange(const void *data, size_t size)
 {
     return (size == 0) || (data != NULL);
 }

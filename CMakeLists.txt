@@ -4,7 +4,7 @@ project(
         PrivateServerToolKit
         VERSION 0.1.0
         DESCRIPTION "Cross-platform native tools for PrivateServer"
-        LANGUAGES CXX
+        LANGUAGES C CXX
 )
 
 # option ( <변수 이름> <설명> <기본값> )
