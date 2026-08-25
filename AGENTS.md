@@ -11,3 +11,7 @@
 ### Domain docs
 
 단일 컨텍스트 구성으로 루트 `CONTEXT.md`와 `docs/adr/`를 사용한다. 자세한 내용은 `docs/agents/domain.md`를 참고한다.
+
+### C++ API contracts
+
+C++의 성공/실패 반환은 공용 `TkResult`로 통일하며 모듈별 result 타입을 추가하지 않는다. Predicate, diagnostic, 실패 시 output 보존을 구분하는 기준은 `docs/agents/cpp-result-style.md`를 참고한다.
