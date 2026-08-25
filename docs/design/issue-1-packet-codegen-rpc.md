@@ -2,7 +2,7 @@
 
 - Issue: [jammer-droid/PrivateServerToolKit#1](https://github.com/jammer-droid/PrivateServerToolKit/issues/1)
 - Issue state: Open
-- Last verified: 2026-08-25
+- Last verified: 2026-08-26
 
 ## 문서 역할
 
@@ -256,26 +256,197 @@ Phase 0은 다음 조건을 충족하여 완료됐다.
 
 상세: [ADR 0002](../adr/0002-require-exact-fixed-layout-payload-size.md)
 
-### 작업 범위
+### 확정된 범위
 
-1. Schema 형식과 version 규칙을 정의한다.
-2. 위치를 보존하는 parser와 diagnostic 생성을 구현한다.
-3. 언어 독립 `PacketDescriptor` / `FieldDescriptor` IR을 구현한다.
-4. Duplicate packet ID/field, unknown type과 overflow semantic validation을 구현한다.
-5. C++17 fixed-layout DTO와 Encode/Decode를 생성한다.
-6. 동일한 입력이 byte-identical source를 생성하는지 검증한다.
-7. `MovementInput` golden vector로 기존 수기 codec과 byte parity를 검증한다.
+Phase 1은 build-time JSON schema compiler와 C++17 생성기만 구현한다. Runtime JSON parsing, C# 생성, packet catalog, direction, unary RPC와 gameplay semantic validation은 포함하지 않는다. `MovementInput`은 예시 전용 타입이 아니라 첫 end-to-end vertical slice다.
 
-### Phase 1 진입 전 남은 design
+#### Schema 계약
 
-- Schema 문법, primitive type과 schema version 규칙
-- Parser input/output API와 source ownership
-- Descriptor의 필수 field와 layout 계산 책임
-- Semantic validation 순서와 Packet diagnostic ID catalog
-- Generator output artifact·file 구조와 deterministic formatting 규칙
-- Generated C++ public contract과 golden/conformance test 구조
+Schema 파일 하나는 packet 하나만 정의한다. Compiler는 여러 schema 경로를 한 번에 입력받을 수 있다.
 
-이 항목들은 grilling을 통해 한 번에 하나씩 확정하고, 별도 Phase 문서를 만들지 않고 이 Issue #1 design 문서에 계속 반영한다.
+```json
+{
+  "schemaVersion": 1,
+  "packet": {
+    "name": "MovementInput",
+    "id": 257,
+    "payloadVersion": 1,
+    "fields": [
+      {"name": "controlledEntityGeneration", "type": "uint32"},
+      {"name": "targetServerTick", "type": "uint32"},
+      {"name": "moveX", "type": "int16"},
+      {"name": "moveY", "type": "int16"}
+    ]
+  }
+}
+```
+
+- `schemaVersion`은 compiler grammar version이며 필수 정수 `1`만 허용한다.
+- `payloadVersion`은 wire payload version이며 `1..65535` 범위다. Compiler가 payload offset 0에 `uint16`으로 삽입하며 `fields`에는 포함하지 않는다.
+- `packet.id`는 `uint16` 전체 범위 `0..65535`를 허용한다. 한 compile batch에서 packet ID와 packet name은 각각 유일해야 한다.
+- `fields: []`인 packet을 허용하며 이 경우 `PayloadBytes`는 payload version만 포함한 2다.
+- Phase 1 primitive type은 `int8`, `uint8`, `int16`, `uint16`, `int32`, `uint32`, `int64`, `uint64`다.
+- Packet name은 PascalCase, field name은 lowerCamelCase로 작성하도록 안내하되 Phase 1에서 naming style 정규식 검사는 하지 않는다.
+- 필수 name은 비어 있을 수 없고 같은 packet의 field name은 중복될 수 없다.
+- 알 수 없는 JSON property, duplicate key와 알 수 없는 field type은 오류다.
+- `direction`은 semantic packet 분류이므로 Phase 1 schema와 descriptor에서 제외하고 Phase 3 catalog 설계에서 다룬다.
+
+#### Wire와 layout 계약
+
+- 모든 정수 field는 선언 순서대로 배치하고 little-endian으로 Encode/Decode한다.
+- Compiler layout pass가 payload version과 각 field의 offset, size, 최종 `PayloadBytes`를 계산해 검증된 언어 독립 IR에 저장한다.
+- Generator는 offset, size 또는 `PayloadBytes`를 다시 계산하지 않고 IR 값을 사용한다.
+- Compiler는 layout 산술 overflow를 거부하지만 현재 NetworkRuntime의 최대 payload 정책을 schema compiler에 하드코딩하지 않는다.
+- Signed wire 값은 2의 보수다. Codec은 raw byte를 같은 폭의 unsigned 값으로 조립한 뒤 signed field만 명시적으로 signed 값으로 변환한다.
+- Host byte order, signed object representation 또는 unaligned access에 의존하는 `memcpy`/reinterpret 방식은 사용하지 않는다.
+
+#### 입력, parser와 diagnostic 계약
+
+- Public consumer는 schema 경로만 전달한다. Packet Tool file adapter가 각 경로를 현재 working directory를 바꾸지 않고 한 번 읽어 owned source snapshot을 만든다.
+- 입력 경로는 caller가 전달한 순서대로 처리하며 첫 read, JSON syntax 또는 schema semantic 오류에서 전체 compile을 중단한다.
+- JSON parser는 Packet Tool의 private vcpkg dependency인 nlohmann/json을 사용한다.
+- Diagnostic은 source 경로와 `packet.fields[2].type` 같은 logical schema path를 message에 포함한다.
+- Phase 1은 별도 line/column scanner를 구현하지 않는다. Source 파일은 알지만 정확한 위치를 모르면 `sourceName != nullptr`이고 `byteOffset`, `line`, `column`은 모두 0이다.
+- 모든 Phase 1 failure diagnostic severity는 `TK_DIAGNOSTIC_ERROR`다.
+- Diagnostic ID 문자열은 Packet Tool 내부 `inline constexpr const char*`로 정의하고 public symbol로 export하지 않는다. Consumer는 pointer가 아니라 문자열 내용을 비교한다.
+
+Phase 1의 안정적인 diagnostic ID catalog:
+
+```text
+PSTK-PACKET-SOURCE-READ-FAILED
+PSTK-PACKET-INVALID-JSON
+PSTK-PACKET-INVALID-SCHEMA
+PSTK-PACKET-UNSUPPORTED-SCHEMA-VERSION
+PSTK-PACKET-DUPLICATE-KEY
+PSTK-PACKET-DUPLICATE-PACKET-ID
+PSTK-PACKET-DUPLICATE-PACKET-NAME
+PSTK-PACKET-DUPLICATE-FIELD-NAME
+PSTK-PACKET-UNKNOWN-FIELD-TYPE
+PSTK-PACKET-LAYOUT-OVERFLOW
+PSTK-PACKET-OUTPUT-WRITE-FAILED
+PSTK-PACKET-INVALID-PAYLOAD-SIZE
+PSTK-PACKET-UNSUPPORTED-PAYLOAD-VERSION
+```
+
+#### Public compiler API
+
+Phase 1은 여러 입력을 한 번에 처리하는 C-compatible Packet DLL API 하나를 추가한다.
+
+```c
+typedef struct TkPacketCppCompileOptions
+{
+    const char *const *inputPaths;
+    size_t inputPathCount;
+    const char *outputDirectory;
+    const char *cppNamespace;
+    TkDiagnosticCallbacks diagnostics;
+} TkPacketCppCompileOptions;
+
+PSTK_PACKET_API TkResult TkPacketCompileCpp(
+    const TkPacketCppCompileOptions *options);
+```
+
+- 모든 pointer와 문자열은 호출 동안만 borrowed다.
+- C++ namespace는 schema가 아니라 required compiler option으로 전달한다.
+- Diagnostic callback은 값으로 전달하며 `callback == nullptr`이면 disabled다.
+- 파일 open/read/write 실패에는 공용 `TK_ERROR_IO`를 사용하고 schema 또는 payload 해석 실패에는 `TK_ERROR_INVALID_DATA`를 사용한다.
+- Packet 전용 result type이나 layer별 result type은 만들지 않는다.
+
+`TK_ERROR_IO`와 source는 있지만 내부 위치를 모르는 Diagnostic location 표현은 Phase 1 구현 전에 common 계약에 additive follow-up으로 반영한다. 이는 Phase 0의 header-only/type-only 경계를 변경하지 않는다.
+
+#### Generated C++ 계약
+
+- Schema마다 `<PacketName>.generated.h` 하나를 생성한다.
+- 생성 header는 Packet Tool이 제공하는 public C++17 header-only `pstk/packet/TkPacketCodecSupport.h`를 include한다.
+- Codec support는 byte view 검증, little-endian read/write, signed 변환, `TkResult` mapping과 diagnostic emit만 제공한다.
+- Generated DTO는 상속, virtual dispatch와 reflection 없이 packet별 field mapping을 소유한다.
+- Consumer에게 공개하는 metadata는 `PacketId`, `PayloadVersion`, `PayloadBytes`뿐이다. Field offset/size와 endian helper는 public 계약으로 노출하지 않는다.
+- DTO는 `const` Encode member와 Decode member를 제공하고 optional `TkDiagnosticCallbacks diagnostics = {}`를 받는다.
+- Decode는 임시 객체에 성공적으로 해석한 뒤에만 `*this`에 commit한다.
+
+크기와 결과 mapping:
+
+| 조건 | 결과 |
+|---|---|
+| `data == nullptr && size > 0`인 view | `TK_ERROR_INVALID_ARGUMENT` |
+| Encode output이 `PayloadBytes`보다 작음 | `TK_ERROR_BUFFER_TOO_SMALL` |
+| Encode output이 `PayloadBytes`보다 큼 | `TK_ERROR_INVALID_ARGUMENT` |
+| Decode payload 크기가 정확히 일치하지 않음 | `TK_ERROR_INVALID_DATA` |
+| Decode payload version 불일치 | `TK_ERROR_INVALID_DATA` |
+
+모든 실패는 output object와 output buffer를 호출 전 상태로 유지하고 diagnostic message에 expected/actual 값을 포함한다. Codec은 wire 구조, 크기와 version만 검증하며 gameplay 값의 유효성은 검사하지 않는다.
+
+#### Deterministic output과 file commit
+
+- UTF-8, LF와 generator가 직접 만드는 고정 formatting을 사용한다.
+- 고정 banner는 `// Generated by PrivateServerToolKit. Do not edit.`다.
+- Timestamp, 절대 source 경로와 machine 정보는 생성물에 기록하지 않는다.
+- 외부 clang-format 실행에 의존하지 않는다.
+- Batch 전체를 parse, validate하고 모든 header를 메모리에 render한 뒤 final file write를 시작한다.
+- 기존 file과 새 최종 내용을 byte 단위로 직접 비교하고 같으면 다시 쓰지 않는다. Hash comment나 hash 비교는 사용하지 않는다.
+- 내용이 다르면 같은 directory의 temporary file에 완전한 내용을 쓴 뒤 rename한다.
+- 개별 header가 부분 내용으로 남지 않는 file 단위 atomicity를 보장하되 여러 header rename 전체가 하나의 filesystem transaction이라고 보장하지 않는다.
+
+### 구현 slice와 순서
+
+각 slice는 새로운 public layer나 전용 result type을 뜻하지 않는다. Phase 1을 독립적으로 compile, test, review하고 commit할 수 있는 순서로 나눈 것이다. 뒤 slice는 앞 slice의 검증된 산출물만 사용한다.
+
+#### Slice 1 — 공용 계약 보완
+
+- `TkResult`에 기존 숫자값을 바꾸지 않고 `TK_ERROR_IO = -6`을 추가한다.
+- `sourceName != nullptr`이고 나머지 위치값이 모두 0인 Diagnostic location 의미를 common 계약 문서와 테스트에 반영한다.
+- Common은 header-only/type-only 상태를 유지하고 emit, file I/O 또는 Packet 동작을 추가하지 않는다.
+
+검증 게이트: C11/C++17 common contract compile과 기존 Common/Packet regression test가 통과한다.
+
+#### Slice 2 — Schema 입력과 parsing
+
+- `TkPacketCppCompileOptions`와 `TkPacketCompileCpp` public API를 추가한다.
+- File adapter, owned source snapshot과 nlohmann/json parser를 구현한다.
+- Required/unknown property, duplicate key, version, name, ID, field type과 batch duplicate를 정해진 순서로 fail-fast 검증한다.
+- 확정된 Packet diagnostic ID와 source/logical path message를 사용한다.
+
+검증 게이트: valid schema와 read/syntax/schema 오류 fixture가 정확한 `TkResult`와 첫 diagnostic을 반환하며 output directory에 파일을 만들지 않는다.
+
+#### Slice 3 — Descriptor와 layout
+
+- 검증된 schema를 language-neutral `PacketDescriptor` / `FieldDescriptor` IR로 변환한다.
+- Payload version offset, field offset/size와 `PayloadBytes`를 한 번 계산해 IR에 저장한다.
+- 빈 field 목록, 8개 integer type과 layout overflow를 검증한다.
+
+검증 게이트: 모든 primitive type, 빈 packet과 `MovementInput`의 offset/size/`PayloadBytes`가 예상값과 일치한다.
+
+#### Slice 4 — C++17 code generation
+
+- `TkPacketCodecSupport.h`의 공용 header-only primitive codec을 구현한다.
+- IR만 소비하는 deterministic C++ renderer로 DTO, metadata와 member Encode/Decode를 생성한다.
+- Signed 최소값, `-1`, `0`, 최대값을 포함해 unsigned 조립과 2의 보수 변환을 검증한다.
+
+검증 게이트: 생성 header가 C++17 translation unit으로 compile되고 Encode/Decode round trip과 failure atomicity test가 통과한다.
+
+#### Slice 5 — 생성 파일 commit
+
+- Batch 전체 header를 메모리에 render한다.
+- 기존 파일과 byte 비교 후 동일하면 write를 생략한다.
+- 변경 파일은 temporary sibling file과 rename으로 commit한다.
+- Render 또는 write 실패 시 불완전한 final file을 남기지 않는다.
+
+검증 게이트: 동일 입력의 결과가 byte-identical하고 두 번째 실행이 기존 file을 다시 쓰지 않으며 write failure가 기존 final file을 보존한다.
+
+#### Slice 6 — `MovementInput` end-to-end 검증
+
+- `MovementInput.packet.json`, 예상 `MovementInput.generated.h`와 예상 14-byte payload를 golden fixture로 저장한다.
+- Generated header snapshot과 payload bytes를 정확히 비교한다.
+- Generated C++ codec을 기존 수기 `MovementInput` codec과 byte-for-byte 비교한다.
+- Exact size, payload version mismatch, signed boundary와 Decode failure atomicity를 함께 검증한다.
+
+검증 게이트: CMake build와 CTest 전체가 통과하고 golden header와 payload가 예상값과 일치한다.
+
+### 현재 상태와 다음 세션 진입점
+
+Phase 1 design grilling은 2026-08-26 완료했다. Material design branch나 blocker는 남아 있지 않다. 다음 세션은 범위를 다시 grilling하지 않고 **Slice 1 — 공용 계약 보완**부터 구현한다.
+
+GitHub Issue #1의 Phase 1 항목에는 아직 "위치를 포함한 diagnostic"이라고 적혀 있다. 이 문서에서 확정한 Phase 1 범위는 source 경로와 logical schema path만 제공하고 정확한 line/column 계산은 하지 않는 것이다. 원격 issue를 다음에 갱신할 때 이 차이를 함께 반영한다.
 
 ## Issue 완료 기준
 
