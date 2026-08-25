@@ -31,6 +31,41 @@ CMakeLists.txt + CMakePresets.json
 2. Build: C++ 소스를 컴파일하고 target을 링크한다.
 3. Test: 빌드된 테스트 실행 파일을 실행하고 결과를 집계한다.
 
+## 배포 기본 방향: shared library SDK
+
+PrivateServerToolKit은 consumer의 빌드 시스템에 소스 프로젝트로 편입되는 방식보다, 빌드가 완료된 shared library SDK로 배포하는 것을 기본 방향으로 삼는다. Windows에서는 DLL과 import library, public header가 SDK의 핵심 산출물이다.
+
+```text
+PSTK SDK
+├── include/                 public header
+├── bin/                     runtime shared library (Windows DLL)
+├── lib/                     link library (Windows import library)
+└── lib/cmake/PSTK/          CMake consumer용 package metadata
+```
+
+모든 consumer는 동일한 public header와 binary library를 사용하며, 빌드 시스템에 따라 이를 연결하는 방법만 달라진다.
+
+- Visual Studio/MSBuild consumer: include 경로, import library, runtime DLL 경로를 직접 설정하거나 추후 제공할 property sheet를 사용한다.
+- CMake consumer: 설치된 SDK의 package metadata를 `find_package(PSTK CONFIG REQUIRED)`로 불러오고 `PSTK::Packet` target을 링크한다.
+
+```cmake
+find_package(PSTK CONFIG REQUIRED)
+
+add_executable(Consumer main.cpp)
+
+target_link_libraries(
+    Consumer
+    PRIVATE
+        PSTK::Packet
+)
+```
+
+`PSTK::Packet`은 별도의 라이브러리가 아니라 SDK에 포함된 header 경로와 platform별 link 정보를 캡슐화한 imported target이다. 따라서 CMake package 파일은 SDK의 새로운 배포 형식이 아니라 CMake consumer를 위한 편의 계층이다.
+
+소스 트리의 CMake 구성은 SDK를 빌드하고 테스트하며 설치 가능한 형태로 패키징할 책임을 가진다. Consumer에게 ToolKit 소스 트리나 동일한 CMake project 구성을 요구하지 않는다.
+
+현재 구성은 build tree 내부의 Packet DLL과 테스트 target을 만드는 단계다. 외부 consumer 배포를 완료하려면 이후 install rule, exported target, `PSTKConfig.cmake`와 version 파일을 추가하고 설치된 SDK만으로 consumer build가 가능한지 검증해야 한다.
+
 ## 최초 실행 순서
 
 프로젝트 루트에서 다음 순서로 실행한다.
@@ -136,18 +171,6 @@ ctest --preset test-dev --output-on-failure
 ```
 
 `test-dev` 프리셋에는 이미 `outputOnFailure`가 설정되어 있으므로 마지막 옵션은 생략해도 같은 의도로 동작한다.
-
-## 현재 단계의 완료 기준
-
-현재 최소 설정은 다음을 만족하면 된다.
-
-- `cmake --preset dev`가 성공한다.
-- 빌드 결과가 소스 트리 대신 `out/build/dev` 아래에 생성된다.
-- Packet Tool을 `PSTK_BUILD_PACKET_TOOL` 옵션으로 포함하거나 제외할 수 있다.
-- 테스트는 `BUILD_TESTING` 옵션으로 포함하거나 제외할 수 있다.
-- `pstk_packet_smoke`가 public API를 호출하고 CTest가 결과를 집계한다.
-
-현재 Packet DLL과 smoke executable target이 정의되어 있다. Build 단계에서 플랫폼에 맞는 shared library와 테스트 실행 파일을 생성하고, Test 단계에서 `pstk.packet.api.version` 테스트를 실행한다.
 
 ## 공식 참고 자료
 
