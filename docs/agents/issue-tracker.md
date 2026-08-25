@@ -9,6 +9,17 @@
 
 저장소 문맥에서 bare reference `#123`은 `jammer-droid/PrivateServerToolKit`의 123번 항목으로 해석한다. 번호가 PR을 가리키면 외부 PR 정책을 적용하고, 다른 저장소 항목은 `owner/repository#123` 또는 전체 URL로 적는다.
 
+## Issue design 문서
+
+GitHub Issue의 구현 계획과 세부 design은 `docs/design/issue-<number>-<slug>.md`에 issue당 하나로 관리한다. Issue의 Phase와 하위 slice는 독립 계획 문서로 분리하지 않고 해당 issue design 문서 안에 section으로 둔다.
+
+- GitHub Issue는 목표, 범위, 상태와 상위 완료 조건의 source of truth다.
+- Local issue design 문서는 세부 계약, 구현 순서, 하위 Phase, 검증 기준과 확정된 결정을 소유한다.
+- 문서는 issue URL을 포함하고 작성 전에 `gh issue view <number> --repo jammer-droid/PrivateServerToolKit`으로 현재 issue를 확인한다.
+- Issue가 지정되지 않은 상태에서 issue를 임의로 생성하거나 별도 구현 계획 문서를 만들지 않는다.
+
+작성과 갱신 절차는 [`design-workflow.md`](design-workflow.md)를 따른다.
+
 ## 이슈 작업
 
 GitHub CLI 사용 시 저장소를 명시한다.
