@@ -1,0 +1,62 @@
+# PrivateServerToolKit
+
+PrivateServer에서 공통으로 사용할 native tool과 C/C++ 계약을 제공하는 프로젝트다.
+
+## 요구 사항
+
+- Git
+- CMake 3.24 이상
+- C11과 C++17을 지원하는 compiler
+- [vcpkg](https://learn.microsoft.com/en-us/vcpkg/get_started/get-started)
+
+의존성은 root [`vcpkg.json`](vcpkg.json)의 manifest와 `builtin-baseline`으로 관리한다. 현재 `tests` feature가 GoogleTest를 개발 의존성으로 추가하며, header-only `PSTK::Common` 자체에는 runtime 의존성이 없다.
+
+## vcpkg 설정
+
+macOS/Linux에서는 vcpkg를 clone하고 bootstrap한다.
+
+```sh
+git clone https://github.com/microsoft/vcpkg.git /path/to/vcpkg
+cd /path/to/vcpkg
+./bootstrap-vcpkg.sh
+
+export VCPKG_ROOT="/path/to/vcpkg"
+export PATH="$VCPKG_ROOT:$PATH"
+```
+
+환경 변수를 계속 사용하려면 shell profile(`~/.zshrc`, `~/.bashrc` 등)에 `export` 두 줄을 추가한다. macOS에서 GoogleTest 설치 중 `pkg-config`를 찾지 못하면 다음 도구를 설치한다.
+
+```sh
+brew install pkg-config
+```
+
+Windows PowerShell에서는 다음과 같이 설정한다.
+
+```powershell
+git clone https://github.com/microsoft/vcpkg.git C:\path\to\vcpkg
+cd C:\path\to\vcpkg
+.\bootstrap-vcpkg.bat
+
+$env:VCPKG_ROOT = "C:\path\to\vcpkg"
+$env:PATH = "$env:VCPKG_ROOT;$env:PATH"
+```
+
+IDE에서 CMake preset을 사용할 때도 IDE process에 `VCPKG_ROOT`가 전달되어야 한다.
+
+## Build와 Test
+
+`dev` preset은 vcpkg toolchain과 manifest의 `tests` feature를 활성화한다. 첫 configure에서 필요한 package가 자동으로 설치되므로 별도의 `vcpkg install` 명령은 필요하지 않다.
+
+```sh
+cmake --preset dev
+cmake --build --preset build-dev
+ctest --preset test-dev
+```
+
+toolchain 또는 manifest 설정을 변경한 뒤 CMake cache를 새로 구성하려면 다음 명령을 사용한다.
+
+```sh
+cmake --fresh --preset dev
+```
+
+vcpkg manifest와 CMake 연동에 대한 자세한 내용은 [Manifest mode](https://learn.microsoft.com/en-us/vcpkg/concepts/manifest-mode)와 [CMake integration](https://learn.microsoft.com/en-us/vcpkg/users/buildsystems/cmake-integration)을 참고한다.
