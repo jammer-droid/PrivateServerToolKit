@@ -15,7 +15,10 @@
                 "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
                 "PSTK_BUILD_PACKET_TOOL": "ON",
-                "BUILD_TESTING": "ON"
+                "BUILD_TESTING": "ON",
+
+                "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+                "VCPKG_MANIFEST_FEATURES": "tests"
             }
         }
     ],

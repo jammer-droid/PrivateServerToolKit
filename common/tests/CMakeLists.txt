@@ -22,6 +22,12 @@ add_test(
 )
 
 # test for C++ 17
+# GTest 라이브러리 target 가져옴
+find_package(GTest CONFIG REQUIRED)
+
+# CMake에서 사용할 GoogleTest 함수
+include(GoogleTest)
+
 add_executable(
     pstk_common_contract_cpp
     CommonContract.cpp
@@ -37,9 +43,11 @@ target_link_libraries(
     pstk_common_contract_cpp
     PRIVATE
     PSTK::Common
+    GTest::gtest_main # GoogleTest 실행 파일 링크 / main 제공
 )
 
-add_test(
-    NAME pstk.common.contract.cpp
-    COMMAND pst_common_contract_cpp
+# GoogleTest의 TEST를 CTest에 개별 등록
+gtest_discover_tests(
+    pstk_common_contract_cpp
+    TEST_PREFIX "pstk.common.contract.cpp."
 )
