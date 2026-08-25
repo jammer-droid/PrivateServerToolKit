@@ -109,6 +109,133 @@ Common이 소유하지 않는 것:
 
 공용 계약의 design은 확정되었다. Header 구현과 compile/test 검증은 아직 남아 있으며 이 조건을 충족하기 전에 Phase 0를 완료로 판정하지 않는다.
 
+### 구현 가이드
+
+Phase 0은 Packet Tool 기능을 추가하지 않고 common header와 계약 테스트만 구현한다. 작업 중 schema, parser, generator, packet diagnostic ID 또는 `MovementInput` codec을 리팩터링하지 않는다.
+
+#### 1. `TkResult` 어휘 완성
+
+`include/pstk/TkResult.h`에 `TK_ERROR_INVALID_DATA = -5`를 추가한다. 기존 숫자값은 변경하지 않고 예제로 남은 주석은 제거한다.
+
+확정된 값:
+
+```text
+TK_SUCCESS                    0
+TK_ERROR_UNKNOWN             -1
+TK_ERROR_INVALID_ARGUMENT    -2
+TK_ERROR_BUFFER_TOO_SMALL    -3
+TK_ERROR_OUT_OF_MEMORY       -4
+TK_ERROR_INVALID_DATA        -5
+```
+
+Packet, parser 또는 generator 전용 result 값은 추가하지 않는다.
+
+#### 2. Byte view header 완성
+
+`include/pstk/TkByteView.h`를 C와 C++ 모두에서 include할 수 있는 self-contained header로 완성한다.
+
+- C++ 전용 `<cstddef>` 대신 `<stddef.h>`, `<stdint.h>`와 `<stdbool.h>`를 사용한다.
+- `size`에 `const`를 붙이지 않아 view가 복사·대입 가능한 POD가 되게 한다.
+- `TkIsValidByteRange(const void* data, size_t size)`는 `bool`을 반환하는 `static inline` predicate로 정의한다.
+- 구현은 `size == 0 || data != NULL`만 판단한다.
+- View에 constructor, method, template, lifetime 관리 또는 packet 크기 검증을 추가하지 않는다.
+
+#### 3. Diagnostic type header 추가
+
+`include/pstk/TkDiagnostic.h`에 구현 없는 공용 POD와 callback type만 정의한다. 모든 enum 값은 명시적으로 고정한다.
+
+```text
+TkDiagnosticSeverity
+  TK_DIAGNOSTIC_INFO       0
+  TK_DIAGNOSTIC_WARNING    1
+  TK_DIAGNOSTIC_ERROR      2
+  TK_DIAGNOSTIC_SEVERITY_MAX_ENUM  0x7FFFFFFF
+
+TkDiagnosticLocation
+  const char* sourceName
+  size_t      byteOffset
+  uint32_t    line
+  uint32_t    column
+
+TkDiagnostic
+  TkDiagnosticSeverity severity
+  const char*          id
+  const char*          message
+  TkDiagnosticLocation location
+
+TkDiagnosticCallback
+  void (*)(const TkDiagnostic* diagnostic, void* userData)
+
+TkDiagnosticSink
+  TkDiagnosticCallback callback
+  void*                userData
+```
+
+Common에 emit 함수, null-check helper, logger, registry, allocation 또는 thread 코드를 추가하지 않는다. Disabled sink는 `{ NULL, NULL }`로 표현할 수 있어야 한다.
+
+#### 4. Common C/C++ 계약 테스트 추가
+
+루트 CMake project를 `LANGUAGES C CXX`로 구성하고 `PSTK::Common`에 C11/C++17 요구사항을 전파한다. `tests/common/`에 `pstk_common_contract_c`, `pstk_common_contract_cpp` 테스트 target을 두고, 루트의 `if(BUILD_TESTING)`에서 Packet Tool option과 관계없이 해당 디렉터리를 추가한다. Common 테스트는 `PSTK_BUILD_PACKET_TOOL=OFF`인 build에서도 구성·빌드·실행되어야 한다.
+
+테스트 구조:
+
+- C translation unit이 각 common header를 첫 include로 사용해 self-contained C 호환성을 검증한다.
+- C++17 translation unit이 각 common header를 첫 include로 사용한다.
+- C++ test에서 view와 diagnostic struct의 standard-layout/trivially-copyable 조건을 `static_assert`한다.
+- C test에서 view 복사·대입을 compile해 `size`가 const field로 회귀하지 않도록 한다.
+- Result와 severity의 숫자값을 검증한다.
+- Disabled sink를 구성하고 callback/user data가 null인지 검증한다.
+
+Byte range 필수 case:
+
+| `data` | `size` | 결과 |
+|---|---:|---|
+| null | 0 | valid |
+| non-null | 0 | valid |
+| null | 1 | invalid |
+| non-null | 1 | valid |
+
+테스트는 common이 소유하지 않는 lifetime, 실제 allocation 크기, diagnostic 문자열 encoding 또는 callback 동시성을 검증하려고 하지 않는다.
+
+#### 5. Packet target 연결 확인
+
+`pstk_packet`은 기존처럼 `PSTK::Common`을 public link한다. Phase 0에서 Packet public API를 확장하지 않고 기존 API version smoke test가 그대로 통과하는지만 확인한다.
+
+### 검증 게이트
+
+#### Gate A — Common-only
+
+Packet Tool을 빌드하지 않고 common header와 테스트가 독립적으로 성립하는지 확인한다.
+
+```sh
+cmake -S . -B out/build/common-only \
+  -DPSTK_BUILD_PACKET_TOOL=OFF \
+  -DBUILD_TESTING=ON
+cmake --build out/build/common-only
+ctest --test-dir out/build/common-only --output-on-failure
+```
+
+#### Gate B — Full regression
+
+```sh
+cmake --preset dev
+cmake --build --preset build-dev
+ctest --preset test-dev
+git diff --check
+```
+
+Gate B에서 기존 `pstk.packet.api.version`과 새 common C/C++ 테스트가 모두 통과해야 한다.
+
+### Phase 0 완료 판정
+
+Phase 0은 다음 상태에서만 완료로 판정한다.
+
+- 세 common header가 확정된 계약과 일치한다.
+- C/C++ 양쪽의 self-contained header compile과 runtime contract test가 통과한다.
+- Common-only와 full build/test gate가 모두 통과한다.
+- Common에 tool-specific helper, storage, allocation 또는 runtime dependency가 추가되지 않았다.
+- 남은 작업이 Phase 1의 schema/parser/IR/generator design으로 한정된다.
+
 ## Phase 1 — Packet compiler core와 C++ 생성
 
 ### 상속한 계약

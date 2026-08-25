@@ -59,8 +59,7 @@ set_target_properties(
 # 매크로 헤더를 빌드 과정에서 생성
 generate_export_header(
     pstk_packet
-    EXPORT_FILE_NAME
-    "${CMAKE_CURRENT_BINARY_DIR}/pstk_packet_export.h"
+    EXPORT_FILE_NAME "${CMAKE_CURRENT_BINARY_DIR}/pstk_packet_export.h"
     EXPORT_MACRO_NAME PSTK_PACKET_API
 )
 
