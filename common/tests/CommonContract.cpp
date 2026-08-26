@@ -20,6 +20,7 @@ static_assert(TK_ERROR_INVALID_ARGUMENT == -2, "TK_ERROR_INVALID_ARGUMENT value 
 static_assert(TK_ERROR_BUFFER_TOO_SMALL == -3, "TK_ERROR_BUFFER_TOO_SMALL value changed");
 static_assert(TK_ERROR_OUT_OF_MEMORY == -4, "TK_ERROR_OUT_OF_MEMORY value changed");
 static_assert(TK_ERROR_INVALID_DATA == -5, "TK_ERROR_INVALID_DATA value changed");
+static_assert(TK_ERROR_IO == -6, "TK_ERROR_IO value changed");
 
 TEST(TkByteRangeContract, ValidatesNullAndNonNullRanges)
 {

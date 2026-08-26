@@ -31,6 +31,7 @@ int main(void)
     passed &= Expect(TkIsValidByteRange(&byte, 0), "non-null empty range must be valid");
     passed &= Expect(!TkIsValidByteRange(NULL, 1), "null non-empty range must be invalid");
     passed &= Expect(TkIsValidByteRange(&byte, 1), "non-null non-empty range must be valid");
+    passed &= Expect(TK_ERROR_IO == -6, "TK_ERROR_IO value changed");
 
     {
         TkByteView source = {&byte, 1};
