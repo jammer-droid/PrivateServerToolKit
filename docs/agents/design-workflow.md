@@ -32,6 +32,16 @@ Issue design 문서는 issue 본문을 전체 복사하지 않고 상세 design�
 
 Issue 생성, 본문·라벨·관계 변경, comment와 close는 publish다. 로컬 design 문서 작성이 허용되어도 GitHub 원격 상태를 자동으로 변경하지 않는다.
 
+## 구현으로 전환
+
+Design grilling이 끝나면 issue 문서의 현재 Phase와 다음 slice를 구현 진입점으로 사용한다.
+
+- 사용자가 구현 가이드를 요청하면 `$lean-implementation`의 Guide mode로 다음 slice의 파일, public seam, 핵심 흐름, 불변식과 제외 범위를 설명하고 파일은 수정하지 않는다.
+- 사용자는 가이드를 판단해 직접 구현하거나, 일부 또는 전체 typing을 agent에게 위임할 수 있다.
+- Agent가 구현을 위임받으면 같은 slice만 수정하고 issue 문서의 이후 slice를 앞당겨 구현하지 않는다.
+- 테스트와 실행 범위는 `$lean-implementation`을 따른다.
+- 실제 코드와 검증 결과가 design 가정을 깨뜨릴 때만 해당 issue 문서로 돌아가 계약을 갱신한다.
+
 ## 문서 구조
 
 Issue design 문서는 필요한 범위에서 다음 정보를 유지한다.
