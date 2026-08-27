@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <pstk/TkByteView.h>
+#include <pstk/TkDiagnostic.h>
 #include <pstk/TkResult.h>
 
 #include <cstdint>

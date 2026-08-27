@@ -87,11 +87,11 @@ Common이 소유하지 않는 것:
 - `TkDiagnosticSeverity`: Info, Warning, Error 분류
 - `TkDiagnosticLocation`: optional `sourceName`, 0-based UTF-8 `byteOffset`, 1-based `line`, 1-based byte 기준 `column`
 - `TkDiagnostic`: severity, stable `id`, UTF-8 `message`, location을 가지는 borrowed POD
-- `TkDiagnosticCallbacks`: callback function pointer와 `userData`를 가지는 POD
-- `callback == nullptr`은 diagnostic을 버리는 유효한 disabled callbacks
+- `TkDiagnosticCallbackInfo`: callback function pointer와 `userData`를 가지는 POD
+- `callback == nullptr`은 diagnostic을 버리는 유효한 disabled callback
 - Callback은 tool API를 호출한 thread에서 API 반환 전에 동기적으로 실행
 - Diagnostic과 문자열은 callback 동안만 유효하며 consumer가 필요한 정보를 복사
-- 하나의 API 호출은 callback을 순차 실행하지만, 동일 callbacks를 사용한 별도 API 호출들은 동시에 callback을 실행할 수 있음
+- 하나의 API 호출은 callback을 순차 실행하지만, 동일 callback info를 사용한 별도 API 호출들은 동시에 callback을 실행할 수 있음
 - `id`는 non-empty ASCII `PSTK-<TOOL>-<NAME>` 형식의 안정적인 식별자
 - Common은 diagnostic 타입만 제공하고 호출, 저장, 필터링, logging, allocation과 thread를 소유하지 않음
 
@@ -103,7 +103,7 @@ Common이 소유하지 않는 것:
 
 1. `TkResult.h`가 확정된 공용 result 값과 `TK_ERROR_INVALID_DATA`를 정의한다.
 2. `TkByteView.h`가 C-compatible byte view POD와 `TkIsValidByteRange`를 정의한다.
-3. `TkDiagnostic.h`가 diagnostic, location, callback과 callbacks POD를 정의한다.
+3. `TkDiagnostic.h`가 diagnostic, location, callback과 callback info POD를 정의한다.
 4. Common header를 별도 binary 연결 없이 C와 C++ translation unit에서 각각 compile한다.
 5. Test가 공용 result 값, byte range의 null/empty 규칙과 byte view의 복사·쓰기 계약을 검증한다.
 
@@ -166,7 +166,7 @@ TkDiagnostic
 TkDiagnosticCallback
   void (*)(const TkDiagnostic* diagnostic, void* userData)
 
-TkDiagnosticCallbacks
+TkDiagnosticCallbackInfo
   TkDiagnosticCallback callback
   void*                userData
 ```
@@ -302,8 +302,8 @@ Schema 파일 하나는 packet 하나만 정의한다. Compiler는 여러 schema
 
 #### 입력, parser와 diagnostic 계약
 
-- Public consumer는 schema 경로만 전달한다. Packet Tool file adapter가 각 경로를 현재 working directory를 바꾸지 않고 한 번 읽어 owned source snapshot을 만든다.
-- 입력 경로는 caller가 전달한 순서대로 처리하며 첫 read, JSON syntax 또는 schema semantic 오류에서 전체 compile을 중단한다.
+- Public consumer는 schema 경로만 전달한다. Packet Tool file adapter가 각 경로를 현재 working directory를 바꾸지 않고 한 번 읽어 source 이름과 owned JSON byte를 가진 `PacketSource`를 만든다.
+- 입력 경로는 caller가 전달한 순서대로 처리하며 첫 read, JSON syntax 또는 schema semantic 오류에서 전체 compile을 중단한다. 각 `ParsedPacketSource`를 만든 직후 batch name/ID 유일성을 검사한 뒤 다음 경로로 넘어간다.
 - JSON parser는 Packet Tool의 private vcpkg dependency인 nlohmann/json을 사용한다.
 - Diagnostic은 source 경로와 `packet.fields[2].type` 같은 logical schema path를 message에 포함한다.
 - Phase 1은 별도 line/column scanner를 구현하지 않는다. Source 파일은 알지만 정확한 위치를 모르면 `sourceName != nullptr`이고 `byteOffset`, `line`, `column`은 모두 0이다.
@@ -333,21 +333,22 @@ PSTK-PACKET-UNSUPPORTED-PAYLOAD-VERSION
 Phase 1은 여러 입력을 한 번에 처리하는 C-compatible Packet DLL API 하나를 추가한다.
 
 ```c
-typedef struct TkPacketCppCompileOptions
+typedef struct TkPacketCppCompileInfo
 {
     const char *const *inputPaths;
     size_t inputPathCount;
     const char *outputDirectory;
-    const char *cppNamespace;
-    TkDiagnosticCallbacks diagnostics;
-} TkPacketCppCompileOptions;
+    const char *namespaceName;
+    TkDiagnosticCallbackInfo diagnosticCallback;
+} TkPacketCppCompileInfo;
 
 PSTK_PACKET_API TkResult TkPacketCompileCpp(
-    const TkPacketCppCompileOptions *options);
+    const TkPacketCppCompileInfo *compileInfo);
 ```
 
 - 모든 pointer와 문자열은 호출 동안만 borrowed다.
-- C++ namespace는 schema가 아니라 required compiler option으로 전달한다.
+- `compileInfo`, `inputPaths`, 각 input path, `outputDirectory`, `namespaceName`은 non-null이어야 하고 문자열은 non-empty여야 하며 `inputPathCount > 0`이어야 한다. 이 호출 계약을 위반하면 diagnostic 없이 `TK_ERROR_INVALID_ARGUMENT`를 반환한다.
+- C++ namespace는 schema가 아니라 required compile info로 전달한다. `namespace`는 C++ keyword이므로 field 이름은 `namespaceName`을 사용한다.
 - Diagnostic callback은 값으로 전달하며 `callback == nullptr`이면 disabled다.
 - 파일 open/read/write 실패에는 공용 `TK_ERROR_IO`를 사용하고 schema 또는 payload 해석 실패에는 `TK_ERROR_INVALID_DATA`를 사용한다.
 - Packet 전용 result type이나 layer별 result type은 만들지 않는다.
@@ -361,7 +362,7 @@ PSTK_PACKET_API TkResult TkPacketCompileCpp(
 - Codec support는 byte view 검증, little-endian read/write, signed 변환, `TkResult` mapping과 diagnostic emit만 제공한다.
 - Generated DTO는 상속, virtual dispatch와 reflection 없이 packet별 field mapping을 소유한다.
 - Consumer에게 공개하는 metadata는 `PacketId`, `PayloadVersion`, `PayloadBytes`뿐이다. Field offset/size와 endian helper는 public 계약으로 노출하지 않는다.
-- DTO는 `const` Encode member와 Decode member를 제공하고 optional `TkDiagnosticCallbacks diagnostics = {}`를 받는다.
+- DTO는 `const` Encode member와 Decode member를 제공하고 optional `TkDiagnosticCallbackInfo diagnosticCallback = {}`를 받는다.
 - Decode는 임시 객체에 성공적으로 해석한 뒤에만 `*this`에 commit한다.
 
 크기와 결과 mapping:
@@ -401,8 +402,8 @@ PSTK_PACKET_API TkResult TkPacketCompileCpp(
 
 #### Slice 2 — Schema 입력과 parsing
 
-- `TkPacketCppCompileOptions`와 `TkPacketCompileCpp` public API를 추가한다.
-- File adapter, owned source snapshot과 nlohmann/json parser를 구현한다.
+- `TkPacketCppCompileInfo`와 `TkPacketCompileCpp` public API를 추가한다.
+- File adapter에서 `PacketSource`를 만들고 nlohmann/json parser가 `ParsedFieldSchema`를 포함한 `ParsedPacketSource`로 변환한다. `ParsedPacketSource`는 후속 diagnostic을 위해 `sourceName`을 유지한다.
 - Required/unknown property, duplicate key, version, name, ID, field type과 batch duplicate를 정해진 순서로 fail-fast 검증한다.
 - 확정된 Packet diagnostic ID와 source/logical path message를 사용한다.
 

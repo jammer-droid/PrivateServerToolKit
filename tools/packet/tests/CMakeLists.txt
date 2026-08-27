@@ -19,3 +19,29 @@ add_test(
     # CMake에서 실제 실행 파일 경로로 전달
     COMMAND pstk_packet_smoke
 )
+
+find_package(GTest CONFIG REQUIRED)
+include(GoogleTest)
+
+add_executable(
+    pstk_packet_tests
+    TkPacketCompilerTests.cpp
+)
+
+target_compile_features(
+    pstk_packet_tests
+    PRIVATE
+    cxx_std_17
+)
+
+target_link_libraries(
+    pstk_packet_tests
+    PRIVATE
+    PSTK::Packet
+    GTest::gtest_main
+)
+
+gtest_discover_tests(
+    pstk_packet_tests
+    TEST_PREFIX "pstk.packet.compiler."
+)

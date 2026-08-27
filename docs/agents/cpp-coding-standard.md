@@ -15,7 +15,7 @@
 
 ## C-compatible public contract
 
-`common` header와 Packet Tool의 공개 경계는 C와 C++ consumer가 함께 사용하는 C ABI다.
+`common` header와 Packet Tool의 공개 경계는 C++ consumer가 사용하는 C ABI 형태의 계약이다. 이 형태는 C++ ABI의 compiler별 모호함을 줄이고 외부 symbol과 data layout을 단순하게 유지하기 위한 것이며, C 언어 consumer 지원을 의미하지 않는다.
 
 - `typedef struct`, `typedef enum`, lowerCamelCase field와 이미 공개된 symbol 및 numeric value를 유지한다.
 - 공개 계약을 `enum class`, reference parameter, constructor 또는 C++ member function으로 바꾸지 않는다.
@@ -23,8 +23,10 @@
 - 공개 signature와 object layout에는 STL type, exception, RTTI 또는 compiler-dependent C++ class layout을 노출하지 않는다.
 - Export macro는 DLL 밖에서 호출해야 하는 symbol에만 붙이고 나머지 symbol은 기본적으로 숨긴다.
 - 한 module에서 할당한 메모리는 같은 module이 해제한다. Module이 ownership을 넘긴다면 대응하는 destroy/free API를 같은 경계에 제공한다.
+- Public C API에서 하나의 operation이나 object 설정을 묶는 parameter block은 Vulkan 스타일의 `Info` suffix를 사용한다. 생성 요청은 `CreateInfo`, compile 요청은 `CompileInfo`처럼 동작을 이름에 포함하며, `Options`를 범용 parameter bag 이름으로 사용하지 않는다.
+- 하나의 callback과 `userData`를 묶는 parameter block은 단수형 `CallbackInfo`를 사용한다. 서로 다른 callback이 여러 개 있지 않다면 `Callbacks`라는 복수형 이름을 사용하지 않는다.
 
-C translation unit에서 필요한 `NULL`과 C header 표현은 C++ 스타일로 기계적으로 바꾸지 않는다.
+공개 경계에 채택한 C header 표현은 C++ 스타일로 기계적으로 바꾸지 않는다. 기존 common C11 contract test는 작은 POD header의 회귀 검증으로 유지하되, 실제 C 또는 다른 언어 FFI consumer가 생기기 전까지 개별 tool API에 C translation unit 전용 test를 추가하지 않는다.
 
 ## Result, diagnostic과 assertion
 
@@ -46,7 +48,7 @@ C translation unit에서 필요한 `NULL`과 C header 표현은 C++ 스타일로
 
 - Formatting은 저장소의 `.clang-format`을 따르고 기존 include group 순서를 보존한다.
 - 설치 가능한 project public header는 `#include <pstk/...>` 형식을 사용하고 같은 component의 private header는 quote include를 사용할 수 있다.
-- 현재 handwritten tool 구현의 최소 언어 버전은 C++17이다. C-compatible common contract는 C11 translation unit에서도 compile 가능해야 한다.
+- 현재 handwritten tool과 consumer의 최소 언어 버전은 C++17이다. 공개 header는 C ABI 형태를 유지하며, 기존 common header만 C11 contract test 범위에 포함한다.
 - Generated source는 issue design의 public contract, schema field 이름과 deterministic formatting을 우선한다.
 - Generated DTO의 member `Encode`/`Decode`와 schema-derived lowerCamelCase field는 handwritten type 규칙의 예외다.
 - Generated source는 사람이 직접 수정하거나 스타일만을 위해 후처리하지 않는다.

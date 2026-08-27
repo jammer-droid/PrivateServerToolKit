@@ -1,4 +1,5 @@
 include (GenerateExportHeader)
+find_package(nlohmann_json CONFIG REQUIRED)
 
 # SHARED 라이브리러 빌드
 # CMake에서 자동으로 compiler define에
@@ -6,6 +7,7 @@ include (GenerateExportHeader)
 add_library(
     pstk_packet
     SHARED # 동적 라이브러리
+    src/TkPacketCompiler.cpp
     src/TkPacketTool.cpp
 )
 
@@ -25,6 +27,8 @@ target_link_libraries(
     pstk_packet
     PUBLIC
     PSTK::Common
+    PRIVATE
+    nlohmann_json::nlohmann_json
 )
 
 # public header와 생성된 export header 공개

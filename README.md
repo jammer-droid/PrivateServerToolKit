@@ -1,12 +1,13 @@
 # PrivateServerToolKit
 
-PrivateServer에서 공통으로 사용할 native tool과 C/C++ 계약을 제공하는 프로젝트다.
+PrivateServer에서 공통으로 사용할 native tool과 C ABI 형태의 C++ 계약을 제공하는 프로젝트다.
 
 ## 요구 사항
 
 - Git
 - CMake 3.24 이상
 - C11과 C++17을 지원하는 compiler
+- 커밋 hook을 사용할 경우 `clang-format`
 - [vcpkg](https://learn.microsoft.com/en-us/vcpkg/get_started/get-started)
 
 의존성은 root [`vcpkg.json`](vcpkg.json)의 manifest와 `builtin-baseline`으로 관리한다. 현재 `tests` feature가 GoogleTest를 개발 의존성으로 추가하며, header-only `PSTK::Common` 자체에는 runtime 의존성이 없다.
@@ -60,3 +61,13 @@ cmake --fresh --preset dev
 ```
 
 vcpkg manifest와 CMake 연동에 대한 자세한 내용은 [Manifest mode](https://learn.microsoft.com/en-us/vcpkg/concepts/manifest-mode)와 [CMake integration](https://learn.microsoft.com/en-us/vcpkg/users/buildsystems/cmake-integration)을 참고한다.
+
+## Pre-commit formatting
+
+저장소의 hook을 활성화하면 커밋 대상으로 stage한 `.cpp`와 `.h` 파일을 root `.clang-format`으로 자동 포맷하고 다시 stage한다.
+
+```sh
+git config core.hooksPath .githooks
+```
+
+macOS에서는 `PATH`에 `clang-format`이 없으면 `xcrun`으로 Command Line Tools의 실행 파일을 찾는다. 다른 위치를 사용하려면 실행 파일 경로를 `CLANG_FORMAT_BIN` 환경 변수로 전달할 수 있다. 부분 stage한 파일에 unstaged 변경이 함께 있으면 의도하지 않은 코드가 커밋되지 않도록 hook이 중단된다.
