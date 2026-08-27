@@ -47,3 +47,29 @@ gh issue close 123 --repo jammer-droid/PrivateServerToolKit --reason "not planne
 4. 연결할 이슈를 찾아 선택한다.
 
 연결 후 GitHub 이슈의 **Relationships**에서 `Blocked by`와 `Blocking` 관계를 확인한다.
+
+## Wayfinding operations
+
+Wayfinder map은 `wayfinder:map` 라벨이 있는 GitHub Issue 하나로 표현한다.
+하위 decision ticket에는 역할에 따라 다음 라벨을 사용한다.
+
+- `wayfinder:research`
+- `wayfinder:prototype`
+- `wayfinder:grilling`
+- `wayfinder:task`
+
+명시적 Wayfinder 요청 전에 현재 라벨을 조회한다. canonical 라벨이 없으면
+다른 라벨로 대체하거나 자동 생성하지 말고, 사용자가 라벨 생성을 별도로
+허용할 때까지 멈춘다.
+
+- 저장소에서 native sub-issue를 사용할 수 있으면 map의 child로 연결한다.
+  사용할 수 없으면 map 본문의 linked checklist와 child 본문의
+  `Part of #<map>` 표기를 함께 사용한다.
+- blocking edge는 위의 native **Relationships**를 우선한다. 사용할 수 없는
+  경우에만 child 본문의 `Blocked by: #<n>` 필드를 fallback으로 사용한다.
+- claim은 child assignee로 표현하며 assignee가 없으면 unclaimed다.
+- live frontier는 map의 open child 중 open blocker와 assignee가 없는 항목을
+  map 순서대로 조회한 결과다.
+- resolution은 child에 결론을 남기고 닫은 뒤 map의 one-line decision index를
+  갱신한다. 이 외부 write들은 범위를 명시한 Wayfinder chart 또는 advance
+  요청이 있을 때만 수행한다.
