@@ -1,14 +1,16 @@
-# GitHub Issue #1: 스키마 기반 C++/C# 패킷 코드 생성기와 unary RPC 계층 구현
+# GitHub Issue #1: 스키마 기반 C++/C# 패킷 코드 생성기
 
 - Issue: [jammer-droid/PrivateServerToolKit#1](https://github.com/jammer-droid/PrivateServerToolKit/issues/1)
 - Issue state: Open
-- Last verified: 2026-08-26
+- Last verified: 2026-08-28
 
 ## 문서 역할
 
-GitHub Issue #1은 schema를 source of truth로 삼아 C++/C# fixed-layout packet code를 생성하고, Packet MVP 이후 같은 descriptor를 unary RPC 계층으로 확장하는 상위 범위와 완료 조건을 소유한다.
+GitHub Issue #1은 schema를 source of truth로 삼아 C++/C# fixed-layout packet code를 생성하고 두 consumer build에 연결하는 상위 범위와 완료 조건을 소유한다.
 
 이 문서는 Issue #1의 세부 계약, 하위 Phase, 구현 순서와 검증 기준을 관리한다. 기존 `Phase 0: Common Contract`은 독립 프로젝트 Phase가 아니라 Phase 1 Packet Compiler가 의존하는 Issue #1의 선행 slice로 통합한다.
+
+기존 `Phase 4 — Async unary RPC 계층`은 network와 application service 사이의 command/event/unary lifecycle, middleware와 adapter까지 포함하는 [Issue #2 — Typed Service Host와 middleware pipeline](https://github.com/jammer-droid/PrivateServerToolKit/issues/2)으로 분리·확장했다. Issue #1은 해당 runtime을 구현하지 않고 packet/schema foundation과 consumer build integration까지만 소유한다.
 
 ## Issue 경계
 
@@ -16,26 +18,25 @@ GitHub Issue #1은 schema를 source of truth로 삼아 C++/C# fixed-layout packe
 
 - 언어 독립 message/field descriptor와 schema parser
 - C++/C# fixed-layout DTO, codec와 golden vector
-- Packet ID, direction과 catalog
-- 후속 unary RPC stub, dispatcher와 runtime
+- Packet ID를 포함한 generated code의 consumer build integration
 
 수기 코드와 기존 runtime 책임으로 유지하는 것:
 
 - NetworkRuntime의 6-byte transport framing과 socket/IOCP buffer lifetime
-- Transport routing, session/entity ownership과 gameplay semantic validation
-- RPC business/gameplay 구현
+- Direction 해석과 handler 등록을 포함한 transport routing, session/entity ownership과 gameplay semantic validation
 
-Protobuf wire format, runtime reflection, schema hot reload, gRPC/HTTP2 호환과 streaming RPC는 범위 밖이다.
+Typed Service Host, middleware, command/event dispatch, async unary call lifecycle, schema direction metadata, 중앙 packet catalog와 자동 registration, Protobuf wire format, runtime reflection과 schema hot reload는 범위 밖이다. Service Host와 unary call은 Issue #2가 소유한다.
 
 ## 구현 순서
 
 1. Phase 0 — Common contract 선행 slice
 2. Phase 1 — Packet compiler core와 C++ 생성
 3. Phase 2 — C# 생성과 cross-language conformance
-4. Phase 3 — Packet catalog과 build integration
-5. Phase 4 — Async unary RPC 계층
+4. Phase 3 — Generated code build integration
 
-Phase 0 common contract 선행 slice는 구현과 검증을 완료했다. Phase 1은 schema/parser, 공통 schema compiler와 언어별 generator를 순서대로 구현한다. Phase 2~4는 Issue #1의 상위 범위를 따르며 해당 구현에 진입할 때 이 문서에 세부 design을 추가한다.
+Phase 0 common contract 선행 slice는 구현과 검증을 완료했다. Phase 1은 schema/parser, 공통 schema compiler와 언어별 generator를 순서대로 구현한다. Phase 2~3은 Issue #1의 상위 범위를 따르며 해당 구현에 진입할 때 이 문서에 세부 design을 추가한다.
+
+Phase 3은 schema에 direction metadata를 추가하거나 중앙 packet catalog와 자동 registration을 생성하지 않는다. Direction과 handler binding은 PrivateServer와 Godot C# client의 사용 및 등록 문맥에서 해석하고, Phase 3은 generated source를 두 consumer의 build input으로 연결하는 경계에 집중한다. 구체적인 SDK 배포, build hook과 stale output 정책은 Phase 3 진입 시 grilling으로 확정한다.
 
 ## Phase 0 — Common contract 선행 slice
 
@@ -261,7 +262,7 @@ Phase 0은 다음 조건을 충족하여 완료됐다.
 
 ### 확정된 범위
 
-Phase 1은 build-time JSON schema compiler와 C++17 생성기만 구현한다. Runtime JSON parsing, C# 생성, packet catalog, direction, unary RPC와 gameplay semantic validation은 포함하지 않는다. `MovementInput`은 예시 전용 타입이 아니라 첫 end-to-end vertical slice다.
+Phase 1은 build-time JSON schema compiler와 C++17 생성기만 구현한다. Runtime JSON parsing, C# 생성, consumer build integration, Issue #2의 Service Host/unary call lifecycle과 gameplay semantic validation은 포함하지 않는다. `MovementInput`은 예시 전용 타입이 아니라 첫 end-to-end vertical slice다.
 
 #### Schema 계약
 
@@ -292,7 +293,7 @@ Schema 파일 하나는 packet 하나만 정의한다. Compiler는 여러 schema
 - Packet name은 PascalCase, field name은 lowerCamelCase로 작성하도록 안내하되 Phase 1에서 naming style 정규식 검사는 하지 않는다.
 - 필수 name은 비어 있을 수 없고 같은 packet의 field name은 중복될 수 없다.
 - 알 수 없는 JSON property, duplicate key와 알 수 없는 field type은 오류다.
-- `direction`은 semantic packet 분류이므로 Phase 1 schema와 descriptor에서 제외하고 Phase 3 catalog 설계에서 다룬다.
+- `direction`은 fixed-layout schema와 descriptor에 포함하지 않는다. Direction 해석과 handler binding은 generated code를 사용하는 consumer runtime이 소유한다.
 
 #### Wire와 layout 계약
 
@@ -454,7 +455,11 @@ Phase 1의 compiler pipeline은 `schema path → PacketSource → PacketJsonPars
 
 Phase 1 design grilling은 2026-08-26 완료했다. Material design branch나 blocker는 남아 있지 않다. Slice 1부터 Slice 4까지 공용 계약, schema compiler, descriptor/layout과 C++17 code generation을 구현했으며, 다음 작업은 **Slice 5 — 생성 파일 commit**이다.
 
-GitHub Issue #1의 Phase 1 항목에는 아직 "위치를 포함한 diagnostic"이라고 적혀 있다. 이 문서에서 확정한 Phase 1 범위는 source 경로와 logical schema path만 제공하고 정확한 line/column 계산은 하지 않는 것이다. 원격 issue를 다음에 갱신할 때 이 차이를 함께 반영한다.
+GitHub Issue #1의 Phase 1 diagnostic 문구도 이 문서의 계약과 동일하게 source 경로와 logical schema path를 제공하되 정확한 line/column은 계산하지 않는 범위로 갱신했다.
+
+### 후속 Service Host
+
+Generated packet을 typed service 호출로 연결하는 application-facing I/O, middleware pipeline, command/event dispatch와 async unary lifecycle은 Issue #1의 Phase 4에서 제거하고 [Issue #2](https://github.com/jammer-droid/PrivateServerToolKit/issues/2)로 이관했다. Issue #2는 Issue #1의 C++/C# codec과 consumer build integration을 사용하지만 별도 목표, 책임 경계, 설계 refinement와 완료 조건을 소유한다.
 
 ## Issue 완료 기준
 
