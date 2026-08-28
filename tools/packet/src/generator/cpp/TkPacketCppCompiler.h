@@ -5,4 +5,4 @@
 namespace pstk::packet
 {
 TkResult CompileCpp(const TkPacketCppCompileInfo &compileInfo);
-}
+} // namespace pstk::packet

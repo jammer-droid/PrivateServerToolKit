@@ -1,15 +1,19 @@
-#include "TkPacketCompiler.h"
+#include "TkPacketJsonParser.h"
+
+#include "TkPacketDiagnostic.h"
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
 #include <iterator>
+#include <limits>
 #include <string>
 #include <unordered_set>
+#include <utility>
 #include <vector>
-#include <fstream>
 
 namespace pstk::packet
 {
@@ -17,55 +21,20 @@ namespace
 {
 using Json = nlohmann::json;
 
-inline constexpr const char *SourceReadFailedId = "PSTK-PACKET-SOURCE-READ-FAILED";
-inline constexpr const char *InvalidJsonId = "PSTK-PACKET-INVALID-JSON";
-inline constexpr const char *InvalidSchemaId = "PSTK-PACKET-INVALID-SCHEMA";
-inline constexpr const char *UnsupportedSchemaVersionId = "PSTK-PACKET-UNSUPPORTED-SCHEMA-VERSION";
-inline constexpr const char *DuplicateKeyId = "PSTK-PACKET-DUPLICATE-KEY";
-inline constexpr const char *DuplicatePacketIdId = "PSTK-PACKET-DUPLICATE-PACKET-ID";
-inline constexpr const char *DuplicatePacketNameId = "PSTK-PACKET-DUPLICATE-PACKET-NAME";
-inline constexpr const char *DuplicateFieldNameId = "PSTK-PACKET-DUPLICATE-FIELD-NAME";
-inline constexpr const char *UnknownFieldTypeId = "PSTK-PACKET-UNKNOWN-FIELD-TYPE";
-
-struct PacketSource
-{
-    std::string sourceName;
-    std::string contents;
-};
-
-struct ParsedFieldSchema
-{
-    std::string name;
-    std::string type;
-};
-
-struct ParsedPacketSource
-{
-    std::string sourceName;
-    std::string name;
-    std::uint16_t id;
-    std::uint16_t payloadVersion;
-    std::vector<ParsedFieldSchema> fields;
-};
-
 class DuplicateKeyDetector final : public nlohmann::json_sax<Json>
 {
     struct SaxContainer
     {
         enum class SaxType
         {
-            JsonObject, // property 접근 가능
-            JsonArray   // index 로 접근 가능
+            JsonObject,
+            JsonArray,
         };
 
         SaxType type;
         std::string path;
-
-        // for SaxType::JsonObject
         std::unordered_set<std::string> objectKeys;
         std::string pendingKey;
-
-        // for SaxType::JsonArray
         std::size_t nextIndex = 0;
     };
 
@@ -204,84 +173,6 @@ class DuplicateKeyDetector final : public nlohmann::json_sax<Json>
     std::string duplicatePath_;
 };
 
-void EmitDiagnostic(const TkDiagnosticCallbackInfo &callbackInfo, const char *const id, const std::string &message,
-                    const std::string &sourceName)
-{
-    if (callbackInfo.callback == nullptr)
-    {
-        return;
-    }
-
-    const TkDiagnostic diagnostic = {
-        TK_DIAGNOSTIC_ERROR,
-        id,
-        message.c_str(),
-        {sourceName.c_str(), 0, 0, 0},
-    };
-    callbackInfo.callback(&diagnostic, callbackInfo.userData);
-}
-
-TkResult ReportFailure(const TkDiagnosticCallbackInfo &callbackInfo, const TkResult result, const char *const id,
-                       const std::string &sourceName, const std::string &logicalPath, const std::string &detail)
-{
-    std::string message = sourceName;
-    if (!logicalPath.empty())
-    {
-        message += ": ";
-        message += logicalPath;
-    }
-    message += ": ";
-    message += detail;
-
-    EmitDiagnostic(callbackInfo, id, message, sourceName);
-    return result;
-}
-
-bool IsNonEmpty(const char *const value)
-{
-    return value != nullptr && value[0] != '\0';
-}
-
-bool IsValidCompileInfo(const TkPacketCppCompileInfo &compileInfo)
-{
-    if (compileInfo.inputPaths == nullptr || compileInfo.inputPathCount == 0 ||
-        !IsNonEmpty(compileInfo.outputDirectory) || !IsNonEmpty(compileInfo.namespaceName))
-    {
-        return false;
-    }
-
-    for (std::size_t index = 0; index < compileInfo.inputPathCount; ++index)
-    {
-        if (!IsNonEmpty(compileInfo.inputPaths[index]))
-        {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-TkResult ReadPacketSource(const char *const inputPath, const TkDiagnosticCallbackInfo &callbackInfo,
-                          PacketSource *const outSource)
-{
-    std::ifstream input(inputPath, std::ios::binary);
-    if (!input)
-    {
-        return ReportFailure(callbackInfo, TK_ERROR_IO, SourceReadFailedId, inputPath, {},
-                             "failed to open packet schema");
-    }
-
-    std::string contents{std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
-    if (input.bad())
-    {
-        return ReportFailure(callbackInfo, TK_ERROR_IO, SourceReadFailedId, inputPath, {},
-                             "failed to read packet schema");
-    }
-
-    *outSource = {inputPath, std::move(contents)};
-    return TK_SUCCESS;
-}
-
 bool IsAllowedProperty(const std::string &property, const std::initializer_list<const char *> allowed)
 {
     return std::find_if(allowed.begin(), allowed.end(),
@@ -315,7 +206,7 @@ TkResult ValidateProperties(const Json &object, const std::initializer_list<cons
     return TK_SUCCESS;
 }
 
-bool TryGetUnsigned16(const Json &value, const std::uint16_t minimum, std::uint16_t &outValue)
+bool TryGetUnsigned16(const Json &value, const std::uint16_t minimum, std::uint16_t *outValue)
 {
     std::uint64_t parsedValue = 0;
     if (value.is_number_unsigned())
@@ -341,22 +232,54 @@ bool TryGetUnsigned16(const Json &value, const std::uint16_t minimum, std::uint1
         return false;
     }
 
-    outValue = static_cast<std::uint16_t>(parsedValue);
+    *outValue = static_cast<std::uint16_t>(parsedValue);
     return true;
 }
 
-bool IsKnownFieldType(const std::string &type)
+bool TryParsePrimitiveType(const std::string &type, PacketPrimitiveType *outType)
 {
-    static constexpr const char *KnownTypes[] = {
-        "int8", "uint8", "int16", "uint16", "int32", "uint32", "int64", "uint64",
-    };
+    if (type == "int8")
+    {
+        *outType = PacketPrimitiveType::Int8;
+    }
+    else if (type == "uint8")
+    {
+        *outType = PacketPrimitiveType::UInt8;
+    }
+    else if (type == "int16")
+    {
+        *outType = PacketPrimitiveType::Int16;
+    }
+    else if (type == "uint16")
+    {
+        *outType = PacketPrimitiveType::UInt16;
+    }
+    else if (type == "int32")
+    {
+        *outType = PacketPrimitiveType::Int32;
+    }
+    else if (type == "uint32")
+    {
+        *outType = PacketPrimitiveType::UInt32;
+    }
+    else if (type == "int64")
+    {
+        *outType = PacketPrimitiveType::Int64;
+    }
+    else if (type == "uint64")
+    {
+        *outType = PacketPrimitiveType::UInt64;
+    }
+    else
+    {
+        return false;
+    }
 
-    return std::find_if(std::begin(KnownTypes), std::end(KnownTypes),
-                        [&type](const char *const knownType) { return type == knownType; }) != std::end(KnownTypes);
+    return true;
 }
 
 TkResult ParseField(const Json &field, const std::size_t fieldIndex, const PacketSource &source,
-                    const TkDiagnosticCallbackInfo &callbackInfo, ParsedFieldSchema *const outField)
+                    const TkDiagnosticCallbackInfo &callbackInfo, PacketFieldSchema *const outField)
 {
     const std::string fieldPath = "packet.fields[" + std::to_string(fieldIndex) + "]";
     if (!field.is_object())
@@ -385,7 +308,8 @@ TkResult ParseField(const Json &field, const std::size_t fieldIndex, const Packe
     }
 
     const std::string &type = field["type"].get_ref<const std::string &>();
-    if (!IsKnownFieldType(type))
+    PacketPrimitiveType primitiveType = PacketPrimitiveType::Int8;
+    if (!TryParsePrimitiveType(type, &primitiveType))
     {
         return ReportFailure(callbackInfo, TK_ERROR_INVALID_DATA, UnknownFieldTypeId, source.sourceName,
                              fieldPath + ".type", "unknown field type '" + type + "'");
@@ -393,66 +317,78 @@ TkResult ParseField(const Json &field, const std::size_t fieldIndex, const Packe
 
     *outField = {
         field["name"].get<std::string>(),
-        type,
+        primitiveType,
     };
     return TK_SUCCESS;
 }
+} // namespace
 
-TkResult ParsePacketSource(const PacketSource &source, const TkDiagnosticCallbackInfo &callbackInfo,
-                           ParsedPacketSource *const outPacket)
+PacketJsonParser::PacketJsonParser(const TkDiagnosticCallbackInfo diagnosticCallback)
+    : diagnosticCallback_(diagnosticCallback)
 {
+}
+
+TkResult PacketJsonParser::Parse(const PacketSource &source, PacketSchema *const outSchema) const
+{
+    if (outSchema == nullptr)
+    {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+
     DuplicateKeyDetector duplicateDetector;
     if (!Json::sax_parse(source.contents, &duplicateDetector))
     {
         if (duplicateDetector.HasDuplicateKey())
         {
-            return ReportFailure(callbackInfo, TK_ERROR_INVALID_DATA, DuplicateKeyId, source.sourceName,
+            return ReportFailure(diagnosticCallback_, TK_ERROR_INVALID_DATA, DuplicateKeyId, source.sourceName,
                                  duplicateDetector.DuplicatePath(), "duplicate JSON property");
         }
 
-        return ReportFailure(callbackInfo, TK_ERROR_INVALID_DATA, InvalidJsonId, source.sourceName, {}, "invalid JSON");
+        return ReportFailure(diagnosticCallback_, TK_ERROR_INVALID_DATA, InvalidJsonId, source.sourceName, {},
+                             "invalid JSON");
     }
 
     Json root = Json::parse(source.contents, nullptr, false);
     if (root.is_discarded())
     {
-        return ReportFailure(callbackInfo, TK_ERROR_INVALID_DATA, InvalidJsonId, source.sourceName, {}, "invalid JSON");
+        return ReportFailure(diagnosticCallback_, TK_ERROR_INVALID_DATA, InvalidJsonId, source.sourceName, {},
+                             "invalid JSON");
     }
 
     if (!root.is_object())
     {
-        return ReportFailure(callbackInfo, TK_ERROR_INVALID_DATA, InvalidSchemaId, source.sourceName, "$",
+        return ReportFailure(diagnosticCallback_, TK_ERROR_INVALID_DATA, InvalidSchemaId, source.sourceName, "$",
                              "schema root must be an object");
     }
 
-    TkResult result =
-        ValidateProperties(root, {"schemaVersion", "packet"}, {"schemaVersion", "packet"}, source, {}, callbackInfo);
+    TkResult result = ValidateProperties(root, {"schemaVersion", "packet"}, {"schemaVersion", "packet"}, source, {},
+                                         diagnosticCallback_);
     if (result != TK_SUCCESS)
     {
         return result;
     }
 
     std::uint16_t schemaVersion = 0;
-    if (!TryGetUnsigned16(root["schemaVersion"], 1, schemaVersion))
+    if (!TryGetUnsigned16(root["schemaVersion"], 1, &schemaVersion))
     {
-        return ReportFailure(callbackInfo, TK_ERROR_INVALID_DATA, InvalidSchemaId, source.sourceName, "schemaVersion",
-                             "schema version must be an integer from 1 to 65535");
+        return ReportFailure(diagnosticCallback_, TK_ERROR_INVALID_DATA, InvalidSchemaId, source.sourceName,
+                             "schemaVersion", "schema version must be an integer from 1 to 65535");
     }
     if (schemaVersion != 1)
     {
-        return ReportFailure(callbackInfo, TK_ERROR_INVALID_DATA, UnsupportedSchemaVersionId, source.sourceName,
+        return ReportFailure(diagnosticCallback_, TK_ERROR_INVALID_DATA, UnsupportedSchemaVersionId, source.sourceName,
                              "schemaVersion", "only schema version 1 is supported");
     }
 
     const Json &packet = root["packet"];
     if (!packet.is_object())
     {
-        return ReportFailure(callbackInfo, TK_ERROR_INVALID_DATA, InvalidSchemaId, source.sourceName, "packet",
+        return ReportFailure(diagnosticCallback_, TK_ERROR_INVALID_DATA, InvalidSchemaId, source.sourceName, "packet",
                              "packet must be an object");
     }
 
     result = ValidateProperties(packet, {"name", "id", "payloadVersion", "fields"},
-                                {"name", "id", "payloadVersion", "fields"}, source, "packet", callbackInfo);
+                                {"name", "id", "payloadVersion", "fields"}, source, "packet", diagnosticCallback_);
     if (result != TK_SUCCESS)
     {
         return result;
@@ -460,40 +396,40 @@ TkResult ParsePacketSource(const PacketSource &source, const TkDiagnosticCallbac
 
     if (!packet["name"].is_string() || packet["name"].get_ref<const std::string &>().empty())
     {
-        return ReportFailure(callbackInfo, TK_ERROR_INVALID_DATA, InvalidSchemaId, source.sourceName, "packet.name",
-                             "packet name must be a non-empty string");
+        return ReportFailure(diagnosticCallback_, TK_ERROR_INVALID_DATA, InvalidSchemaId, source.sourceName,
+                             "packet.name", "packet name must be a non-empty string");
     }
 
     std::uint16_t packetId = 0;
-    if (!TryGetUnsigned16(packet["id"], 0, packetId))
+    if (!TryGetUnsigned16(packet["id"], 0, &packetId))
     {
-        return ReportFailure(callbackInfo, TK_ERROR_INVALID_DATA, InvalidSchemaId, source.sourceName, "packet.id",
-                             "packet ID must be an integer from 0 to 65535");
+        return ReportFailure(diagnosticCallback_, TK_ERROR_INVALID_DATA, InvalidSchemaId, source.sourceName,
+                             "packet.id", "packet ID must be an integer from 0 to 65535");
     }
 
     std::uint16_t payloadVersion = 0;
-    if (!TryGetUnsigned16(packet["payloadVersion"], 1, payloadVersion))
+    if (!TryGetUnsigned16(packet["payloadVersion"], 1, &payloadVersion))
     {
-        return ReportFailure(callbackInfo, TK_ERROR_INVALID_DATA, InvalidSchemaId, source.sourceName,
+        return ReportFailure(diagnosticCallback_, TK_ERROR_INVALID_DATA, InvalidSchemaId, source.sourceName,
                              "packet.payloadVersion", "payload version must be an integer from 1 to 65535");
     }
 
     if (!packet["fields"].is_array())
     {
-        return ReportFailure(callbackInfo, TK_ERROR_INVALID_DATA, InvalidSchemaId, source.sourceName, "packet.fields",
-                             "fields must be an array");
+        return ReportFailure(diagnosticCallback_, TK_ERROR_INVALID_DATA, InvalidSchemaId, source.sourceName,
+                             "packet.fields", "fields must be an array");
     }
 
-    ParsedPacketSource parsedPacket = {
+    PacketSchema parsedSchema = {
         source.sourceName, packet["name"].get<std::string>(), packetId, payloadVersion, {},
     };
-    parsedPacket.fields.reserve(packet["fields"].size());
+    parsedSchema.fields.reserve(packet["fields"].size());
 
     std::unordered_set<std::string> fieldNames;
     for (std::size_t fieldIndex = 0; fieldIndex < packet["fields"].size(); ++fieldIndex)
     {
-        ParsedFieldSchema parsedField;
-        result = ParseField(packet["fields"][fieldIndex], fieldIndex, source, callbackInfo, &parsedField);
+        PacketFieldSchema parsedField;
+        result = ParseField(packet["fields"][fieldIndex], fieldIndex, source, diagnosticCallback_, &parsedField);
         if (result != TK_SUCCESS)
         {
             return result;
@@ -501,71 +437,15 @@ TkResult ParsePacketSource(const PacketSource &source, const TkDiagnosticCallbac
 
         if (!fieldNames.insert(parsedField.name).second)
         {
-            return ReportFailure(callbackInfo, TK_ERROR_INVALID_DATA, DuplicateFieldNameId, source.sourceName,
+            return ReportFailure(diagnosticCallback_, TK_ERROR_INVALID_DATA, DuplicateFieldNameId, source.sourceName,
                                  "packet.fields[" + std::to_string(fieldIndex) + "].name",
                                  "duplicate field name '" + parsedField.name + "'");
         }
 
-        parsedPacket.fields.push_back(std::move(parsedField));
+        parsedSchema.fields.push_back(std::move(parsedField));
     }
 
-    *outPacket = std::move(parsedPacket);
-    return TK_SUCCESS;
-}
-
-TkResult ValidateBatchPacket(const ParsedPacketSource &packet, std::unordered_set<std::uint16_t> *const packetIds,
-                             std::unordered_set<std::string> *const packetNames,
-                             const TkDiagnosticCallbackInfo &callbackInfo)
-{
-    if (!packetIds->insert(packet.id).second)
-    {
-        return ReportFailure(callbackInfo, TK_ERROR_INVALID_DATA, DuplicatePacketIdId, packet.sourceName, "packet.id",
-                             "duplicate packet ID " + std::to_string(packet.id));
-    }
-
-    if (!packetNames->insert(packet.name).second)
-    {
-        return ReportFailure(callbackInfo, TK_ERROR_INVALID_DATA, DuplicatePacketNameId, packet.sourceName,
-                             "packet.name", "duplicate packet name '" + packet.name + "'");
-    }
-
-    return TK_SUCCESS;
-}
-} // namespace
-
-TkResult CompileCpp(const TkPacketCppCompileInfo &compileInfo)
-{
-    if (!IsValidCompileInfo(compileInfo))
-    {
-        return TK_ERROR_INVALID_ARGUMENT;
-    }
-
-    std::unordered_set<std::uint16_t> packetIds;
-    std::unordered_set<std::string> packetNames;
-
-    for (std::size_t inputIndex = 0; inputIndex < compileInfo.inputPathCount; ++inputIndex)
-    {
-        PacketSource source;
-        TkResult result = ReadPacketSource(compileInfo.inputPaths[inputIndex], compileInfo.diagnosticCallback, &source);
-        if (result != TK_SUCCESS)
-        {
-            return result;
-        }
-
-        ParsedPacketSource packet;
-        result = ParsePacketSource(source, compileInfo.diagnosticCallback, &packet);
-        if (result != TK_SUCCESS)
-        {
-            return result;
-        }
-
-        result = ValidateBatchPacket(packet, &packetIds, &packetNames, compileInfo.diagnosticCallback);
-        if (result != TK_SUCCESS)
-        {
-            return result;
-        }
-    }
-
+    *outSchema = std::move(parsedSchema);
     return TK_SUCCESS;
 }
 } // namespace pstk::packet

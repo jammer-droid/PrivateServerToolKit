@@ -1,5 +1,6 @@
 include (GenerateExportHeader)
-find_package(nlohmann_json CONFIG REQUIRED)
+
+add_subdirectory(src/schema)
 
 # SHARED 라이브리러 빌드
 # CMake에서 자동으로 compiler define에
@@ -7,8 +8,8 @@ find_package(nlohmann_json CONFIG REQUIRED)
 add_library(
     pstk_packet
     SHARED # 동적 라이브러리
-    src/TkPacketCompiler.cpp
     src/TkPacketTool.cpp
+    src/generator/cpp/TkPacketCppCompiler.cpp
 )
 
 add_library(
@@ -28,7 +29,7 @@ target_link_libraries(
     PUBLIC
     PSTK::Common
     PRIVATE
-    nlohmann_json::nlohmann_json
+    pstk_packet_schema_compiler
 )
 
 # public header와 생성된 export header 공개
@@ -47,6 +48,9 @@ target_include_directories(
 
     # CMAKE_CURRENT_BINARY_DIR = packet tool의 빌드 결과 디렉터리
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+
+    PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 # DLL 내부 symbol 감추는 설정

@@ -35,7 +35,7 @@ Protobuf wire format, runtime reflection, schema hot reload, gRPC/HTTP2 호환�
 4. Phase 3 — Packet catalog과 build integration
 5. Phase 4 — Async unary RPC 계층
 
-Phase 0 common contract 선행 slice는 구현과 검증을 완료했다. 다음 작업은 Phase 1 진입 전 남은 schema/parser/IR/generator 계약을 확정하는 것이다. Phase 2~4는 Issue #1의 상위 범위를 따르며 해당 구현에 진입할 때 이 문서에 세부 design을 추가한다.
+Phase 0 common contract 선행 slice는 구현과 검증을 완료했다. Phase 1은 schema/parser, 공통 schema compiler와 언어별 generator를 순서대로 구현한다. Phase 2~4는 Issue #1의 상위 범위를 따르며 해당 구현에 진입할 때 이 문서에 세부 design을 추가한다.
 
 ## Phase 0 — Common contract 선행 slice
 
@@ -303,7 +303,8 @@ Schema 파일 하나는 packet 하나만 정의한다. Compiler는 여러 schema
 #### 입력, parser와 diagnostic 계약
 
 - Public consumer는 schema 경로만 전달한다. Packet Tool file adapter가 각 경로를 현재 working directory를 바꾸지 않고 한 번 읽어 source 이름과 owned JSON byte를 가진 `PacketSource`를 만든다.
-- 입력 경로는 caller가 전달한 순서대로 처리하며 첫 read, JSON syntax 또는 schema semantic 오류에서 전체 compile을 중단한다. 각 `ParsedPacketSource`를 만든 직후 batch name/ID 유일성을 검사한 뒤 다음 경로로 넘어간다.
+- 공통 `PacketSchemaCompiler`가 `PacketSource`를 `PacketJsonParser`에 전달해 language-neutral `PacketSchema`로 변환하고, 각 schema를 만든 직후 batch name/ID 유일성을 검사한 뒤 `PacketDescriptorBuilder`를 호출한다.
+- 입력 경로는 caller가 전달한 순서대로 처리하며 첫 read, JSON syntax 또는 schema semantic 오류에서 전체 compile을 중단한다. 모든 입력이 성공한 뒤에만 공통 schema compiler가 `PacketDescriptorSet`을 commit한다.
 - JSON parser는 Packet Tool의 private vcpkg dependency인 nlohmann/json을 사용한다.
 - Diagnostic은 source 경로와 `packet.fields[2].type` 같은 logical schema path를 message에 포함한다.
 - Phase 1은 별도 line/column scanner를 구현하지 않는다. Source 파일은 알지만 정확한 위치를 모르면 `sourceName != nullptr`이고 `byteOffset`, `line`, `column`은 모두 0이다.
@@ -392,6 +393,8 @@ PSTK_PACKET_API TkResult TkPacketCompileCpp(
 
 각 slice는 새로운 public layer나 전용 result type을 뜻하지 않는다. Phase 1을 독립적으로 compile, test, review하고 commit할 수 있는 순서로 나눈 것이다. 뒤 slice는 앞 slice의 검증된 산출물만 사용한다.
 
+Phase 1의 compiler pipeline은 `schema path → PacketSource → PacketJsonParser → PacketSchema → batch validation → PacketDescriptorBuilder → PacketDescriptorSet` 순서의 공통 schema compiler와, 이를 소비하는 언어별 generator로 구성한다. 현재는 C++ generator orchestration만 연결하고 C# generator는 후속 Phase에서 같은 `PacketDescriptorSet`을 사용한다.
+
 #### Slice 1 — 공용 계약 보완
 
 - `TkResult`에 기존 숫자값을 바꾸지 않고 `TK_ERROR_IO = -6`을 추가한다.
@@ -403,7 +406,7 @@ PSTK_PACKET_API TkResult TkPacketCompileCpp(
 #### Slice 2 — Schema 입력과 parsing
 
 - `TkPacketCppCompileInfo`와 `TkPacketCompileCpp` public API를 추가한다.
-- File adapter에서 `PacketSource`를 만들고 nlohmann/json parser가 `ParsedFieldSchema`를 포함한 `ParsedPacketSource`로 변환한다. `ParsedPacketSource`는 후속 diagnostic을 위해 `sourceName`을 유지한다.
+- 공통 `PacketSchemaCompiler`의 file adapter가 `PacketSource`를 만들고, `PacketJsonParser`가 nlohmann/json을 사용해 `PacketFieldSchema`를 포함한 `PacketSchema`로 변환한다. `PacketSchema`는 후속 descriptor와 diagnostic을 위해 `sourceName`을 유지한다.
 - Required/unknown property, duplicate key, version, name, ID, field type과 batch duplicate를 정해진 순서로 fail-fast 검증한다.
 - 확정된 Packet diagnostic ID와 source/logical path message를 사용한다.
 
@@ -411,8 +414,9 @@ PSTK_PACKET_API TkResult TkPacketCompileCpp(
 
 #### Slice 3 — Descriptor와 layout
 
-- 검증된 schema를 language-neutral `PacketDescriptor` / `FieldDescriptor` IR로 변환한다.
+- 공통 `PacketDescriptorBuilder`가 검증된 `PacketSchema`를 language-neutral `PacketDescriptor` / `FieldDescriptor` IR로 변환하고, `PacketSchemaCompiler`가 입력 순서대로 `PacketDescriptorSet`에 누적한다.
 - Payload version offset, field offset/size와 `PayloadBytes`를 한 번 계산해 IR에 저장한다.
+- C++ 및 후속 C# generator는 JSON parser나 schema 검증을 직접 호출하지 않고 동일한 `PacketDescriptorSet`을 입력으로 사용한다.
 - 빈 field 목록, 8개 integer type과 layout overflow를 검증한다.
 
 검증 게이트: 모든 primitive type, 빈 packet과 `MovementInput`의 offset/size/`PayloadBytes`가 예상값과 일치한다.
@@ -445,7 +449,7 @@ PSTK_PACKET_API TkResult TkPacketCompileCpp(
 
 ### 현재 상태와 다음 세션 진입점
 
-Phase 1 design grilling은 2026-08-26 완료했다. Material design branch나 blocker는 남아 있지 않다. 다음 세션은 범위를 다시 grilling하지 않고 **Slice 1 — 공용 계약 보완**부터 구현한다.
+Phase 1 design grilling은 2026-08-26 완료했다. Material design branch나 blocker는 남아 있지 않다. Slice 1과 Slice 2의 공용 계약 및 schema 입력 기반 위에 Slice 3의 공통 schema compiler와 descriptor/layout을 구현하며, 다음 작업은 **Slice 4 — C++17 code generation**이다.
 
 GitHub Issue #1의 Phase 1 항목에는 아직 "위치를 포함한 diagnostic"이라고 적혀 있다. 이 문서에서 확정한 Phase 1 범위는 source 경로와 logical schema path만 제공하고 정확한 line/column 계산은 하지 않는 것이다. 원격 issue를 다음에 갱신할 때 이 차이를 함께 반영한다.
 
