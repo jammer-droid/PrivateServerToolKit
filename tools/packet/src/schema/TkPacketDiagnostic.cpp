@@ -5,18 +5,13 @@ namespace pstk::packet
 void EmitDiagnostic(const TkDiagnosticCallbackInfo &callbackInfo, const char *const id, const std::string &message,
                     const std::string &sourceName)
 {
-    if (callbackInfo.callback == nullptr)
-    {
-        return;
-    }
-
     const TkDiagnostic diagnostic = {
         TK_DIAGNOSTIC_ERROR,
         id,
         message.c_str(),
         {sourceName.c_str(), 0, 0, 0},
     };
-    callbackInfo.callback(&diagnostic, callbackInfo.userData);
+    TkEmitDiagnostic(callbackInfo, &diagnostic);
 }
 
 TkResult ReportFailure(const TkDiagnosticCallbackInfo &callbackInfo, const TkResult result, const char *const id,

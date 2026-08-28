@@ -18,18 +18,13 @@ inline constexpr const char *UnsupportedPayloadVersionId = "PSTK-PACKET-UNSUPPOR
 inline void EmitRuntimeDiagnostic(const TkDiagnosticCallbackInfo diagnosticCallback, const char *const id,
                                   const char *const message)
 {
-    if (diagnosticCallback.callback == nullptr)
-    {
-        return;
-    }
-
     const TkDiagnostic diagnostic = {
         TK_DIAGNOSTIC_ERROR,
         id,
         message,
         {nullptr, 0, 0, 0},
     };
-    diagnosticCallback.callback(&diagnostic, diagnosticCallback.userData);
+    TkEmitDiagnostic(diagnosticCallback, &diagnostic);
 }
 
 inline void EmitInvalidPayloadSize(const std::size_t expectedSize, const std::size_t actualSize,

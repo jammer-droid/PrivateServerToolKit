@@ -40,3 +40,14 @@ typedef struct TkDiagnosticCallbackInfo
     TkDiagnosticCallback callback;
     void *userData;
 } TkDiagnosticCallbackInfo;
+
+/* diagnostic은 non-null이며 callback 호출 동안만 유효하다. */
+static inline void TkEmitDiagnostic(TkDiagnosticCallbackInfo callbackInfo, const TkDiagnostic *diagnostic)
+{
+    if (callbackInfo.callback == NULL)
+    {
+        return;
+    }
+
+    callbackInfo.callback(diagnostic, callbackInfo.userData);
+}

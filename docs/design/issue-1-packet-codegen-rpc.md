@@ -93,7 +93,7 @@ Common이 소유하지 않는 것:
 - Diagnostic과 문자열은 callback 동안만 유효하며 consumer가 필요한 정보를 복사
 - 하나의 API 호출은 callback을 순차 실행하지만, 동일 callback info를 사용한 별도 API 호출들은 동시에 callback을 실행할 수 있음
 - `id`는 non-empty ASCII `PSTK-<TOOL>-<NAME>` 형식의 안정적인 식별자
-- Common은 diagnostic 타입만 제공하고 호출, 저장, 필터링, logging, allocation과 thread를 소유하지 않음
+- Common은 diagnostic 타입과 disabled callback을 처리하는 최소 header-only emit helper만 제공하고, 구성, 저장, 필터링, logging, allocation과 thread를 소유하지 않음
 
 상세: [ADR 0004](../adr/0004-use-common-diagnostic-callbacks.md)
 
@@ -107,7 +107,7 @@ Common이 소유하지 않는 것:
 4. Common header를 별도 binary 연결 없이 C와 C++ translation unit에서 각각 compile한다.
 5. Test가 공용 result 값, byte range의 null/empty 규칙과 byte view의 복사·쓰기 계약을 검증한다.
 
-Phase 0은 2026-08-25 완료했다. `TkDiagnostic.h`는 동작을 소유하지 않는 type-only 계약이므로 별도 runtime test를 추가하지 않고 C11/C++17 translation unit의 독립 compile로 호환성을 확인했다.
+Phase 0은 2026-08-25 완료했다. `TkDiagnostic.h`의 계약은 이후 additive follow-up으로 disabled callback 확인과 동기 호출만 수행하는 최소 header-only helper까지 확장했으며, C11/C++17 translation unit의 독립 compile로 호환성을 확인한다.
 
 ### 구현 가이드
 
@@ -140,9 +140,9 @@ Packet, parser 또는 generator 전용 result 값은 추가하지 않는다.
 - 구현은 `size == 0 || data != NULL`만 판단한다.
 - View에 constructor, method, template, lifetime 관리 또는 packet 크기 검증을 추가하지 않는다.
 
-#### 3. Diagnostic type header 추가
+#### 3. Diagnostic header 추가
 
-`include/pstk/TkDiagnostic.h`에 구현 없는 공용 POD와 callback type만 정의한다. 모든 enum 값은 명시적으로 고정한다.
+`include/pstk/TkDiagnostic.h`에 공용 POD, callback type과 최소 emit helper를 정의한다. 모든 enum 값은 명시적으로 고정한다.
 
 ```text
 TkDiagnosticSeverity
@@ -169,9 +169,12 @@ TkDiagnosticCallback
 TkDiagnosticCallbackInfo
   TkDiagnosticCallback callback
   void*                userData
+
+TkEmitDiagnostic
+  disabled callback이면 반환하고, 그 외에는 non-null Diagnostic과 userData로 callback을 동기 호출
 ```
 
-Common에 emit 함수, null-check helper, logger, registry, allocation 또는 thread 코드를 추가하지 않는다. Disabled callbacks는 `{ NULL, NULL }`로 표현할 수 있어야 한다.
+`TkEmitDiagnostic`은 C-compatible `static inline` helper이며 callback disabled 여부만 확인한다. Diagnostic 구성, emit 시점과 순서는 tool이 소유하고 Common에는 logger, registry, allocation 또는 thread 코드를 추가하지 않는다. Disabled callbacks는 `{ NULL, NULL }`로 표현할 수 있어야 한다.
 
 #### 4. Common C/C++ 계약 테스트 추가
 
@@ -354,7 +357,7 @@ PSTK_PACKET_API TkResult TkPacketCompileCpp(
 - 파일 open/read/write 실패에는 공용 `TK_ERROR_IO`를 사용하고 schema 또는 payload 해석 실패에는 `TK_ERROR_INVALID_DATA`를 사용한다.
 - Packet 전용 result type이나 layer별 result type은 만들지 않는다.
 
-`TK_ERROR_IO`와 source는 있지만 내부 위치를 모르는 Diagnostic location 표현은 Phase 1 구현 전에 common 계약에 additive follow-up으로 반영한다. 이는 Phase 0의 header-only/type-only 경계를 변경하지 않는다.
+`TK_ERROR_IO`, source는 있지만 내부 위치를 모르는 Diagnostic location 표현과 최소 emit helper는 Phase 1 구현 전에 common 계약에 additive follow-up으로 반영한다. 이는 Phase 0의 C-compatible header-only 경계를 변경하지 않는다.
 
 #### Generated C++ 계약
 
@@ -399,7 +402,7 @@ Phase 1의 compiler pipeline은 `schema path → PacketSource → PacketJsonPars
 
 - `TkResult`에 기존 숫자값을 바꾸지 않고 `TK_ERROR_IO = -6`을 추가한다.
 - `sourceName != nullptr`이고 나머지 위치값이 모두 0인 Diagnostic location 의미를 common 계약 문서와 테스트에 반영한다.
-- Common은 header-only/type-only 상태를 유지하고 emit, file I/O 또는 Packet 동작을 추가하지 않는다.
+- Common은 C-compatible header-only 상태를 유지하고 disabled callback 확인과 동기 호출만 수행하는 최소 emit helper를 제공한다. File I/O 또는 Packet 동작은 추가하지 않는다.
 
 검증 게이트: C11/C++17 common contract compile과 기존 Common/Packet regression test가 통과한다.
 

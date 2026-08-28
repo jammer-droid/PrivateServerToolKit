@@ -18,4 +18,4 @@ Tool은 callback info, `userData` 또는 Diagnostic의 borrowed pointer를 API �
 
 Diagnostic `id`는 non-null, non-empty ASCII이며 `PSTK-<TOOL>-<NAME>` 형식을 사용하고 한번 공개된 의미를 변경하지 않는다. `message`는 non-null, non-empty UTF-8 설명이지만 안정적인 parsing 대상은 아니다. Optional `sourceName`은 non-null일 때 non-empty UTF-8이어야 한다.
 
-Common 계층은 Diagnostic과 Callback Info의 POD 및 callback function pointer type만 정의하고 함수 구현은 제공하지 않는다. Diagnostic을 구성하고 callback을 호출하며 emit 시점과 순서를 정하는 구현은 각 tool 번역 단위가 소유하고, 저장, 출력, 필터링과 동기화는 consumer가 소유한다. Common은 diagnostic 호출 함수, 저장소, logger, callback registry, allocation 또는 thread를 소유하지 않는다.
+Common 계층은 Diagnostic과 Callback Info의 POD, callback function pointer type과 C-compatible header-only `TkEmitDiagnostic` helper를 제공한다. `TkEmitDiagnostic`은 non-null Diagnostic을 borrowed data로 받아 callback이 disabled인지 확인하고, 활성 callback을 `userData`와 함께 동기 호출하는 동작만 소유한다. Diagnostic을 구성하고 ID, message, location, emit 시점과 순서 및 `TkResult`를 정하는 구현은 각 tool이 소유하고, 저장, 출력, 필터링과 동기화는 consumer가 소유한다. Common은 formatting, 저장소, logger, callback registry, allocation 또는 thread를 소유하지 않는다.
