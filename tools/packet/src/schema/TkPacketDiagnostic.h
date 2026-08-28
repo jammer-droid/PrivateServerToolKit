@@ -17,6 +17,7 @@ inline constexpr const char *DuplicatePacketNameId = "PSTK-PACKET-DUPLICATE-PACK
 inline constexpr const char *DuplicateFieldNameId = "PSTK-PACKET-DUPLICATE-FIELD-NAME";
 inline constexpr const char *UnknownFieldTypeId = "PSTK-PACKET-UNKNOWN-FIELD-TYPE";
 inline constexpr const char *LayoutOverflowId = "PSTK-PACKET-LAYOUT-OVERFLOW";
+inline constexpr const char *OutputWriteFailedId = "PSTK-PACKET-OUTPUT-WRITE-FAILED";
 
 void EmitDiagnostic(const TkDiagnosticCallbackInfo &callbackInfo, const char *id, const std::string &message,
                     const std::string &sourceName);

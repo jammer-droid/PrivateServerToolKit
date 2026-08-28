@@ -3,6 +3,7 @@ add_library(
     STATIC
     TkPacketCppCompiler.cpp
     TkPacketCppGenerator.cpp
+    TkPacketGeneratedFileCommitter.cpp
 )
 
 target_compile_features(
