@@ -1,6 +1,14 @@
 #include "TkPacketCppCompiler.h"
 
+#include "TkPacketCppGenerator.h"
+
 #include "schema/TkPacketSchemaCompiler.h"
+
+#include <pstk/packet/TkPacketTool.h>
+
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace pstk::packet
 {
@@ -26,6 +34,26 @@ TkResult CompileCpp(const TkPacketCppCompileInfo &compileInfo)
 
     PacketDescriptorSet descriptorSet;
     PacketSchemaCompiler schemaCompiler(compileInfo.diagnosticCallback);
-    return schemaCompiler.Compile(compileInfo.inputPaths, compileInfo.inputPathCount, &descriptorSet);
+    TkResult result = schemaCompiler.Compile(compileInfo.inputPaths, compileInfo.inputPathCount, &descriptorSet);
+    if (result != TK_SUCCESS)
+    {
+        return result;
+    }
+
+    std::vector<std::string> generatedHeaders;
+    generatedHeaders.reserve(descriptorSet.packets.size());
+    for (const PacketDescriptor &descriptor : descriptorSet.packets)
+    {
+        std::string generatedHeader;
+        result = GenerateCppHeader(descriptor, compileInfo.namespaceName, &generatedHeader);
+        if (result != TK_SUCCESS)
+        {
+            return result;
+        }
+
+        generatedHeaders.push_back(std::move(generatedHeader));
+    }
+
+    return TK_SUCCESS;
 }
 } // namespace pstk::packet

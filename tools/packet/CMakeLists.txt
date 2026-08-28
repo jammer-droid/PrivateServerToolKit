@@ -1,6 +1,7 @@
 include (GenerateExportHeader)
 
 add_subdirectory(src/schema)
+add_subdirectory(src/generator/cpp)
 
 # SHARED 라이브리러 빌드
 # CMake에서 자동으로 compiler define에
@@ -9,7 +10,6 @@ add_library(
     pstk_packet
     SHARED # 동적 라이브러리
     src/TkPacketTool.cpp
-    src/generator/cpp/TkPacketCppCompiler.cpp
 )
 
 add_library(
@@ -29,7 +29,7 @@ target_link_libraries(
     PUBLIC
     PSTK::Common
     PRIVATE
-    pstk_packet_schema_compiler
+    pstk_packet_cpp_generator
 )
 
 # public header와 생성된 export header 공개

@@ -1,6 +1,8 @@
 #pragma once
 
-#include <pstk/packet/TkPacketTool.h>
+#include <pstk/TkResult.h>
+
+struct TkPacketCppCompileInfo;
 
 namespace pstk::packet
 {
