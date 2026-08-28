@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -109,6 +110,12 @@ TkResult Compile(const std::vector<std::filesystem::path> &schemaPaths, const st
     return TkPacketCompileCpp(&compileInfo);
 }
 
+std::string ReadFile(const std::filesystem::path &path)
+{
+    std::ifstream input(path, std::ios::binary);
+    return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+}
+
 void ExpectSingleDiagnostic(const DiagnosticCapture &capture, const std::string &expectedId,
                             const std::filesystem::path &expectedSource, const std::string &expectedLogicalPath)
 {
@@ -138,7 +145,7 @@ TEST(TkPacketCompiler, RejectsInvalidCompileInfoWithoutDiagnostic)
     EXPECT_TRUE(capture.diagnostics.empty());
 }
 
-TEST(TkPacketCompiler, ParsesValidSchemaWithoutWritingOutput)
+TEST(TkPacketCompiler, GeneratesHeaderForValidSchema)
 {
     const TemporaryDirectory directory;
     const std::filesystem::path schemaPath = directory.Write(
@@ -148,7 +155,54 @@ TEST(TkPacketCompiler, ParsesValidSchemaWithoutWritingOutput)
 
     EXPECT_EQ(Compile({schemaPath}, directory.OutputDirectory(), capture), TK_SUCCESS);
     EXPECT_TRUE(capture.diagnostics.empty());
-    EXPECT_TRUE(std::filesystem::is_empty(directory.OutputDirectory()));
+    EXPECT_TRUE(std::filesystem::is_regular_file(directory.OutputDirectory() / "MovementInput.generated.h"));
+}
+
+TEST(TkPacketCompiler, DoesNotRewriteIdenticalGeneratedHeader)
+{
+    const TemporaryDirectory directory;
+    const std::filesystem::path schemaPath = directory.Write(
+        "MovementInput.packet.json",
+        R"({"schemaVersion":1,"packet":{"name":"MovementInput","id":257,"payloadVersion":1,"fields":[{"name":"moveX","type":"int16"}]}})");
+    const std::filesystem::path generatedHeader = directory.OutputDirectory() / "MovementInput.generated.h";
+    DiagnosticCapture capture;
+
+    ASSERT_EQ(Compile({schemaPath}, directory.OutputDirectory(), capture), TK_SUCCESS);
+    // 새 생성 내용이 기존 final과 같으면 기존 파일을 다시 쓰지 않고 보존해야 한다.
+    const std::filesystem::file_time_type pastTime =
+        std::filesystem::file_time_type::clock::now() - std::chrono::hours(1);
+    std::filesystem::last_write_time(generatedHeader, pastTime);
+    const std::filesystem::file_time_type storedTime = std::filesystem::last_write_time(generatedHeader);
+
+    EXPECT_EQ(Compile({schemaPath}, directory.OutputDirectory(), capture), TK_SUCCESS);
+    EXPECT_TRUE(capture.diagnostics.empty());
+    EXPECT_EQ(std::filesystem::last_write_time(generatedHeader), storedTime);
+}
+
+TEST(TkPacketCompiler, PreservesExistingHeaderWhenTemporaryWriteFails)
+{
+    const TemporaryDirectory directory;
+    const std::filesystem::path schemaPath = directory.Write(
+        "MovementInput.packet.json",
+        R"({"schemaVersion":1,"packet":{"name":"MovementInput","id":257,"payloadVersion":1,"fields":[{"name":"moveX","type":"int16"}]}})");
+    const std::filesystem::path generatedHeader = directory.OutputDirectory() / "MovementInput.generated.h";
+    DiagnosticCapture capture;
+
+    ASSERT_EQ(Compile({schemaPath}, directory.OutputDirectory(), capture), TK_SUCCESS);
+    const std::string originalContents = ReadFile(generatedHeader);
+    // 새 생성 내용이 달라도 임시 쓰기가 실패하면 기존 final을 보존하고 임시 산출물을 남기지 않아야 한다.
+    directory.Write(
+        "MovementInput.packet.json",
+        R"({"schemaVersion":1,"packet":{"name":"MovementInput","id":258,"payloadVersion":1,"fields":[{"name":"moveX","type":"int16"}]}})");
+
+    std::filesystem::path temporaryPath = generatedHeader;
+    temporaryPath += ".tmp";
+    ASSERT_TRUE(std::filesystem::create_directory(temporaryPath));
+
+    EXPECT_EQ(Compile({schemaPath}, directory.OutputDirectory(), capture), TK_ERROR_IO);
+    ExpectSingleDiagnostic(capture, "PSTK-PACKET-OUTPUT-WRITE-FAILED", generatedHeader, "");
+    EXPECT_EQ(ReadFile(generatedHeader), originalContents);
+    EXPECT_FALSE(std::filesystem::exists(temporaryPath));
 }
 
 TEST(TkPacketCompiler, ReportsSourceReadFailure)

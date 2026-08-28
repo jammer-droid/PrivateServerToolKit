@@ -323,13 +323,23 @@ ctest \
   --output-on-failure
 ```
 
-CTest는 테스트 실행 파일을 일반적으로 자동 빌드하지 않는다. 먼저 build preset으로 DLL과 smoke executable을 최신 상태로 만든 뒤 실행한다.
+### Build target과 CTest 테스트 이름
+
+`cmake --build`의 `--target`은 CMake가 정의한 빌드 target을 선택하고, CTest의 `-R`은 등록된 테스트 이름을 정규식으로 선택한다. Packet compiler 테스트만 빌드하고 실행하려면 두 단계를 다음처럼 짝지어 사용한다.
 
 ```shell
-cmake --preset dev
-cmake --build --preset build-dev
-ctest --preset test-dev
+cmake --build --preset build-dev --target pstk_packet_tests
+ctest --preset test-dev -R '^pstk\.packet\.compiler\.' --output-on-failure
 ```
+
+`pstk_packet_tests`는 CMake executable target이다. `pstk.packet.compiler.*` 이름은 `gtest_discover_tests(... TEST_PREFIX "pstk.packet.compiler.")`가 GoogleTest case를 CTest에 등록하면서 만든다. 따라서 `ctest --preset test-dev --target pstk_packet_tests`는 테스트를 선택하는 일반적인 명령이 아니다. `--target`은 `cmake --build`에 사용하고, CTest에서는 등록된 이름을 `-R` 등으로 선택한다.
+
+CTest는 테스트 실행 파일을 자동으로 빌드하지 않는다. 일부 target만 빌드한 뒤 전체 CTest를 실행하면 아직 만들어지지 않은 실행 파일은 조용히 건너뛰지 않고 `Not Run`으로 보고되어 전체 결과가 실패한다. 반대로 build directory에 이전 실행 파일이 남아 있다면 최신 소스가 반영되지 않은 실행 파일을 실행할 수도 있다.
+
+따라서 다음 두 조합을 사용한다.
+
+- 집중 검증: 필요한 target만 빌드한 뒤 대응하는 이름을 `-R`로 실행
+- 전체 검증: 전체 빌드 후 전체 CTest 실행
 
 ## 전체 실행 흐름
 
