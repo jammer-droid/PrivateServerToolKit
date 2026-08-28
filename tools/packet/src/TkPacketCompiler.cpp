@@ -50,18 +50,22 @@ struct ParsedPacketSource
 
 class DuplicateKeyDetector final : public nlohmann::json_sax<Json>
 {
-    struct Container
+    struct SaxContainer
     {
-        enum class Kind
+        enum class SaxType
         {
-            Object,
-            Array
+            JsonObject, // property 접근 가능
+            JsonArray   // index 로 접근 가능
         };
 
-        Kind kind;
+        SaxType type;
         std::string path;
-        std::unordered_set<std::string> keys;
+
+        // for SaxType::JsonObject
+        std::unordered_set<std::string> objectKeys;
         std::string pendingKey;
+
+        // for SaxType::JsonArray
         std::size_t nextIndex = 0;
     };
 
@@ -110,14 +114,14 @@ class DuplicateKeyDetector final : public nlohmann::json_sax<Json>
 
     bool start_object(std::size_t) override
     {
-        containers_.push_back({Container::Kind::Object, TakeValuePath()});
+        containerStack_.push_back({SaxContainer::SaxType::JsonObject, TakeValuePath()});
         return true;
     }
 
     bool key(string_t &key) override
     {
-        Container &object = containers_.back();
-        if (!object.keys.insert(key).second)
+        SaxContainer &object = containerStack_.back();
+        if (!object.objectKeys.insert(key).second)
         {
             hasDuplicateKey_ = true;
             duplicatePath_ = AppendProperty(object.path, key);
@@ -130,19 +134,19 @@ class DuplicateKeyDetector final : public nlohmann::json_sax<Json>
 
     bool end_object() override
     {
-        containers_.pop_back();
+        containerStack_.pop_back();
         return true;
     }
 
     bool start_array(std::size_t) override
     {
-        containers_.push_back({Container::Kind::Array, TakeValuePath()});
+        containerStack_.push_back({SaxContainer::SaxType::JsonArray, TakeValuePath()});
         return true;
     }
 
     bool end_array() override
     {
-        containers_.pop_back();
+        containerStack_.pop_back();
         return true;
     }
 
@@ -174,13 +178,13 @@ class DuplicateKeyDetector final : public nlohmann::json_sax<Json>
 
     std::string TakeValuePath()
     {
-        if (containers_.empty())
+        if (containerStack_.empty())
         {
             return {};
         }
 
-        Container &parent = containers_.back();
-        if (parent.kind == Container::Kind::Object)
+        SaxContainer &parent = containerStack_.back();
+        if (parent.type == SaxContainer::SaxType::JsonObject)
         {
             std::string path = AppendProperty(parent.path, parent.pendingKey);
             parent.pendingKey.clear();
@@ -195,7 +199,7 @@ class DuplicateKeyDetector final : public nlohmann::json_sax<Json>
         (void)TakeValuePath();
     }
 
-    std::vector<Container> containers_;
+    std::vector<SaxContainer> containerStack_;
     bool hasDuplicateKey_ = false;
     std::string duplicatePath_;
 };
