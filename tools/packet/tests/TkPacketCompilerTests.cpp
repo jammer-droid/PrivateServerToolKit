@@ -168,12 +168,19 @@ TEST(TkPacketCompiler, DoesNotRewriteIdenticalGeneratedHeader)
     DiagnosticCapture capture;
 
     ASSERT_EQ(Compile({schemaPath}, directory.OutputDirectory(), capture), TK_SUCCESS);
+
     // 새 생성 내용이 기존 final과 같으면 기존 파일을 다시 쓰지 않고 보존해야 한다.
     const std::filesystem::file_time_type pastTime =
         std::filesystem::file_time_type::clock::now() - std::chrono::hours(1);
+
+    // generatedHeader 파일의 마지막 수정 시간을 pastTime으로 변경
     std::filesystem::last_write_time(generatedHeader, pastTime);
+
+    // generatedHeader의 수정 시간 불러오기
     const std::filesystem::file_time_type storedTime = std::filesystem::last_write_time(generatedHeader);
 
+    // Compile을 했을 때, Write 까지 진행하지 않으면
+    // generatedHeader의 마지막 수정 시간이 storedTime과 같음
     EXPECT_EQ(Compile({schemaPath}, directory.OutputDirectory(), capture), TK_SUCCESS);
     EXPECT_TRUE(capture.diagnostics.empty());
     EXPECT_EQ(std::filesystem::last_write_time(generatedHeader), storedTime);
@@ -188,8 +195,10 @@ TEST(TkPacketCompiler, PreservesExistingHeaderWhenTemporaryWriteFails)
     const std::filesystem::path generatedHeader = directory.OutputDirectory() / "MovementInput.generated.h";
     DiagnosticCapture capture;
 
+    // 정상 Compile 실행
     ASSERT_EQ(Compile({schemaPath}, directory.OutputDirectory(), capture), TK_SUCCESS);
     const std::string originalContents = ReadFile(generatedHeader);
+
     // 새 생성 내용이 달라도 임시 쓰기가 실패하면 기존 final을 보존하고 임시 산출물을 남기지 않아야 한다.
     directory.Write(
         "MovementInput.packet.json",
@@ -197,10 +206,17 @@ TEST(TkPacketCompiler, PreservesExistingHeaderWhenTemporaryWriteFails)
 
     std::filesystem::path temporaryPath = generatedHeader;
     temporaryPath += ".tmp";
-    ASSERT_TRUE(std::filesystem::create_directory(temporaryPath));
+    ASSERT_TRUE(std::filesystem::create_directory(temporaryPath)); // .tmp 경로 생성
 
+    // 다시 Compile 진행하면
+    // generatedHeader.h.tmp 가 파일이 아닌 디렉터리로 존재하기 때문에
+    // 변경된 내용을 작성하기 위한 .h.tmp 를 만들기 위한 ofstream을 여는 과정에서 실패
+    //      - 테스트를 위한 실패 path
+    //      - 정상 path에서는 .h.tmp 파일을 만들고, ofstream으로 파일 쓰기 진행
     EXPECT_EQ(Compile({schemaPath}, directory.OutputDirectory(), capture), TK_ERROR_IO);
     ExpectSingleDiagnostic(capture, "PSTK-PACKET-OUTPUT-WRITE-FAILED", generatedHeader, "");
+
+    // 재 Compile이 실패했기 때문에 원본 content의 내용은 변경되지 않아야 함
     EXPECT_EQ(ReadFile(generatedHeader), originalContents);
     EXPECT_FALSE(std::filesystem::exists(temporaryPath));
 }
