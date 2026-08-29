@@ -230,7 +230,7 @@ TkResult GenerateCSharpSource(const PacketDescriptor &descriptor, const char *co
                 return TK_ERROR_INVALID_DATA;
             }
 
-            const char *const suffix = fieldIndex + 1 < descriptor.fields.size() ? "," : ")";
+            const char *const suffix = fieldIndex + 1 < descriptor.fields.size() ? "," : ");";
             AppendLine(&source, "                " + BuildReadExpression(methodName, field.offset) + suffix);
         }
     }
