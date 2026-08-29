@@ -2,7 +2,7 @@
 
 - Issue: [jammer-droid/PrivateServerToolKit#1](https://github.com/jammer-droid/PrivateServerToolKit/issues/1)
 - Issue state: Open
-- Last verified: 2026-08-28
+- Last verified: 2026-08-29
 
 ## 문서 역할
 
@@ -17,7 +17,7 @@ GitHub Issue #1은 schema를 source of truth로 삼아 C++/C# fixed-layout packe
 이 issue에서 생성하는 것:
 
 - 언어 독립 message/field descriptor와 schema parser
-- C++/C# fixed-layout DTO, codec와 golden vector
+- C++/C# fixed-layout DTO와 codec source
 - Packet ID를 포함한 generated code의 consumer build integration
 
 수기 코드와 기존 runtime 책임으로 유지하는 것:
@@ -27,14 +27,18 @@ GitHub Issue #1은 schema를 source of truth로 삼아 C++/C# fixed-layout packe
 
 Typed Service Host, middleware, command/event dispatch, async unary call lifecycle, schema direction metadata, 중앙 packet catalog와 자동 registration, Protobuf wire format, runtime reflection과 schema hot reload는 범위 밖이다. Service Host와 unary call은 Issue #2가 소유한다.
 
+Generated C# source의 실제 `.NET` compile과 C++/C# golden byte conformance는 CMake 기반 compiler 구현과 다른 toolchain을 사용하므로 후속 GitHub Issue로 분리하기로 했다. 후속 Issue를 생성하기 전이므로 이 문서에서는 임시 이름으로 기록하고, Issue 생성 후 번호와 dependency를 갱신한다.
+
 ## 구현 순서
 
 1. Phase 0 — Common contract 선행 slice
 2. Phase 1 — Packet compiler core와 C++ 생성
-3. Phase 2 — C# 생성과 cross-language conformance
+3. Phase 2 — C# source generation
 4. Phase 3 — Generated code build integration
 
-Phase 0 common contract 선행 slice는 구현과 검증을 완료했다. Phase 1은 schema/parser, 공통 schema compiler와 언어별 generator를 순서대로 구현한다. Phase 2~3은 Issue #1의 상위 범위를 따르며 해당 구현에 진입할 때 이 문서에 세부 design을 추가한다.
+Phase 0 common contract와 Phase 1 C++ compiler는 구현과 검증을 완료했다. Phase 2는 언어 독립 compiler pipeline을 추출한 뒤 C# source generator를 연결한다. C# compile과 cross-language conformance는 후속 Issue에서 `dotnet` toolchain으로 검증하고 CMake/CTest에 등록하지 않는다.
+
+2026-08-29 기준 GitHub Issue #1 본문은 Phase 2에 cross-language conformance를 아직 포함한다. 이 문서의 Phase 2 축소와 후속 Issue 분리는 확정된 design 변경이지만 tracker에는 아직 publish하지 않았다.
 
 Phase 3은 schema에 direction metadata를 추가하거나 중앙 packet catalog와 자동 registration을 생성하지 않는다. Direction과 handler binding은 PrivateServer와 Godot C# client의 사용 및 등록 문맥에서 해석하고, Phase 3은 generated source를 두 consumer의 build input으로 연결하는 경계에 집중한다. 구체적인 SDK 배포, build hook과 stale output 정책은 Phase 3 진입 시 grilling으로 확정한다.
 
@@ -442,20 +446,143 @@ Phase 1의 compiler pipeline은 `schema path → PacketSource → PacketJsonPars
 
 검증 게이트: 동일 입력의 결과가 byte-identical하고 두 번째 실행이 기존 file을 다시 쓰지 않으며 write failure가 기존 final file을 보존한다.
 
-#### Slice 6 — `MovementInput` end-to-end 검증
+#### Slice 6 — `MovementInput` end-to-end 검증 (merged)
 
-- `MovementInput.packet.json`, 예상 `MovementInput.generated.h`와 예상 14-byte payload를 golden fixture로 저장한다.
-- Generated header snapshot과 payload bytes를 정확히 비교한다.
-- Generated C++ codec을 기존 수기 `MovementInput` codec과 byte-for-byte 비교한다.
-- Exact size, payload version mismatch, signed boundary와 Decode failure atomicity를 함께 검증한다.
+전용 `MovementInput.generated.h` snapshot, 14-byte payload fixture와 기존 수기 codec 직접 비교는 추가하지 않는다. 해당 위험은 이미 다음 검증 seam에서 나눠 관찰할 수 있어 전용 fixture의 유지 비용을 추가하지 않기로 했다.
 
-검증 게이트: CMake build와 CTest 전체가 통과하고 golden header와 payload가 예상값과 일치한다.
+- `BuildsMovementInputLayout`은 field offset과 `PayloadBytes == 14`를 검증한다.
+- Public compiler test는 schema에서 generated header가 생성되는지 검증한다.
+- Generated codec test는 little-endian, signed boundary, exact-size와 failure atomicity를 검증한다.
+- File commit test는 byte-identical output의 write 생략과 write failure 시 기존 final 보존을 검증한다.
+
+이 slice의 완료 근거는 새로운 통합 fixture가 아니라 위 기존 검증의 조합으로 Phase 1 계약을 커버하는지 확인한 것이다.
 
 ### 현재 상태와 다음 세션 진입점
 
-Phase 1 design grilling은 2026-08-26 완료했다. Material design branch나 blocker는 남아 있지 않다. Slice 1부터 Slice 4까지 공용 계약, schema compiler, descriptor/layout과 C++17 code generation을 구현했으며, 다음 작업은 **Slice 5 — 생성 파일 commit**이다.
+Phase 1 design grilling은 2026-08-26 완료했고 Phase 1 구현은 2026-08-29 완료 처리했다. Slice 1부터 Slice 5까지의 공용 계약, schema compiler, descriptor/layout, C++17 code generation과 생성 파일 commit을 구현했다. Slice 6은 전용 fixture를 추가하지 않고 기존 schema/layout, public compiler, generated codec와 file-commit 검증에 병합한 축소 기준으로 완료했다.
 
 GitHub Issue #1의 Phase 1 diagnostic 문구도 이 문서의 계약과 동일하게 source 경로와 logical schema path를 제공하되 정확한 line/column은 계산하지 않는 범위로 갱신했다.
+
+## Phase 2 — C# source generation
+
+### 목적과 consumer 경계
+
+Phase 2는 Phase 1의 `PacketDescriptorSet`을 재사용해 C# fixed-layout DTO와 codec source를 생성한다. JSON parser, schema validation과 layout을 C# generator에서 다시 구현하지 않는다.
+
+Compiler API consumer와 generated-code consumer는 다른 계약을 사용한다.
+
+- `TkPacketCompileCpp`/`TkPacketCompileCSharp`를 호출하는 compiler consumer는 ToolKit의 C ABI, `TkResult`와 Diagnostic을 사용한다.
+- Generated C# source를 사용하는 client는 ToolKit shared library, `TkResult` 또는 `TkDiagnostic`에 의존하지 않는다.
+- 언어 간 공통 계약은 packet ID, payload version, payload size, field layout과 wire bytes다. API 표현은 각 언어에 맞게 다를 수 있다.
+- C++은 ToolKit의 주 대상이므로 기존 generated header의 `TkResult`, Diagnostic과 `TkPacketCodecSupport.h` 의존을 유지한다.
+
+Generated C# source의 최소 runtime target은 `net8.0`이다. SDK 설치·배포, support source 전달과 consumer build integration은 Phase 3에서 다룬다.
+
+### 언어 독립 generation seam
+
+Phase 1의 `CompileCpp` 구현에서 schema compile, 언어별 source generation과 file commit을 분리한다.
+
+```text
+language-specific public compile API
+  -> PacketCompiler
+       -> PacketSchemaCompiler
+       -> PacketDescriptorSet
+       -> PacketCodeGenerator::Generate(PacketDescriptor)
+       -> GeneratedFile
+       -> GeneratedFileCommitter
+```
+
+- `PacketCompiler`, `PacketCodeGenerator`와 `GeneratedFile`은 Packet Tool 내부 C++ 타입으로 유지하고 DLL ABI에 export하지 않는다.
+- Root `common`은 기존 C-compatible header-only 계약만 소유하고 Packet generation 오케스트레이션을 소유하지 않는다.
+- 공통 `PacketCompiler`는 schema compile부터 생성 파일 commit까지 순서와 failure atomicity를 소유한다.
+- 언어별 generator는 `PacketDescriptor` 하나를 `GeneratedFile` 하나로 변환한다. Packet 개수에는 별도 상한을 두지 않는다.
+- Batch의 모든 source를 메모리에서 완성한 뒤 file commit을 시작한다.
+- 기존 byte comparison, unchanged-file write 생략, temporary sibling file과 replace 계약을 언어에 관계없이 재사용한다.
+
+Public API는 범용 language enum과 option bag으로 합치지 않고 언어별로 분리한다.
+
+```c
+typedef struct TkPacketCSharpCompileInfo
+{
+    const char *const *inputPaths;
+    size_t inputPathCount;
+    const char *outputDirectory;
+    const char *namespaceName;
+    TkDiagnosticCallbackInfo diagnosticCallback;
+} TkPacketCSharpCompileInfo;
+
+PSTK_PACKET_API TkResult TkPacketCompileCSharp(
+    const TkPacketCSharpCompileInfo *compileInfo);
+```
+
+Pointer, string, callback, invalid argument, diagnostic과 file I/O 계약은 `TkPacketCompileCpp`와 동일하다. 이 `TkResult`는 compiler operation의 결과이며 generated C# codec에 노출되지 않는다.
+
+### Generated C# 계약
+
+- Schema마다 `<PacketName>.generated.cs` 하나를 생성한다.
+- C# namespace는 required `TkPacketCSharpCompileInfo::namespaceName`으로 전달하고 schema에 저장하지 않는다.
+- DTO는 `public readonly record struct`로 생성한다.
+- Schema의 lowerCamelCase field name은 C# public property의 PascalCase로 변환한다. Phase 2에서 naming style 정규식 검사를 추가하지 않는다.
+- `PacketId`, `PayloadVersion`과 `PayloadBytes`를 공개 constant로 생성한다.
+- DTO 내부에 static `TryEncode(value, Span<byte> output)`과 `TryDecode(ReadOnlySpan<byte> input, out value)`를 생성한다.
+- Codec은 `bool`만 반환하고 ToolKit의 `TkResult`, Diagnostic callback과 shared library를 요구하지 않는다.
+- `TryEncode`는 크기 또는 인자 검증에 실패하면 output buffer를 변경하지 않는다.
+- `TryDecode`는 크기가 정확하지 않거나 payload version이 다르면 `false`와 `default` output을 반환한다.
+- 16/32/64-bit signed·unsigned integer는 `System.Buffers.Binary.BinaryPrimitives`의 little-endian operation을 사용하고 8-bit integer는 직접 indexing한다.
+- Gameplay semantic validation은 generated codec에 추가하지 않는다.
+
+`TkPacketCodecSupport.cs`는 packet마다 생성하지 않고 SDK가 제공하는 고정 source로 유지한다. 정확한 source 경로, namespace, visibility와 packaging은 P2-S2 구현 가이드와 Phase 3 배포 설계에서 필요한 최소 범위로 확정한다.
+
+### 검증 경계
+
+Phase 2는 C++로 작성된 generator test에서 C# source 생성 계약만 검증한다.
+
+- Output 파일 이름과 존재
+- 동일 descriptor의 byte-identical source
+- UTF-8, LF와 generated banner
+- namespace, DTO, metadata, 8개 integer type mapping과 static `TryEncode`/`TryDecode` 구조
+
+전체 generated source snapshot은 추가하지 않고 위 핵심 구조만 간단히 확인한다. C# compile, Encode/Decode 실행, signed boundary와 golden byte conformance는 Phase 2 완료 조건에 포함하지 않는다.
+
+CMake/CTest는 `dotnet`을 탐색하거나 `.csproj`를 build/test하지 않는다. 후속 Issue는 별도 `.csproj`와 언어 전용 `dotnet build`/`dotnet test` 흐름을 소유한다.
+
+### 구현 slice와 순서
+
+#### P2-S1 — 언어 독립 generation pipeline 추출
+
+- Outcome: 기존 C++ 동작을 변경하지 않고 `PacketCompiler`, `PacketCodeGenerator`, `GeneratedFile`과 언어 독립 file committer를 Packet Tool 내부에 추출한다.
+- Dependency: Phase 1 완료.
+- Seam: `PacketDescriptorSet` 이후의 language-specific source generation.
+- Invariant: C++ public API, generated header 파일명·내용, failure atomicity와 commit 정책을 유지하고 root `common`을 확장하지 않는다.
+- Acceptance: 기존 C++ compile path가 공통 pipeline을 사용하며 C++ compiler/generator/file-commit 검증이 기존과 동일하게 통과한다.
+- Verification: 새 세부 테스트를 추가하지 않고 기존 Packet C++ 테스트를 regression gate로 사용한다.
+
+#### P2-S2 — C# source generator와 public compile path
+
+- Outcome: `PacketDescriptor`를 `<PacketName>.generated.cs`로 변환하는 C# generator, 고정 codec support source, `TkPacketCSharpCompileInfo`와 `TkPacketCompileCSharp`를 연결한다.
+- Dependency: P2-S1 완료.
+- Seam: 언어별 public compile API와 `PacketCodeGenerator` adapter.
+- Invariant: Generated C#은 ToolKit result/diagnostic/runtime을 요구하지 않고 descriptor의 offset, size와 metadata를 재계산하지 않는다.
+- Acceptance: 유효한 schema batch에서 packet별 deterministic `.generated.cs`가 생성되고 공개 API 실패가 기존 `TkResult`/Diagnostic/file commit 계약을 따른다.
+- Verification: C++ generator/public compiler 테스트가 파일 생성, deterministic source와 핵심 C# 구조만 검증하며 `.NET` compile과 실행은 하지 않는다.
+
+### 현재 상태와 다음 세션 진입점
+
+Phase 2 design grilling은 2026-08-29 완료했다. Material implementation blocker는 남아 있지 않고 다음 작업은 **P2-S1 — 언어 독립 generation pipeline 추출**이다. P2-S2의 세부 source layout과 support visibility는 이 문서의 계약을 바꾸지 않는 최소 범위에서 구현 가이드 시 확정한다.
+
+### 분리 예정 후속 Issue
+
+임시 제목: `Generated C# codec .NET build와 C++/C# wire conformance`
+
+후속 Issue가 소유할 범위:
+
+- Generated C# source와 `TkPacketCodecSupport.cs`를 포함하는 별도 `.csproj`
+- `dotnet build` 및 `dotnet test`
+- 언어 독립 golden byte vector
+- C++ Encode/C# Decode와 C# Encode/C++ Decode의 wire parity
+- Signed/unsigned integer boundary와 C# `TryEncode`/`TryDecode` 실행 계약
+
+후속 Issue는 CMake/CTest에 `.NET` 실행을 등록하지 않고 자신의 `.NET` build/test 명령을 소유한다. 해당 Issue를 생성할 때 Issue #1의 Phase 2 본문, 완료 조건과 dependency를 함께 정리한다.
 
 ### 후속 Service Host
 

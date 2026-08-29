@@ -10,4 +10,4 @@ Phase, milestone과 vertical slice는 독립 계획 문서가 아니라 해당 i
 
 ## Index
 
-- [Issue #1: 스키마 기반 C++/C# 패킷 코드 생성기와 unary RPC 계층 구현](issue-1-packet-codegen-rpc.md)
+- [Issue #1: 스키마 기반 C++/C# 패킷 코드 생성기](issue-1-packet-codegen-rpc.md)
