@@ -21,13 +21,15 @@ golden bytes, xUnit 검증 범위와 dependency 순서가 있는 구현 slice를
   `PayloadVersion`, `PayloadBytes`, `TryEncode`와 `TryDecode`를 생성할 수 있다.
 - `tools/packet/support/csharp/TkPacketCodecSupport.cs`는 8개 정수 primitive의
   little-endian read/write를 제공한다.
-- `TkPacketCSharpGeneratorTests.cpp`는 생성 문자열과 결정성을 검사하지만,
-  생성된 source를 C# compiler로 compile하지 않는다.
-- 현재 CMake custom command는 `AllTypes.generated.h`만 build tree에 남기며
-  `pstk_packet_generated_codec_tests`가 이를 사용한다.
-- 현재 `CMakePresets.json`은 Debug 성격의 `dev`, `build-dev`, `test-dev`만
-  제공한다.
-- 저장소에는 아직 `dotnet/` project와 `.NET` test가 없다.
+- CMake custom command는 같은 `AllTypes` descriptor로
+  `AllTypes.generated.h`와 `AllTypes.generated.cs`를 함께 생성해 선택한
+  Debug/Release build tree에 남긴다.
+- `CMakePresets.json`은 대칭적인 Debug/Release configure, build와 test
+  preset을 제공한다.
+- `dotnet/tests/packet/PstkPacketTests.csproj`는 generated C# source와 canonical
+  support source를 `net8.0`으로 compile하고 xUnit/VSTest로 실행한다.
+- C++과 C# generated codec test는 동일한 32-byte golden wire와 integer
+  boundary를 검증한다.
 
 Issue 본문은 C++/C#이 함께 소비하는 golden vector 또는 동등한 언어 독립
 fixture를 요구한다. 이 design은 별도 fixture file 대신 양쪽 테스트 코드에
@@ -148,13 +150,13 @@ dotnet/
 
 ```xml
 <Project>
-  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug' and '$(PstkGeneratedSourceDir)' == ''">
     <PstkGeneratedSourceDir>
       $(MSBuildThisFileDirectory)../out/build/dev/tools/packet/tests/generated
     </PstkGeneratedSourceDir>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+  <PropertyGroup Condition="'$(Configuration)' == 'Release' and '$(PstkGeneratedSourceDir)' == ''">
     <PstkGeneratedSourceDir>
       $(MSBuildThisFileDirectory)../out/build/release/tools/packet/tests/generated
     </PstkGeneratedSourceDir>
@@ -165,17 +167,13 @@ dotnet/
 `.csproj`는 다음 두 source를 실제 compile input으로 사용한다.
 
 ```xml
-<Compile
-  Include="../../../tools/packet/support/csharp/TkPacketCodecSupport.cs"
-  Link="Support/TkPacketCodecSupport.cs" />
-<Compile
-  Include="$(PstkGeneratedSourceDir)/AllTypes.generated.cs"
-  Link="Generated/AllTypes.generated.cs" />
+<Compile Include="../../../tools/packet/support/csharp/TkPacketCodecSupport.cs" />
+<Compile Include="$(PstkGeneratedSourceDir)/AllTypes.generated.cs" />
 ```
 
-`Link`는 IDE의 논리 경로만 정하고 file을 복사하지 않는다. 특수한 build
-tree를 사용할 때는 `-p:PstkGeneratedSourceDir=<path>`로 기본값을 덮어쓸 수
-있지만, 표준 Debug/Release 실행에서는 경로 argument를 반복하지 않는다.
+특수한 build tree를 사용할 때는
+`-p:PstkGeneratedSourceDir=<path>`로 기본값을 덮어쓸 수 있지만, 표준
+Debug/Release 실행에서는 경로 argument를 반복하지 않는다.
 
 ## Golden wire 계약
 
@@ -351,7 +349,11 @@ git diff --check
 
 ## 현재 상태
 
-- Grilling에서 물질적 구현 계약을 확정했다.
-- I3-S1, I3-S2, I3-S3는 아직 구현하지 않았다.
+- I3-S1, I3-S2, I3-S3 구현을 완료했다.
+- Debug/Release focused CTest는 generated codec test 5개가 각각 통과했다.
+- Debug/Release xUnit/VSTest는 packet codec test 4개가 각각 통과했다.
+- 전체 Debug native build와 CTest 33개가 통과했으며 `git diff --check`도
+  이상이 없다.
 - 남은 blocker와 미해결 design decision은 없다.
-- 다음 구현 진입점은 I3-S1이다.
+- SDK 배포와 consumer build integration은 이 Issue의 제외 범위대로 Issue #1
+  Phase 3에서 이어간다.

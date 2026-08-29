@@ -92,7 +92,7 @@ TEST(TkPacketGeneratedCodec, RoundTripsSignedBoundaries)
     ExpectRoundTrip(maximum);
 }
 
-TEST(TkPacketGeneratedCodec, WritesDescriptorOffsetsInLittleEndian)
+TEST(TkPacketGeneratedCodec, MatchesGoldenWireFormat)
 {
     AllTypes source{};
     source.int8Value = -1;
@@ -112,6 +112,10 @@ TEST(TkPacketGeneratedCodec, WritesDescriptorOffsetsInLittleEndian)
         0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xEF, 0xCD, 0xAB, 0x89, 0x67, 0x45, 0x23, 0x01,
     };
     EXPECT_EQ(encoded, expected);
+
+    AllTypes decoded{};
+    ASSERT_EQ(decoded.Decode({expected.data(), expected.size()}), TK_SUCCESS);
+    EXPECT_TRUE(Matches(decoded, source));
 }
 
 TEST(TkPacketGeneratedCodec, PreservesEncodeOutputForInvalidViews)
