@@ -27,7 +27,7 @@ GitHub Issue #1은 schema를 source of truth로 삼아 C++/C# fixed-layout packe
 
 Typed Service Host, middleware, command/event dispatch, async unary call lifecycle, schema direction metadata, 중앙 packet catalog와 자동 registration, Protobuf wire format, runtime reflection과 schema hot reload는 범위 밖이다. Service Host와 unary call은 Issue #2가 소유한다.
 
-Generated C# source의 실제 `.NET` compile과 C++/C# golden byte conformance는 CMake 기반 compiler 구현과 다른 toolchain을 사용하므로 후속 GitHub Issue로 분리하기로 했다. 후속 Issue를 생성하기 전이므로 이 문서에서는 임시 이름으로 기록하고, Issue 생성 후 번호와 dependency를 갱신한다.
+Generated C# source의 실제 `.NET` compile과 C++/C# golden byte conformance는 CMake 기반 compiler 구현과 다른 toolchain을 사용하므로 [Issue #3 — Generated C# codec .NET build와 C++/C# wire conformance](https://github.com/jammer-droid/PrivateServerToolKit/issues/3)로 분리했다.
 
 ## 구현 순서
 
@@ -36,11 +36,11 @@ Generated C# source의 실제 `.NET` compile과 C++/C# golden byte conformance�
 3. Phase 2 — C# source generation
 4. Phase 3 — Generated code build integration
 
-Phase 0 common contract와 Phase 1 C++ compiler는 구현과 검증을 완료했다. Phase 2는 언어 독립 compiler pipeline을 추출한 뒤 C# source generator를 연결한다. C# compile과 cross-language conformance는 후속 Issue에서 `dotnet` toolchain으로 검증하고 CMake/CTest에 등록하지 않는다.
+Phase 0 common contract, Phase 1 C++ compiler와 Phase 2 C# source generation은 구현과 검증을 완료했다. Phase 2는 `fddbc86`에서 언어 독립 compiler pipeline을 추출하고 `f3be9d3`에서 C# source generator와 공용 `TkPacketCompileInfo` public path를 연결했다. C# compile과 cross-language conformance는 Issue #3에서 `dotnet` toolchain으로 검증하고 CMake/CTest에 등록하지 않는다.
 
-2026-08-29 기준 GitHub Issue #1 본문은 Phase 2에 cross-language conformance를 아직 포함한다. 이 문서의 Phase 2 축소와 후속 Issue 분리는 확정된 design 변경이지만 tracker에는 아직 publish하지 않았다.
+Issue #3은 Issue #1의 Phase 3을 대체하지 않는다. Generated C# compile과 wire correctness를 먼저 검증한 뒤 Phase 3에서 검증된 source의 SDK 배포, build hook과 consumer integration을 다룬다.
 
-Phase 3은 schema에 direction metadata를 추가하거나 중앙 packet catalog와 자동 registration을 생성하지 않는다. Direction과 handler binding은 PrivateServer와 Godot C# client의 사용 및 등록 문맥에서 해석하고, Phase 3은 generated source를 두 consumer의 build input으로 연결하는 경계에 집중한다. 구체적인 SDK 배포, build hook과 stale output 정책은 Phase 3 진입 시 grilling으로 확정한다.
+Phase 3은 Issue #3 완료 뒤 진입한다. Schema에 direction metadata를 추가하거나 중앙 packet catalog와 자동 registration을 생성하지 않는다. Direction과 handler binding은 PrivateServer와 Godot C# client의 사용 및 등록 문맥에서 해석하고, Phase 3은 generated source를 두 consumer의 build input으로 연결하는 경계에 집중한다. 구체적인 SDK 배포, build hook과 stale output 정책은 Phase 3 진입 시 grilling으로 확정한다.
 
 ## Phase 0 — Common contract 선행 slice
 
@@ -544,7 +544,7 @@ Phase 2는 C++로 작성된 generator test에서 C# source 생성 계약만 검�
 
 전체 generated source snapshot은 추가하지 않고 위 핵심 구조만 간단히 확인한다. C# compile, Encode/Decode 실행, signed boundary와 golden byte conformance는 Phase 2 완료 조건에 포함하지 않는다.
 
-CMake/CTest는 `dotnet`을 탐색하거나 `.csproj`를 build/test하지 않는다. 후속 Issue는 별도 `.csproj`와 언어 전용 `dotnet build`/`dotnet test` 흐름을 소유한다.
+CMake/CTest는 `dotnet`을 탐색하거나 `.csproj`를 build/test하지 않는다. Issue #3은 별도 `.csproj`와 언어 전용 `dotnet build`/`dotnet test` 흐름을 소유한다.
 
 ### 구현 slice와 순서
 
@@ -568,13 +568,11 @@ CMake/CTest는 `dotnet`을 탐색하거나 `.csproj`를 build/test하지 않는�
 
 ### 현재 상태와 다음 세션 진입점
 
-Phase 2 design grilling은 2026-08-29 완료했다. Material implementation blocker는 남아 있지 않고 다음 작업은 **P2-S1 — 언어 독립 generation pipeline 추출**이다. P2-S2의 세부 source layout과 support visibility는 이 문서의 계약을 바꾸지 않는 최소 범위에서 구현 가이드 시 확정한다.
+Phase 2 design grilling과 P2-S1/P2-S2 구현은 2026-08-29 완료했다. C++/C# public compiler와 generator 관련 focused CTest 17개가 통과했으며, `.NET` compile과 runtime wire conformance는 완료 근거에 포함하지 않고 Issue #3으로 넘겼다. 다음 작업은 Issue #3 refinement와 구현이고, 그 완료 뒤 Issue #1 Phase 3 grilling으로 돌아온다.
 
-### 분리 예정 후속 Issue
+### 분리된 후속 Issue #3
 
-임시 제목: `Generated C# codec .NET build와 C++/C# wire conformance`
-
-후속 Issue가 소유할 범위:
+[Issue #3 — Generated C# codec .NET build와 C++/C# wire conformance](https://github.com/jammer-droid/PrivateServerToolKit/issues/3)가 소유하는 범위:
 
 - Generated C# source와 `TkPacketCodecSupport.cs`를 포함하는 별도 `.csproj`
 - `dotnet build` 및 `dotnet test`
@@ -582,7 +580,7 @@ Phase 2 design grilling은 2026-08-29 완료했다. Material implementation bloc
 - C++ Encode/C# Decode와 C# Encode/C++ Decode의 wire parity
 - Signed/unsigned integer boundary와 C# `TryEncode`/`TryDecode` 실행 계약
 
-후속 Issue는 CMake/CTest에 `.NET` 실행을 등록하지 않고 자신의 `.NET` build/test 명령을 소유한다. 해당 Issue를 생성할 때 Issue #1의 Phase 2 본문, 완료 조건과 dependency를 함께 정리한다.
+Issue #3은 CMake/CTest에 `.NET` 실행을 등록하지 않고 자신의 `.NET` build/test 명령을 소유한다. Issue #1의 남은 Phase 3은 Issue #3이 wire correctness를 검증한 뒤 consumer build integration을 시작한다.
 
 ### 후속 Service Host
 
