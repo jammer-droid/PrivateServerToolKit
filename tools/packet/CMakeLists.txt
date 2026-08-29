@@ -1,7 +1,7 @@
 include (GenerateExportHeader)
 
 add_subdirectory(src/schema)
-add_subdirectory(src/generator/cpp)
+add_subdirectory(src/generator)
 
 # SHARED 라이브리러 빌드
 # CMake에서 자동으로 compiler define에

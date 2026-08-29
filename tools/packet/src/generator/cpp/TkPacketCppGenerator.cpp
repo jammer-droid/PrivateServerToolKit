@@ -1,6 +1,7 @@
 #include "TkPacketCppGenerator.h"
 
 #include <cstddef>
+#include <filesystem>
 #include <string>
 #include <utility>
 
@@ -182,6 +183,30 @@ TkResult GenerateCppHeader(const PacketDescriptor &descriptor, const char *const
     AppendLine(&header, "} // namespace " + std::string(namespaceName));
 
     *outHeader = std::move(header);
+    return TK_SUCCESS;
+}
+
+CppPacketCodeGenerator::CppPacketCodeGenerator(const char *const namespaceName)
+    : namespaceName_(namespaceName != nullptr ? namespaceName : "")
+{
+}
+
+TkResult CppPacketCodeGenerator::Generate(const PacketDescriptor &descriptor, GeneratedFile *const outFile) const
+{
+    if (outFile == nullptr)
+    {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+
+    GeneratedFile generatedFile;
+    const TkResult result = GenerateCppHeader(descriptor, namespaceName_.c_str(), &generatedFile.contents);
+    if (result != TK_SUCCESS)
+    {
+        return result;
+    }
+
+    generatedFile.fileName = std::filesystem::u8path(descriptor.name + ".generated.h");
+    *outFile = std::move(generatedFile);
     return TK_SUCCESS;
 }
 } // namespace pstk::packet

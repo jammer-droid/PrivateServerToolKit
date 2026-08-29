@@ -3,7 +3,6 @@ add_library(
     STATIC
     TkPacketCppCompiler.cpp
     TkPacketCppGenerator.cpp
-    TkPacketGeneratedFileCommitter.cpp
 )
 
 target_compile_features(
@@ -15,8 +14,7 @@ target_compile_features(
 target_link_libraries(
     pstk_packet_cpp_generator
     PUBLIC
-    PSTK::Common
-    pstk_packet_schema_compiler
+    pstk_packet_generator_core
 )
 
 target_include_directories(
