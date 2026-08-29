@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Set global using. -->
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.3.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0" />
+    <PackageReference Include="xunit.v3.mtp-off" Version="4.0.0" />
+
+    <!-- Compile the canonical C# support and generated packet source. -->
+    <Compile Include="../../../tools/packet/support/csharp/TkPacketCodecSupport.cs" />
+    <Compile Include="$(PstkGeneratedSourceDir)/AllTypes.generated.cs" />
+  </ItemGroup>
+
+</Project>
