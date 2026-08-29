@@ -101,8 +101,8 @@ template <typename Integer> constexpr UnsignedInteger<Integer> ToUnsignedBits(co
     static_assert(std::numeric_limits<Integer>::digits + (std::is_signed_v<Integer> ? 1 : 0) == sizeof(Integer) * 8);
 
     // C++ defines signed-to-unsigned conversion modulo 2^N.
-    // Therefore, every signed value has a corresponding same-width unsigned value even when the source value is
-    // negative.
+    // Therefore, every signed value has a corresponding same-width unsigned value
+    //  even when the source value is negative.
     return static_cast<UnsignedInteger<Integer>>(value);
 }
 
@@ -122,8 +122,8 @@ template <typename Integer> constexpr Integer FromUnsignedBits(const UnsignedInt
 
         // The unsigned range cannot be represented completely by the corresponding signed type.
         // Therefore, C++17 leaves out-of-range unsigned-to-signed conversion implementation-defined.
-        // PrivateServerToolKit supports MSVC, Clang, and GCC targets whose same-width conversion preserves the
-        // two's-complement bit pattern.
+        // PrivateServerToolKit supports MSVC, Clang, and GCC targets
+        //  whose same-width conversion preserves the two's-complement bit pattern.
         // A new conversion path is required for a toolchain that does not satisfy this contract.
         static_assert(static_cast<Integer>(std::numeric_limits<Unsigned>::max()) == Integer{-1});
         static_assert(static_cast<Integer>(signBit) == std::numeric_limits<Integer>::min());
