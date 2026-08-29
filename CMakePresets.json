@@ -20,6 +20,21 @@
                 "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
                 "VCPKG_MANIFEST_FEATURES": "tests"
             }
+        },
+        {
+            "name": "release",
+            "displayName": "ToolKit Release",
+            "description": "Build the tools and tests with release settings",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "PSTK_BUILD_PACKET_TOOL": "ON",
+                "BUILD_TESTING": "ON",
+
+                "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+                "VCPKG_MANIFEST_FEATURES": "tests"
+            }
         }
     ],
     "buildPresets": [
@@ -27,6 +42,11 @@
             "name": "build-dev",
             "configurePreset": "dev",
             "configuration": "Debug"
+        },
+        {
+            "name": "build-release",
+            "configurePreset": "release",
+            "configuration": "Release"
         }
     ],
     "testPresets": [
@@ -34,6 +54,14 @@
             "name": "test-dev",
             "configurePreset": "dev",
             "configuration": "Debug",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "test-release",
+            "configurePreset": "release",
+            "configuration": "Release",
             "output": {
                 "outputOnFailure": true
             }

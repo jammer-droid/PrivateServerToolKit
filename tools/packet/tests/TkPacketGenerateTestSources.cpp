@@ -1,4 +1,5 @@
 #include "generator/cpp/TkPacketCppGenerator.h"
+#include "generator/csharp/TkPacketCSharpGenerator.h"
 
 #include <pstk/TkResult.h>
 
@@ -7,9 +8,32 @@
 #include <fstream>
 #include <string>
 
+namespace
+{
+bool WriteFile(const char *const outputPath, const std::string &contents)
+{
+    if (outputPath == nullptr)
+    {
+        return false;
+    }
+
+    std::ofstream output(outputPath, std::ios::binary);
+    if (!output)
+    {
+        return false;
+    }
+
+    output.write(contents.data(), static_cast<std::streamsize>(contents.size()));
+    return static_cast<bool>(output);
+}
+} // namespace
+
 int main(const int argumentCount, const char *const *const arguments)
 {
-    if (argumentCount != 2)
+    // arguments: path for genarated packet
+    // cpp header
+    // csharp shoource
+    if (argumentCount != 3)
     {
         return 1;
     }
@@ -48,12 +72,16 @@ int main(const int argumentCount, const char *const *const arguments)
         return 1;
     }
 
-    std::ofstream output(arguments[1], std::ios::binary);
-    if (!output)
+    std::string generatedSource;
+    if (pstk::packet::GenerateCSharpSource(descriptor, "Pstk.Generated", &generatedSource) != TK_SUCCESS)
     {
         return 1;
     }
 
-    output.write(generatedHeader.data(), static_cast<std::streamsize>(generatedHeader.size()));
-    return output ? 0 : 1;
+    if (!WriteFile(arguments[1], generatedHeader))
+    {
+        return 1;
+    }
+
+    return WriteFile(arguments[2], generatedSource) ? 0 : 1;
 }

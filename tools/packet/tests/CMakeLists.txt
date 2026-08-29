@@ -117,42 +117,43 @@ gtest_discover_tests(
 
 set(PSTK_PACKET_GENERATED_TEST_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 set(PSTK_PACKET_GENERATED_TEST_HEADER "${PSTK_PACKET_GENERATED_TEST_DIR}/AllTypes.generated.h")
+set(PSTK_PACKET_GENERATED_TEST_CSHARP_SOURCE "${PSTK_PACKET_GENERATED_TEST_DIR}/AllTypes.generated.cs")
 
+# 패킷 생성 테스트
 add_executable(
-    pstk_packet_generate_test_header
-    TkPacketGenerateTestHeader.cpp
+    pstk_packet_generate_test_sources
+    TkPacketGenerateTestSources.cpp
 )
 
 target_compile_features(
-    pstk_packet_generate_test_header
+    pstk_packet_generate_test_sources
     PRIVATE
     cxx_std_17
 )
 
 target_link_libraries(
-    pstk_packet_generate_test_header
+    pstk_packet_generate_test_sources
     PRIVATE
     pstk_packet_cpp_generator
+    pstk_packet_csharp_generator
 )
 
 add_custom_command(
-    # custom command 생성 결과(생성된 헤더 파일)
     OUTPUT
     "${PSTK_PACKET_GENERATED_TEST_HEADER}"
+    "${PSTK_PACKET_GENERATED_TEST_CSHARP_SOURCE}"
 
-    # 생성 헤더 넣을 build directory 생성
     COMMAND
     ${CMAKE_COMMAND} -E make_directory "${PSTK_PACKET_GENERATED_TEST_DIR}"
 
-    # 테스트용 generator 실행 파일 호출 및 출력 경로를 인자로 전달
     COMMAND
-    pstk_packet_generate_test_header "${PSTK_PACKET_GENERATED_TEST_HEADER}"
+    pstk_packet_generate_test_sources               # generate packet test with
+    "${PSTK_PACKET_GENERATED_TEST_HEADER}"          # cpp header
+    "${PSTK_PACKET_GENERATED_TEST_CSHARP_SOURCE}"   # csharp source
 
-    # custom command 사용에 필요한 의존성 설정
     DEPENDS
-    pstk_packet_generate_test_header
+    pstk_packet_generate_test_sources
 
-    # 경로 공백, 따옴표, platform 별 escape 등을 cmake에서 처리
     VERBATIM
 )
 
