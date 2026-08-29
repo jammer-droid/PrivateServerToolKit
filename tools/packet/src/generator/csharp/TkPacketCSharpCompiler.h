@@ -6,5 +6,5 @@ struct TkPacketCompileInfo;
 
 namespace pstk::packet
 {
-TkResult CompileCpp(const TkPacketCompileInfo &compileInfo);
+TkResult CompileCSharp(const TkPacketCompileInfo &compileInfo);
 } // namespace pstk::packet

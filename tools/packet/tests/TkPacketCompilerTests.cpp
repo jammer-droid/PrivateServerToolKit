@@ -103,11 +103,36 @@ TkResult Compile(const std::vector<std::filesystem::path> &schemaPaths, const st
     }
 
     const std::string outputPath = outputDirectory.string();
-    const TkPacketCppCompileInfo compileInfo = {
+    const TkPacketCompileInfo compileInfo = {
         inputPaths.data(), inputPaths.size(), outputPath.c_str(), "PrivateServer", {CaptureDiagnostic, &capture},
     };
 
     return TkPacketCompileCpp(&compileInfo);
+}
+
+TkResult CompileCSharp(const std::vector<std::filesystem::path> &schemaPaths,
+                       const std::filesystem::path &outputDirectory, DiagnosticCapture &capture)
+{
+    std::vector<std::string> pathStrings;
+    pathStrings.reserve(schemaPaths.size());
+    for (const std::filesystem::path &path : schemaPaths)
+    {
+        pathStrings.push_back(path.string());
+    }
+
+    std::vector<const char *> inputPaths;
+    inputPaths.reserve(pathStrings.size());
+    for (const std::string &path : pathStrings)
+    {
+        inputPaths.push_back(path.c_str());
+    }
+
+    const std::string outputPath = outputDirectory.string();
+    const TkPacketCompileInfo compileInfo = {
+        inputPaths.data(), inputPaths.size(), outputPath.c_str(), "PrivateServer", {CaptureDiagnostic, &capture},
+    };
+
+    return TkPacketCompileCSharp(&compileInfo);
 }
 
 std::string ReadFile(const std::filesystem::path &path)
@@ -137,7 +162,7 @@ void ExpectSingleDiagnostic(const DiagnosticCapture &capture, const std::string 
 TEST(TkPacketCompiler, RejectsInvalidCompileInfoWithoutDiagnostic)
 {
     DiagnosticCapture capture;
-    const TkPacketCppCompileInfo compileInfo = {
+    const TkPacketCompileInfo compileInfo = {
         nullptr, 0, "output", "PrivateServer", {CaptureDiagnostic, &capture},
     };
 
@@ -156,6 +181,30 @@ TEST(TkPacketCompiler, GeneratesHeaderForValidSchema)
     EXPECT_EQ(Compile({schemaPath}, directory.OutputDirectory(), capture), TK_SUCCESS);
     EXPECT_TRUE(capture.diagnostics.empty());
     EXPECT_TRUE(std::filesystem::is_regular_file(directory.OutputDirectory() / "MovementInput.generated.h"));
+}
+
+TEST(TkPacketCompiler, RejectsInvalidCSharpCompileInfoWithoutDiagnostic)
+{
+    DiagnosticCapture capture;
+    const TkPacketCompileInfo compileInfo = {
+        nullptr, 0, "output", nullptr, {CaptureDiagnostic, &capture},
+    };
+
+    EXPECT_EQ(TkPacketCompileCSharp(&compileInfo), TK_ERROR_INVALID_ARGUMENT);
+    EXPECT_TRUE(capture.diagnostics.empty());
+}
+
+TEST(TkPacketCompiler, GeneratesCSharpForValidSchema)
+{
+    const TemporaryDirectory directory;
+    const std::filesystem::path schemaPath = directory.Write(
+        "MovementInput.packet.json",
+        R"({"schemaVersion":1,"packet":{"name":"MovementInput","id":257,"payloadVersion":1,"fields":[{"name":"moveX","type":"int16"}]}})");
+    DiagnosticCapture capture;
+
+    EXPECT_EQ(CompileCSharp({schemaPath}, directory.OutputDirectory(), capture), TK_SUCCESS);
+    EXPECT_TRUE(capture.diagnostics.empty());
+    EXPECT_TRUE(std::filesystem::is_regular_file(directory.OutputDirectory() / "MovementInput.generated.cs"));
 }
 
 TEST(TkPacketCompiler, DoesNotRewriteIdenticalGeneratedHeader)

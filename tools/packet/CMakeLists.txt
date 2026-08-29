@@ -30,6 +30,7 @@ target_link_libraries(
     PSTK::Common
     PRIVATE
     pstk_packet_cpp_generator
+    pstk_packet_csharp_generator
 )
 
 # public header와 생성된 export header 공개

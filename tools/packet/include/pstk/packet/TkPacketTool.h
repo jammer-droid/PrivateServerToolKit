@@ -7,14 +7,14 @@
 #include <pstk/TkResult.h>
 #include "pstk_packet_export.h"
 
-typedef struct TkPacketCppCompileInfo
+typedef struct TkPacketCompileInfo
 {
     const char *const *inputPaths;
     size_t inputPathCount;
     const char *outputDirectory;
     const char *namespaceName;
     TkDiagnosticCallbackInfo diagnosticCallback;
-} TkPacketCppCompileInfo;
+} TkPacketCompileInfo;
 
 #ifdef __cplusplus
 extern "C"
@@ -23,7 +23,9 @@ extern "C"
 
     PSTK_PACKET_API TkResult TkPacketGetApiVersion(uint32_t *outVersion);
 
-    PSTK_PACKET_API TkResult TkPacketCompileCpp(const TkPacketCppCompileInfo *compileInfo);
+    PSTK_PACKET_API TkResult TkPacketCompileCpp(const TkPacketCompileInfo *compileInfo);
+
+    PSTK_PACKET_API TkResult TkPacketCompileCSharp(const TkPacketCompileInfo *compileInfo);
 
 #ifdef __cplusplus
 }

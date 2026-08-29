@@ -1,20 +1,20 @@
-#include "TkPacketCppCompiler.h"
+#include "TkPacketCSharpCompiler.h"
 
-#include "TkPacketCppGenerator.h"
+#include "TkPacketCSharpGenerator.h"
 #include "generator/TkPacketCompiler.h"
 
 #include <pstk/packet/TkPacketTool.h>
 
 namespace pstk::packet
 {
-TkResult CompileCpp(const TkPacketCompileInfo &compileInfo)
+TkResult CompileCSharp(const TkPacketCompileInfo &compileInfo)
 {
     if (compileInfo.namespaceName == nullptr || compileInfo.namespaceName[0] == '\0')
     {
         return TK_ERROR_INVALID_ARGUMENT;
     }
 
-    CppPacketCodeGenerator codeGenerator(compileInfo.namespaceName);
+    CSharpPacketCodeGenerator codeGenerator(compileInfo.namespaceName);
     PacketCompiler compiler(compileInfo.diagnosticCallback);
 
     return compiler.Compile(compileInfo.inputPaths, compileInfo.inputPathCount, compileInfo.outputDirectory,

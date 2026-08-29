@@ -33,3 +33,4 @@ set_target_properties(
 )
 
 add_subdirectory(cpp)
+add_subdirectory(csharp)

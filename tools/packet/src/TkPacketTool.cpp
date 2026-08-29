@@ -1,4 +1,5 @@
 #include "pstk/packet/TkPacketTool.h"
+#include "generator/csharp/TkPacketCSharpCompiler.h"
 #include "generator/cpp/TkPacketCppCompiler.h"
 
 #include <new>
@@ -15,7 +16,7 @@ TkResult TkPacketGetApiVersion(uint32_t *const outVersion)
     return TK_SUCCESS;
 }
 
-TkResult TkPacketCompileCpp(const TkPacketCppCompileInfo *const compileInfo)
+TkResult TkPacketCompileCpp(const TkPacketCompileInfo *const compileInfo)
 {
     if (compileInfo == nullptr)
     {
@@ -25,6 +26,27 @@ TkResult TkPacketCompileCpp(const TkPacketCppCompileInfo *const compileInfo)
     try
     {
         return pstk::packet::CompileCpp(*compileInfo);
+    }
+    catch (const std::bad_alloc &)
+    {
+        return TK_ERROR_OUT_OF_MEMORY;
+    }
+    catch (...)
+    {
+        return TK_ERROR_UNKNOWN;
+    }
+}
+
+TkResult TkPacketCompileCSharp(const TkPacketCompileInfo *const compileInfo)
+{
+    if (compileInfo == nullptr)
+    {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+
+    try
+    {
+        return pstk::packet::CompileCSharp(*compileInfo);
     }
     catch (const std::bad_alloc &)
     {

@@ -47,6 +47,29 @@ gtest_discover_tests(
 )
 
 add_executable(
+    pstk_packet_csharp_generator_tests
+    TkPacketCSharpGeneratorTests.cpp
+)
+
+target_compile_features(
+    pstk_packet_csharp_generator_tests
+    PRIVATE
+    cxx_std_17
+)
+
+target_link_libraries(
+    pstk_packet_csharp_generator_tests
+    PRIVATE
+    pstk_packet_csharp_generator
+    GTest::gtest_main
+)
+
+gtest_discover_tests(
+    pstk_packet_csharp_generator_tests
+    TEST_PREFIX "pstk.packet.csharp-generator."
+)
+
+add_executable(
     pstk_packet_schema_compiler_tests
     TkPacketSchemaCompilerTests.cpp
 )

@@ -342,17 +342,17 @@ PSTK-PACKET-UNSUPPORTED-PAYLOAD-VERSION
 Phase 1은 여러 입력을 한 번에 처리하는 C-compatible Packet DLL API 하나를 추가한다.
 
 ```c
-typedef struct TkPacketCppCompileInfo
+typedef struct TkPacketCompileInfo
 {
     const char *const *inputPaths;
     size_t inputPathCount;
     const char *outputDirectory;
     const char *namespaceName;
     TkDiagnosticCallbackInfo diagnosticCallback;
-} TkPacketCppCompileInfo;
+} TkPacketCompileInfo;
 
 PSTK_PACKET_API TkResult TkPacketCompileCpp(
-    const TkPacketCppCompileInfo *compileInfo);
+    const TkPacketCompileInfo *compileInfo);
 ```
 
 - 모든 pointer와 문자열은 호출 동안만 borrowed다.
@@ -413,7 +413,7 @@ Phase 1의 compiler pipeline은 `schema path → PacketSource → PacketJsonPars
 
 #### Slice 2 — Schema 입력과 parsing
 
-- `TkPacketCppCompileInfo`와 `TkPacketCompileCpp` public API를 추가한다.
+- `TkPacketCompileInfo` 공용 parameter block과 `TkPacketCompileCpp` public API를 추가한다. 함수는 언어별로 분리하지만 공통 compile parameter block을 공유하고 language enum/option bag은 쓰지 않는다.
 - 공통 `PacketSchemaCompiler`의 file adapter가 `PacketSource`를 만들고, `PacketJsonParser`가 nlohmann/json을 사용해 `PacketFieldSchema`를 포함한 `PacketSchema`로 변환한다. `PacketSchema`는 후속 descriptor와 diagnostic을 위해 `sourceName`을 유지한다.
 - Required/unknown property, duplicate key, version, name, ID, field type과 batch duplicate를 정해진 순서로 fail-fast 검증한다.
 - 확정된 Packet diagnostic ID와 source/logical path message를 사용한다.
@@ -471,7 +471,7 @@ Phase 2는 Phase 1의 `PacketDescriptorSet`을 재사용해 C# fixed-layout DTO�
 
 Compiler API consumer와 generated-code consumer는 다른 계약을 사용한다.
 
-- `TkPacketCompileCpp`/`TkPacketCompileCSharp`를 호출하는 compiler consumer는 ToolKit의 C ABI, `TkResult`와 Diagnostic을 사용한다.
+- `TkPacketCompileCpp`/`TkPacketCompileCSharp`를 호출하는 compiler consumer는 공용 `TkPacketCompileInfo` parameter block과 ToolKit의 C ABI, `TkResult`와 Diagnostic을 사용한다. 함수는 언어별로 분리하지만 공통 compile parameter block을 공유하고 language enum/option bag은 쓰지 않는다.
 - Generated C# source를 사용하는 client는 ToolKit shared library, `TkResult` 또는 `TkDiagnostic`에 의존하지 않는다.
 - 언어 간 공통 계약은 packet ID, payload version, payload size, field layout과 wire bytes다. API 표현은 각 언어에 맞게 다를 수 있다.
 - C++은 ToolKit의 주 대상이므로 기존 generated header의 `TkResult`, Diagnostic과 `TkPacketCodecSupport.h` 의존을 유지한다.
@@ -499,20 +499,20 @@ language-specific public compile API
 - Batch의 모든 source를 메모리에서 완성한 뒤 file commit을 시작한다.
 - 기존 byte comparison, unchanged-file write 생략, temporary sibling file과 replace 계약을 언어에 관계없이 재사용한다.
 
-Public API는 범용 language enum과 option bag으로 합치지 않고 언어별로 분리한다.
+Public API 함수는 언어별로 분리하지만 공통 `TkPacketCompileInfo` parameter block을 공유하며, 범용 language enum과 option bag은 사용하지 않는다.
 
 ```c
-typedef struct TkPacketCSharpCompileInfo
+typedef struct TkPacketCompileInfo
 {
     const char *const *inputPaths;
     size_t inputPathCount;
     const char *outputDirectory;
     const char *namespaceName;
     TkDiagnosticCallbackInfo diagnosticCallback;
-} TkPacketCSharpCompileInfo;
+} TkPacketCompileInfo;
 
 PSTK_PACKET_API TkResult TkPacketCompileCSharp(
-    const TkPacketCSharpCompileInfo *compileInfo);
+    const TkPacketCompileInfo *compileInfo);
 ```
 
 Pointer, string, callback, invalid argument, diagnostic과 file I/O 계약은 `TkPacketCompileCpp`와 동일하다. 이 `TkResult`는 compiler operation의 결과이며 generated C# codec에 노출되지 않는다.
@@ -520,9 +520,9 @@ Pointer, string, callback, invalid argument, diagnostic과 file I/O 계약은 `T
 ### Generated C# 계약
 
 - Schema마다 `<PacketName>.generated.cs` 하나를 생성한다.
-- C# namespace는 required `TkPacketCSharpCompileInfo::namespaceName`으로 전달하고 schema에 저장하지 않는다.
+- C# namespace는 required `TkPacketCompileInfo::namespaceName`으로 전달하고 schema에 저장하지 않는다.
 - DTO는 `public readonly record struct`로 생성한다.
-- Schema의 lowerCamelCase field name은 C# public property의 PascalCase로 변환한다. Phase 2에서 naming style 정규식 검사를 추가하지 않는다.
+- Generated C#의 public property는 Schema의 field name을 변환하지 않고 그대로 사용한다. 언어별 naming convention을 위한 case 변환이나 naming style 정규식 검사는 추가하지 않는다.
 - `PacketId`, `PayloadVersion`과 `PayloadBytes`를 공개 constant로 생성한다.
 - DTO 내부에 static `TryEncode(value, Span<byte> output)`과 `TryDecode(ReadOnlySpan<byte> input, out value)`를 생성한다.
 - Codec은 `bool`만 반환하고 ToolKit의 `TkResult`, Diagnostic callback과 shared library를 요구하지 않는다.
@@ -559,7 +559,7 @@ CMake/CTest는 `dotnet`을 탐색하거나 `.csproj`를 build/test하지 않는�
 
 #### P2-S2 — C# source generator와 public compile path
 
-- Outcome: `PacketDescriptor`를 `<PacketName>.generated.cs`로 변환하는 C# generator, 고정 codec support source, `TkPacketCSharpCompileInfo`와 `TkPacketCompileCSharp`를 연결한다.
+- Outcome: `PacketDescriptor`를 `<PacketName>.generated.cs`로 변환하는 C# generator, 고정 codec support source, `TkPacketCompileInfo`와 `TkPacketCompileCSharp`를 연결한다.
 - Dependency: P2-S1 완료.
 - Seam: 언어별 public compile API와 `PacketCodeGenerator` adapter.
 - Invariant: Generated C#은 ToolKit result/diagnostic/runtime을 요구하지 않고 descriptor의 offset, size와 metadata를 재계산하지 않는다.
