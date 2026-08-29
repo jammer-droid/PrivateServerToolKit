@@ -100,27 +100,10 @@ template <typename Integer> constexpr UnsignedInteger<Integer> ToUnsignedBits(co
     static_assert(std::is_integral_v<Integer> && !std::is_same_v<Integer, bool>);
     static_assert(std::numeric_limits<Integer>::digits + (std::is_signed_v<Integer> ? 1 : 0) == sizeof(Integer) * 8);
 
-    using Unsigned = UnsignedInteger<Integer>;
-    if constexpr (!std::is_signed_v<Integer>)
-    {
-        return value;
-    }
-    else
-    {
-        if (value >= 0)
-        {
-            return static_cast<Unsigned>(value);
-        }
-
-        const Unsigned signBit = static_cast<Unsigned>(Unsigned{1} << std::numeric_limits<Integer>::digits);
-        if (value == std::numeric_limits<Integer>::min())
-        {
-            return signBit;
-        }
-
-        const Unsigned magnitude = static_cast<Unsigned>(-value);
-        return static_cast<Unsigned>(static_cast<Unsigned>(~magnitude) + Unsigned{1});
-    }
+    // C++ defines signed-to-unsigned conversion modulo 2^N.
+    // Therefore, every signed value has a corresponding same-width unsigned value even when the source value is
+    // negative.
+    return static_cast<UnsignedInteger<Integer>>(value);
 }
 
 template <typename Integer> constexpr Integer FromUnsignedBits(const UnsignedInteger<Integer> rawValue)
@@ -135,20 +118,17 @@ template <typename Integer> constexpr Integer FromUnsignedBits(const UnsignedInt
     else
     {
         using Unsigned = UnsignedInteger<Integer>;
-        const Unsigned maximum = static_cast<Unsigned>(std::numeric_limits<Integer>::max());
-        if (rawValue <= maximum)
-        {
-            return static_cast<Integer>(rawValue);
-        }
+        constexpr Unsigned signBit = static_cast<Unsigned>(Unsigned{1} << std::numeric_limits<Integer>::digits);
 
-        const Unsigned signBit = static_cast<Unsigned>(maximum + Unsigned{1});
-        const Unsigned magnitude = static_cast<Unsigned>(static_cast<Unsigned>(~rawValue) + Unsigned{1});
-        if (magnitude == signBit)
-        {
-            return std::numeric_limits<Integer>::min();
-        }
+        // The unsigned range cannot be represented completely by the corresponding signed type.
+        // Therefore, C++17 leaves out-of-range unsigned-to-signed conversion implementation-defined.
+        // PrivateServerToolKit supports MSVC, Clang, and GCC targets whose same-width conversion preserves the
+        // two's-complement bit pattern.
+        // A new conversion path is required for a toolchain that does not satisfy this contract.
+        static_assert(static_cast<Integer>(std::numeric_limits<Unsigned>::max()) == Integer{-1});
+        static_assert(static_cast<Integer>(signBit) == std::numeric_limits<Integer>::min());
 
-        return static_cast<Integer>(-static_cast<Integer>(magnitude));
+        return static_cast<Integer>(rawValue);
     }
 }
 
