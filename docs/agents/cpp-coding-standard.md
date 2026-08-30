@@ -32,7 +32,7 @@
 
 - 성공과 실패는 public/internal 모두 공용 `TkResult`로 전달하고 layer나 tool마다 별도 result type을 만들지 않는다.
 - `TkResult`는 control-flow 분류로 유지하고 source, stable ID와 message 같은 상세 정보는 common Diagnostic 계약으로 분리한다.
-- `TkResult`를 반환하는 함수는 별도 명시가 없으면 실패 시 caller의 output object와 buffer를 변경하지 않는다.
+- `TkResult`를 반환하는 함수는 별도 명시가 없으면 실패 시 caller의 output/in-out object, buffer와 갱신 대상 객체를 호출 전 상태로 보존한다. 전달 방식과 예외의 세부 기준은 [실패 시 output 보존](cpp-result-style.md#실패-시-output-보존)을 따른다.
 - Consumer 입력, null output, schema 오류와 I/O 실패는 `TkResult`로 처리하고 assertion으로 대체하지 않는다.
 - Assertion은 tool 내부에서 이미 성립해야 하는 invariant에만 사용하며 표현식에 필수 side effect를 넣지 않는다. Compile-time 조건은 `static_assert`를 사용한다.
 - Diagnostic callback의 lifetime, 호출 thread와 concurrency 계약은 `docs/adr/0004-use-common-diagnostic-callbacks.md`를 따른다.
@@ -50,6 +50,7 @@
 - 설치 가능한 project public header는 `#include <pstk/...>` 형식을 사용하고 같은 component의 private header는 quote include를 사용할 수 있다.
 - 현재 handwritten tool과 consumer의 최소 언어 버전은 C++17이다. 공개 header는 C ABI 형태를 유지하며, 기존 common header만 C11 contract test 범위에 포함한다.
 - Generated source는 issue design의 public contract, schema field 이름과 deterministic formatting을 우선한다.
+- Generated C++의 ToolKit 공통 header 사용과 non-C++의 native 공통 계층 독립성은 [generated-code consumer 계약](../adr/0005-generated-code-consumer-boundary.md)을 따른다. Compiler API consumer와 generated-code consumer의 의존성을 혼동하지 않는다.
 - Generated DTO의 member `Encode`/`Decode`와 schema-derived lowerCamelCase field는 handwritten type 규칙의 예외다.
 - Generated source는 사람이 직접 수정하거나 스타일만을 위해 후처리하지 않는다.
 

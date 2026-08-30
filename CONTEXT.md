@@ -33,5 +33,5 @@ Callback signature와 user data를 묶어 Tool이 생성한 borrowed Diagnostic�
 _Avoid_: Tool logger, diagnostic owner
 
 **Failure Atomicity**:
-`TkResult`를 반환하는 함수가 실패했을 때 호출자가 제공한 output object와 output buffer에 부분 결과를 남기지 않는 공용 API 규칙이다. API가 필요 크기 같은 정보성 output을 실패에서도 제공하려면 해당 예외를 명시해야 한다.
+`TkResult`를 반환하는 함수가 실패했을 때 호출자 소유 output/in-out object, buffer와 갱신 대상 객체를 호출 전 상태로 보존하여 호출자에게 복구 작업을 요구하지 않는 공용 API 규칙이다. API가 필요 크기 같은 정보성 output을 실패에서도 제공하려면 해당 예외를 명시해야 한다.
 _Avoid_: Partial output, undocumented failure mutation

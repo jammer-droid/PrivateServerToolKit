@@ -18,12 +18,15 @@ TkResult EncodePacket(/* ... */);
 
 ## 실패 시 output 보존
 
-`TkResult`를 반환하는 함수는 `TK_SUCCESS`가 아닌 경우 호출자가 제공한 output object와 output buffer를 변경하지 않는다. 중간 결과가 필요하면 임시 객체나 tool 내부 저장소에서 작업한 뒤 모든 검증이 성공했을 때만 output에 commit한다.
+`TkResult`를 반환하는 함수는 `TK_SUCCESS`가 아닌 경우 호출자가 소유한 output/in-out object와 buffer를 호출 전 상태로 보존한다. Pointer, reference 또는 view 중 어떤 방식으로 전달했는지와 관계없이 적용하며, member function이 갱신하는 호출자 소유 객체도 포함한다. 호출자가 실패 후 부분 결과를 지우거나 원래 값으로 복구할 필요가 없어야 한다.
+
+이는 성공 시 변경까지 금지하는 immutability가 아니라 실패 시 상태를 보존하는 failure atomicity다. 중간 결과가 필요하면 임시 객체나 tool 내부 저장소에서 작업한 뒤 모든 실패 가능 작업과 검증이 성공했을 때만 output에 commit한다.
 
 - Decode는 임시 객체에 값을 구성하고 검증한 뒤 성공 시에만 output object에 대입한다.
 - Encode는 인자, payload 크기와 값을 먼저 검증하고 성공이 확정된 뒤 output buffer를 기록한다.
 - Compile은 실패한 중간 IR이나 불완전한 생성물을 output으로 commit하지 않는다.
 - 필요 buffer 크기와 같은 정보성 output을 실패에서도 갱신하는 API는 그 예외를 API 계약에 명시한다. 명시되지 않은 예외와 부분 쓰기는 허용하지 않는다.
+- Diagnostic callback을 통한 실패 보고와 consumer가 `userData`에 기록하는 진단 정보는 별도 Diagnostic 계약을 따른다. 이 규칙이 callback 기록이나 파일·네트워크 I/O 전체의 자동 rollback을 뜻하지는 않으며, 외부 부수효과의 보존 범위는 해당 API 계약에서 정한다.
 
 ## 다른 반환 타입을 쓰는 경우
 

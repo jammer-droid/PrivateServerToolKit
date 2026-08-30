@@ -29,3 +29,7 @@ Handwritten C++은 `agent-context`의 전역 C++ coding standard를 기본값으
 ### Lean implementation workflow
 
 구현 가이드 요청과 일반 C/C++ 구현 작업은 `$lean-implementation`을 사용한다. Guide가 기본이며 명시적 변경 요청만 구현을 위임한다. Test-first는 별도 workflow가 아니라 suitability gate를 만족한 slice에서만 사용한다.
+
+### Generated-code consumer contract
+
+Compiler API consumer와 generated-code consumer의 의존성을 구분한다. Generated C++은 ToolKit 공통 header 계약을 사용하고 non-C++ code에는 native 공통 계층을 강제하지 않는다. 세부 기준은 `docs/adr/0005-generated-code-consumer-boundary.md`를 따른다.

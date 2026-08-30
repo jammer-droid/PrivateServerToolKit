@@ -54,6 +54,8 @@ cmake --build --preset build-dev
 ctest --preset test-dev
 ```
 
+Generated C# packet code의 준비, Debug/Release 빌드와 xUnit 테스트는 [.NET 가이드](dotnet/README.md)를 참고한다. 위 CTest 명령은 .NET 테스트를 실행하지 않는다.
+
 toolchain 또는 manifest 설정을 변경한 뒤 CMake cache를 새로 구성하려면 다음 명령을 사용한다.
 
 ```sh

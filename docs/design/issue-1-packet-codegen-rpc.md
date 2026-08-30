@@ -469,7 +469,7 @@ GitHub Issue #1의 Phase 1 diagnostic 문구도 이 문서의 계약과 동일�
 
 Phase 2는 Phase 1의 `PacketDescriptorSet`을 재사용해 C# fixed-layout DTO와 codec source를 생성한다. JSON parser, schema validation과 layout을 C# generator에서 다시 구현하지 않는다.
 
-Compiler API consumer와 generated-code consumer는 다른 계약을 사용한다.
+Compiler API consumer와 generated-code consumer는 다른 계약을 사용한다. 언어별 의존성의 상위 기준은 [generated-code consumer ADR](../adr/0005-generated-code-consumer-boundary.md)을 따른다.
 
 - `TkPacketCompileCpp`/`TkPacketCompileCSharp`를 호출하는 compiler consumer는 공용 `TkPacketCompileInfo` parameter block과 ToolKit의 C ABI, `TkResult`와 Diagnostic을 사용한다. 함수는 언어별로 분리하지만 공통 compile parameter block을 공유하고 language enum/option bag은 쓰지 않는다.
 - Generated C# source를 사용하는 client는 ToolKit shared library, `TkResult` 또는 `TkDiagnostic`에 의존하지 않는다.
