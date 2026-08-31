@@ -9,11 +9,6 @@ namespace pstk::packet
 {
 TkResult CompileCpp(const TkPacketCompileInfo &compileInfo)
 {
-    if (compileInfo.namespaceName == nullptr || compileInfo.namespaceName[0] == '\0')
-    {
-        return TK_ERROR_INVALID_ARGUMENT;
-    }
-
     CppPacketCodeGenerator codeGenerator(compileInfo.namespaceName);
     PacketCompiler compiler(compileInfo.diagnosticCallback);
 
