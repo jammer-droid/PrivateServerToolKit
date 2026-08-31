@@ -12,6 +12,7 @@ typedef struct TkPacketCompileInfo
     const char *const *inputPaths;
     size_t inputPathCount;
     const char *outputDirectory;
+    // Null or empty means generate in the global namespace.
     const char *namespaceName;
     TkDiagnosticCallbackInfo diagnosticCallback;
 } TkPacketCompileInfo;

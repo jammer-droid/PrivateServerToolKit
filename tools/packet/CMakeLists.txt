@@ -72,6 +72,25 @@ generate_export_header(
     EXPORT_MACRO_NAME PSTK_PACKET_API
 )
 
+install(
+    TARGETS pstk_packet
+    RUNTIME DESTINATION bin
+    LIBRARY DESTINATION bin
+)
+
+install(
+    FILES
+        include/pstk/packet/TkPacketCodecSupport.h
+    DESTINATION include/pstk/packet
+)
+
+install(
+    FILES
+        support/csharp/TkPacketCodecSupport.cs
+    DESTINATION support/csharp
+)
+
+add_subdirectory(cli)
 
 if(BUILD_TESTING)
     add_subdirectory(tests)

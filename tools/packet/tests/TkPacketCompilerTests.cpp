@@ -86,7 +86,7 @@ class TemporaryDirectory
 };
 
 TkResult Compile(const std::vector<std::filesystem::path> &schemaPaths, const std::filesystem::path &outputDirectory,
-                 DiagnosticCapture &capture)
+                 DiagnosticCapture &capture, const char *const namespaceName = "PrivateServer")
 {
     std::vector<std::string> pathStrings;
     pathStrings.reserve(schemaPaths.size());
@@ -104,14 +104,15 @@ TkResult Compile(const std::vector<std::filesystem::path> &schemaPaths, const st
 
     const std::string outputPath = outputDirectory.string();
     const TkPacketCompileInfo compileInfo = {
-        inputPaths.data(), inputPaths.size(), outputPath.c_str(), "PrivateServer", {CaptureDiagnostic, &capture},
+        inputPaths.data(), inputPaths.size(), outputPath.c_str(), namespaceName, {CaptureDiagnostic, &capture},
     };
 
     return TkPacketCompileCpp(&compileInfo);
 }
 
 TkResult CompileCSharp(const std::vector<std::filesystem::path> &schemaPaths,
-                       const std::filesystem::path &outputDirectory, DiagnosticCapture &capture)
+                       const std::filesystem::path &outputDirectory, DiagnosticCapture &capture,
+                       const char *const namespaceName = "PrivateServer")
 {
     std::vector<std::string> pathStrings;
     pathStrings.reserve(schemaPaths.size());
@@ -129,7 +130,7 @@ TkResult CompileCSharp(const std::vector<std::filesystem::path> &schemaPaths,
 
     const std::string outputPath = outputDirectory.string();
     const TkPacketCompileInfo compileInfo = {
-        inputPaths.data(), inputPaths.size(), outputPath.c_str(), "PrivateServer", {CaptureDiagnostic, &capture},
+        inputPaths.data(), inputPaths.size(), outputPath.c_str(), namespaceName, {CaptureDiagnostic, &capture},
     };
 
     return TkPacketCompileCSharp(&compileInfo);
@@ -183,6 +184,38 @@ TEST(TkPacketCompiler, GeneratesHeaderForValidSchema)
     EXPECT_TRUE(std::filesystem::is_regular_file(directory.OutputDirectory() / "MovementInput.generated.h"));
 }
 
+TEST(TkPacketCompiler, GeneratesHeaderWithoutNamespace)
+{
+    const TemporaryDirectory nullNamespaceDirectory;
+    const TemporaryDirectory emptyNamespaceDirectory;
+    const std::filesystem::path nullNamespaceSchemaPath = nullNamespaceDirectory.Write(
+        "MovementInput.packet.json",
+        R"({"schemaVersion":1,"packet":{"name":"MovementInput","id":257,"payloadVersion":1,"fields":[{"name":"moveX","type":"int16"}]}})");
+    const std::filesystem::path emptyNamespaceSchemaPath = emptyNamespaceDirectory.Write(
+        "MovementInput.packet.json",
+        R"({"schemaVersion":1,"packet":{"name":"MovementInput","id":257,"payloadVersion":1,"fields":[{"name":"moveX","type":"int16"}]}})");
+    DiagnosticCapture nullNamespaceCapture;
+    DiagnosticCapture emptyNamespaceCapture;
+
+    ASSERT_EQ(
+        Compile({nullNamespaceSchemaPath}, nullNamespaceDirectory.OutputDirectory(), nullNamespaceCapture, nullptr),
+        TK_SUCCESS);
+    ASSERT_TRUE(nullNamespaceCapture.diagnostics.empty());
+    const std::string nullNamespaceHeader =
+        ReadFile(nullNamespaceDirectory.OutputDirectory() / "MovementInput.generated.h");
+    EXPECT_EQ(nullNamespaceHeader.find("namespace "), std::string::npos);
+    EXPECT_NE(nullNamespaceHeader.find("struct MovementInput"), std::string::npos);
+
+    ASSERT_EQ(Compile({emptyNamespaceSchemaPath}, emptyNamespaceDirectory.OutputDirectory(), emptyNamespaceCapture, ""),
+              TK_SUCCESS);
+    ASSERT_TRUE(emptyNamespaceCapture.diagnostics.empty());
+    const std::string emptyNamespaceHeader =
+        ReadFile(emptyNamespaceDirectory.OutputDirectory() / "MovementInput.generated.h");
+    EXPECT_EQ(emptyNamespaceHeader.find("namespace "), std::string::npos);
+    EXPECT_NE(emptyNamespaceHeader.find("struct MovementInput"), std::string::npos);
+    EXPECT_EQ(emptyNamespaceHeader, nullNamespaceHeader);
+}
+
 TEST(TkPacketCompiler, RejectsInvalidCSharpCompileInfoWithoutDiagnostic)
 {
     DiagnosticCapture capture;
@@ -205,6 +238,39 @@ TEST(TkPacketCompiler, GeneratesCSharpForValidSchema)
     EXPECT_EQ(CompileCSharp({schemaPath}, directory.OutputDirectory(), capture), TK_SUCCESS);
     EXPECT_TRUE(capture.diagnostics.empty());
     EXPECT_TRUE(std::filesystem::is_regular_file(directory.OutputDirectory() / "MovementInput.generated.cs"));
+}
+
+TEST(TkPacketCompiler, GeneratesCSharpWithoutNamespace)
+{
+    const TemporaryDirectory nullNamespaceDirectory;
+    const TemporaryDirectory emptyNamespaceDirectory;
+    const std::filesystem::path nullNamespaceSchemaPath = nullNamespaceDirectory.Write(
+        "MovementInput.packet.json",
+        R"({"schemaVersion":1,"packet":{"name":"MovementInput","id":257,"payloadVersion":1,"fields":[{"name":"moveX","type":"int16"}]}})");
+    const std::filesystem::path emptyNamespaceSchemaPath = emptyNamespaceDirectory.Write(
+        "MovementInput.packet.json",
+        R"({"schemaVersion":1,"packet":{"name":"MovementInput","id":257,"payloadVersion":1,"fields":[{"name":"moveX","type":"int16"}]}})");
+    DiagnosticCapture nullNamespaceCapture;
+    DiagnosticCapture emptyNamespaceCapture;
+
+    ASSERT_EQ(CompileCSharp({nullNamespaceSchemaPath}, nullNamespaceDirectory.OutputDirectory(), nullNamespaceCapture,
+                            nullptr),
+              TK_SUCCESS);
+    ASSERT_TRUE(nullNamespaceCapture.diagnostics.empty());
+    const std::string nullNamespaceSource =
+        ReadFile(nullNamespaceDirectory.OutputDirectory() / "MovementInput.generated.cs");
+    EXPECT_EQ(nullNamespaceSource.find("namespace "), std::string::npos);
+    EXPECT_NE(nullNamespaceSource.find("public readonly record struct MovementInput"), std::string::npos);
+
+    ASSERT_EQ(
+        CompileCSharp({emptyNamespaceSchemaPath}, emptyNamespaceDirectory.OutputDirectory(), emptyNamespaceCapture, ""),
+        TK_SUCCESS);
+    ASSERT_TRUE(emptyNamespaceCapture.diagnostics.empty());
+    const std::string emptyNamespaceSource =
+        ReadFile(emptyNamespaceDirectory.OutputDirectory() / "MovementInput.generated.cs");
+    EXPECT_EQ(emptyNamespaceSource.find("namespace "), std::string::npos);
+    EXPECT_NE(emptyNamespaceSource.find("public readonly record struct MovementInput"), std::string::npos);
+    EXPECT_EQ(emptyNamespaceSource, nullNamespaceSource);
 }
 
 TEST(TkPacketCompiler, DoesNotRewriteIdenticalGeneratedHeader)

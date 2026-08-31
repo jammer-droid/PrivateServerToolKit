@@ -2,6 +2,7 @@
 
 - [`CMakeLists.md`](CMakeLists.md): 루트 `CMakeLists.txt`에 작성한 명령의 의미
 - [`CMakePreset.md`](CMakePreset.md): `CMakePresets.json`에 작성한 프리셋의 의미
+- [`CMakeInstall.md`](CMakeInstall.md): `install()` 규칙, CLI 배포 구성과 설치 명령
 - [`PacketTarget.md`](PacketTarget.md): Packet DLL target, public include, export header와 smoke test 구성
 - [`SharedLibraryBinaryModel.md`](../cpp/SharedLibraryBinaryModel.md): shared library의 compile-link-load-call 흐름, symbol visibility와 inline 모델
 
@@ -31,40 +32,26 @@ CMakeLists.txt + CMakePresets.json
 2. Build: C++ 소스를 컴파일하고 target을 링크한다.
 3. Test: 빌드된 테스트 실행 파일을 실행하고 결과를 집계한다.
 
-## 배포 기본 방향: shared library SDK
+## Packet 배포: CLI와 언어별 support
 
-PrivateServerToolKit은 consumer의 빌드 시스템에 소스 프로젝트로 편입되는 방식보다, 빌드가 완료된 shared library SDK로 배포하는 것을 기본 방향으로 삼는다. Windows에서는 DLL과 import library, public header가 SDK의 핵심 산출물이다.
+현재 Packet 배포물은 미리 빌드한 `pstk-packet` CLI와 CLI 실행에 필요한 shared library, 기본 INI, generated code용 support다. Consumer는 CLI로 packet source를 생성하고, 생성된 source와 대상 언어의 support를 자신의 빌드 도구로 컴파일한다.
 
-```text
-PSTK SDK
-├── include/                 public header
-├── bin/                     runtime shared library (Windows DLL)
-├── lib/                     link library (Windows import library)
-└── lib/cmake/PSTK/          CMake consumer용 package metadata
+- `bin/`: CLI, Packet shared library, `packet.ini`
+- `include/`: generated C++ code가 사용하는 common header와 codec support
+- `support/csharp/`: generated C# code와 함께 컴파일하는 codec support
+
+Generated packet을 사용하는 것만으로 Packet shared library를 링크할 필요는 없다. Shared library는 compiler API를 호출하는 CLI에 필요하며, generated-code consumer 경계는 [ADR 0005](../adr/0005-generated-code-consumer-boundary.md)를 따른다.
+
+현재 배포물은 compiler API용 binary SDK가 아니므로 Windows import library, compiler API header, CMake exported target과 `PSTKConfig.cmake`는 포함하지 않는다. 저장소 내부의 `PSTK::Packet` target과 외부에서 `find_package()`로 가져오는 installed target을 구분한다.
+
+프로젝트 루트에서 Release 빌드와 설치를 함께 실행한다.
+
+```shell
+cmake --preset release
+cmake --build --preset build-release
 ```
 
-모든 consumer는 동일한 public header와 binary library를 사용하며, 빌드 시스템에 따라 이를 연결하는 방법만 달라진다.
-
-- Visual Studio/MSBuild consumer: include 경로, import library, runtime DLL 경로를 직접 설정하거나 추후 제공할 property sheet를 사용한다.
-- CMake consumer: 설치된 SDK의 package metadata를 `find_package(PSTK CONFIG REQUIRED)`로 불러오고 `PSTK::Packet` target을 링크한다.
-
-```cmake
-find_package(PSTK CONFIG REQUIRED)
-
-add_executable(Consumer main.cpp)
-
-target_link_libraries(
-    Consumer
-    PRIVATE
-        PSTK::Packet
-)
-```
-
-`PSTK::Packet`은 별도의 라이브러리가 아니라 SDK에 포함된 header 경로와 platform별 link 정보를 캡슐화한 imported target이다. 따라서 CMake package 파일은 SDK의 새로운 배포 형식이 아니라 CMake consumer를 위한 편의 계층이다.
-
-소스 트리의 CMake 구성은 SDK를 빌드하고 테스트하며 설치 가능한 형태로 패키징할 책임을 가진다. Consumer에게 ToolKit 소스 트리나 동일한 CMake project 구성을 요구하지 않는다.
-
-현재 구성은 build tree 내부의 Packet DLL과 테스트 target을 만드는 단계다. 외부 consumer 배포를 완료하려면 이후 install rule, exported target, `PSTKConfig.cmake`와 version 파일을 추가하고 설치된 SDK만으로 consumer build가 가능한지 검증해야 한다.
+배포 폴더는 `out/build/dist/release/pstk-packet/`다. 이 명령은 테스트나 CLI를 실행하지 않는다. 설치 규칙과 직접 `cmake --install`을 사용하는 방법은 [CMake install 가이드](CMakeInstall.md), preset에 설치를 묶은 방법은 [preset 해설](CMakePreset.md)을 참고한다.
 
 ## 최초 실행 순서
 
@@ -123,10 +110,12 @@ CMakeLists.txt
   - 프로젝트와 target의 구조를 정의
   - 하위 디렉터리를 빌드에 포함
   - 라이브러리, 실행 파일, 테스트 관계 정의
+  - install()로 배포 대상과 prefix 아래의 배치 경로 정의
 
 CMakePresets.json
   - 자주 사용하는 configure/build/test 옵션을 이름으로 저장
   - 빌드 디렉터리와 Debug/Release 설정 선택
+  - installDir로 설치 prefix, build preset의 targets로 실행할 target 선택
   - 명령행 입력을 짧고 재현 가능하게 유지
 ```
 

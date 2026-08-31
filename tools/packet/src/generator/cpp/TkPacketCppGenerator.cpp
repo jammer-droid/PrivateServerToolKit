@@ -80,10 +80,12 @@ void AppendDecodeField(std::string *const output, const FieldDescriptor &field, 
 TkResult GenerateCppHeader(const PacketDescriptor &descriptor, const char *const namespaceName,
                            std::string *const outHeader)
 {
-    if (namespaceName == nullptr || namespaceName[0] == '\0' || outHeader == nullptr)
+    if (outHeader == nullptr)
     {
         return TK_ERROR_INVALID_ARGUMENT;
     }
+
+    const bool hasNamespace = namespaceName != nullptr && namespaceName[0] != '\0';
 
     if (descriptor.name.empty() || !HasValidDescriptorBounds(descriptor))
     {
@@ -101,8 +103,11 @@ TkResult GenerateCppHeader(const PacketDescriptor &descriptor, const char *const
     AppendLine(&header, "#include <cstddef>");
     AppendLine(&header, "#include <cstdint>");
     AppendLine(&header);
-    AppendLine(&header, "namespace " + std::string(namespaceName));
-    AppendLine(&header, "{");
+    if (hasNamespace)
+    {
+        AppendLine(&header, "namespace " + std::string(namespaceName));
+        AppendLine(&header, "{");
+    }
     AppendLine(&header, "struct " + descriptor.name);
     AppendLine(&header, "{");
     AppendLine(&header, "    static constexpr std::uint16_t PacketId = " + std::to_string(descriptor.id) + ";");
@@ -180,7 +185,10 @@ TkResult GenerateCppHeader(const PacketDescriptor &descriptor, const char *const
     AppendLine(&header, "        return TK_SUCCESS;");
     AppendLine(&header, "    }");
     AppendLine(&header, "};");
-    AppendLine(&header, "} // namespace " + std::string(namespaceName));
+    if (hasNamespace)
+    {
+        AppendLine(&header, "} // namespace " + std::string(namespaceName));
+    }
 
     *outHeader = std::move(header);
     return TK_SUCCESS;
