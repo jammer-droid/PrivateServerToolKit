@@ -1,8 +1,3 @@
-if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/TkPacketCli.cpp")
-    # 임시 setup: CLI 소스가 아직 없어 target을 만들지 않는다.
-    return()
-endif()
-
 find_package(SimpleIni CONFIG REQUIRED)
 
 add_executable(
@@ -14,6 +9,12 @@ target_compile_features(
     pstk_packet_cli
     PRIVATE
     cxx_std_17
+)
+
+target_compile_definitions(
+    pstk_packet_cli
+    PRIVATE
+    SI_CONVERT_GENERIC
 )
 
 target_link_libraries(
