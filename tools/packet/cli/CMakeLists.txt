@@ -63,9 +63,13 @@ add_custom_target(
 add_dependencies(pstk_packet_cli pstk_packet_cli_config)
 
 if(WIN32)
-    add_custom_command(
-        TARGET pstk_packet_cli
-        POST_BUILD
+    add_custom_target(
+        pstk_packet_cli_runtime
+        COMMAND
+        "${CMAKE_COMMAND}"
+        -E
+        make_directory
+        "$<TARGET_FILE_DIR:pstk_packet_cli>"
         COMMAND
         "${CMAKE_COMMAND}"
         -E
@@ -74,4 +78,6 @@ if(WIN32)
         "$<TARGET_FILE_DIR:pstk_packet_cli>"
         VERBATIM
     )
+
+    add_dependencies(pstk_packet_cli pstk_packet_cli_runtime)
 endif()
