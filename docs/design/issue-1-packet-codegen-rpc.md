@@ -42,7 +42,7 @@ Phase 0 common contract, Phase 1 C++ compiler와 Phase 2 C# source generation은
 
 Issue #3은 Issue #1의 Phase 3을 대체하지 않는다. Issue #3에서 검증한 compiler/codec을 바탕으로 Phase 3은 CLI와 support 배포, INI 설정에 따른 생성 결과 확인을 다룬다.
 
-Phase 3 grilling은 2026-08-31 완료했다. 기존 consumer build integration 계획을 C++ CLI 전달 범위로 변경했으며, 실제 PrivateServer/Godot 적용은 Issue #1의 완료 조건에서 제외한다. Schema direction metadata, 중앙 packet catalog와 자동 registration은 추가하지 않는다. 구현은 아직 시작하지 않았으며 아래 P3-S1부터 순서대로 진행한다.
+Phase 3 grilling은 2026-08-31 완료했다. 기존 consumer build integration 계획을 C++ CLI 전달 범위로 변경했으며, 실제 PrivateServer/Godot 적용은 Issue #1의 완료 조건에서 제외한다. Schema direction metadata, 중앙 packet catalog와 자동 registration은 추가하지 않는다. P3-S1·P3-S2는 완료했고 P3-S3의 install 구성과 사용 문서를 반영했다. 배포 폴더 CLI의 플랫폼별 실행 검증은 아래 현재 상태에서 구분한다.
 
 ## Phase 0 — Common contract 선행 slice
 
@@ -644,17 +644,18 @@ namespace=
 - `TkPacketCompileInfo::namespaceName`은 `nullptr` 또는 빈 문자열이면 namespace 생략을 뜻하도록 변경한다. Struct layout과 언어별 public function signature는 유지한다.
 - C++/C# generator 모두 namespace 선언과 대응하는 wrapper를 생략하고 global namespace에 DTO를 생성한다. C++ anonymous namespace로 대체하지 않는다.
 - Non-empty namespace를 전달하는 기존 동작과 나머지 필수 인자 검증은 유지한다.
-- 이 항목은 현재 구현과 달라지는 새 shared-library 동작이다. P3-S1에서 compiler/generator 검증을 보완하고 CLI 검증과 구분한다.
+- 이 동작은 P3-S1에서 compiler/generator와 기존 테스트에 반영했다. CLI 설정 적용 검증과는 구분한다.
 
 ### 배포와 consumer 책임
 
-플랫폼별로 미리 빌드한 다음 형태의 폴더를 전달한다. 아래는 배포 layout 계약이며 아직 생성된 산출물이 아니다.
+플랫폼별로 미리 빌드한 다음 형태의 폴더를 전달한다. CMake install 규칙으로 구성하며 macOS Release 배포 산출물을 확인했다. Windows 실행 확인은 별도로 남아 있다.
 
 ```text
 pstk-packet/
   bin/
     pstk-packet 실행 파일
     pstk_packet shared library
+    packet.ini                   # 입력 schema는 별도로 준비
   include/
     pstk/...                     # C++ Common/codec support public headers
   support/
@@ -669,6 +670,10 @@ pstk-packet/
 - 외부 consumer는 자신의 출력 경로, generated source의 Git 포함 여부, 실행 시점과 build/CI hook을 결정한다. 매 빌드마다 생성하도록 강제하지 않는다.
 - 기존 final과 byte-identical하면 write를 생략하는 정책은 그대로 재사용한다. 삭제되거나 이름이 바뀐 schema의 오래된 생성물을 자동 삭제하는 기능은 추가하지 않는다.
 - PrivateServer/Godot의 실제 적용과 통신 확인은 consumer 작업이며 Issue #1의 완료 조건이 아니다.
+
+프로젝트 루트에서 `cmake --preset release` 후 `cmake --build --preset build-release`를 실행한다. `release.installDir`는 `out/build/dist/release/pstk-packet`을 지정하고, `build-release.targets`의 `install`이 빌드 후 배포 파일을 모은다. `build-dev`에는 설치를 묶지 않는다.
+
+직접 `cmake --install`을 사용하는 방법, `--prefix`, 배포 구성과 macOS loader 설정은 [CMake install 가이드](../cmake/CMakeInstall.md), preset 연결은 [CMake preset 해설](../cmake/CMakePreset.md)에 기록한다. Compiler API SDK용 import library, API/export header와 CMake package는 배포 대상이 아니며 generated-code용 support만 제공한다.
 
 ### 검증 경계
 
@@ -720,11 +725,21 @@ CLI는 **INI 설정이 실제 생성에 반영되는지**만 직접 실행해 �
 
 ### 현재 상태와 다음 세션 진입점
 
-- Design: 2026-08-31 grilling 완료. 기존 tracker/design의 consumer integration 범위를 이 Phase의 CLI 계약으로 변경한다.
-- Implementation: **0/3 완료**. 현재 코드는 namespace를 필수로 검사하며 CLI와 배포 규칙은 아직 없다.
-- Next: **P3-S1**의 namespace 인자 검증과 C++/C# wrapper 생성을 수정하는 가이드부터 진행한다.
-- 검증: 이번 문서 반영은 구현·빌드·실행 결과가 아니다. 특히 Windows x64 배포 검증을 완료한 것으로 간주하지 않는다.
-- 보류: Consumer별 적용/build hook/stale 관리와 추가 플랫폼. CLI 파일 배치와 CMake 배포 명령의 세부 형태는 각 slice 구현 가이드에서 최소한으로 정한다. 현재 계약을 막는 미해결 결정은 없다.
+- Design: 2026-08-31 grilling 완료. 기존 consumer integration 범위를 이 Phase의 CLI 계약으로 변경했다.
+- Progress: **2/3 완료** — **P3-S1 complete**, **P3-S2 complete**, **P3-S3 current**.
+- P3-S1: `db3201f`에서 null/empty namespace와 기존 non-empty 동작을 반영했다. Dev/Release × null/empty 네 조합의 generated C++ consumer object와 C# `net8.0` consumer assembly가 남아 있다.
+- P3-S2: `8113dd5`, `b07759c`, `25ed4fc`, `c553900`에서 SimpleIni 연결, CLI, 기본 INI 복사와 실제 packet fixture 기반 수동 smoke를 반영했다. Build-tree CLI로 C++/C# 단일·재귀 입력 네 case의 설정 적용을 확인했다.
+- P3-S3: CLI/shared library, 기본 INI, Common/C++ support header와 C# support의 install 규칙, macOS `@loader_path`, Release build-install preset과 사용 문서를 반영했다. macOS Release 배포 결과는 사용자가 확인했으며 설치 manifest와 실제 파일 8개를 대조했다.
+- Next: 배포 폴더 CLI를 대상으로 수동 smoke 결과를 기록하고 Windows x64 native build/install/실행을 확인한다. 이를 확인하기 전까지 P3-S3와 Issue #1은 완료 처리하지 않는다.
+- 보류: Consumer별 적용/build hook/stale 관리, Linux와 추가 architecture, 자동 Release upload와 별도 installer.
+
+검증 근거와 한계:
+
+- 기존 `out/build/dev/Testing/Temporary/LastTest.log`와 `out/build/release/Testing/Temporary/LastTest.log`는 2026-08-31 09:38 실행이며 각각 35개 테스트 통과를 기록한다. 이는 install 변경 이후 다시 실행한 결과가 아니다.
+- `out/build/p3-s1-verification.4hQ6Hv/`에 namespace 생략 consumer의 C++ `Consumer.o`와 C# `Consumer.dll`이 네 조합 모두 존재한다. 해당 폴더에 원래 컴파일 명령의 stdout/exit-code 로그까지 보존된 것은 아니다.
+- `out/build/packet-cli-smoke/run-a55d0c94f8e1/`은 앞서 build-tree CLI로 확인한 네 case의 INI와 결과를 보존한다. 이 결과를 설치된 CLI의 smoke 통과 근거로 사용하지 않는다.
+- `out/build/release/install_manifest.txt`와 `out/build/dist/release/pstk-packet/`의 8개 파일로 macOS 설치 구성을 확인한다. 사용자 배포 확인과 별개로 installed CLI 네 case의 실행 로그 및 Windows 검증 근거는 아직 기록하지 않았다.
+- 이번 커밋·tracker 동기화에서는 빌드·설치·테스트를 재실행하지 않고 변경 diff, 문서 링크와 기존 산출물만 확인한다.
 
 ## Issue 완료 기준
 

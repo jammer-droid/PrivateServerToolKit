@@ -308,29 +308,29 @@ C:/PSTK/include
 
 `INSTALL_INTERFACE:include`는 source tree의 절대 경로를 외부에 노출하지 않고, 설치 prefix를 기준으로 옮겨 다닐 수 있는 include 경로를 package target에 기록하는 역할을 한다. Consumer가 installed target을 링크하면 이 경로가 compile 설정으로 전달된다.
 
-또한 `INSTALL_INTERFACE`만 추가해도 파일이 복사되지는 않는다. 다음 install 규칙이 별도로 필요하다.
+또한 `INSTALL_INTERFACE`만 추가해도 파일이 복사되지는 않는다. Compiler API SDK를 CMake package로 제공하려면 다음 install 규칙이 별도로 필요하다.
 
 - Packet DLL과 Windows import library 설치
 - 직접 작성한 public header 설치
 - 생성된 `pstk_packet_export.h` 설치
 - 외부 `find_package()`를 위한 target export와 package config 설치
 
-현재 target은 build-tree 사용까지만 구성되어 있고 install/package 규칙은 아직 추가되지 않았다.
+현재 프로젝트에는 CLI와 generated-code support를 배포하는 `install()` 규칙이 있다. 다만 위 compiler API SDK용 target export와 package config는 제공하지 않으며, 현재 target의 include 설정도 build-tree 전용이다. 실제 배포 구성은 [CMake install 가이드](CMakeInstall.md)를 참고한다.
 
-### Packet SDK로 배포할 때 필요한 결과물
+### Compiler API SDK를 별도로 제공한다면
 
-현재 target을 Windows binary SDK로 패키징하려면 다음 결과물이 필요하다.
+아래는 CLI 배포와 별개로, 외부 C++ 프로그램이 compiler API를 직접 호출하도록 Windows binary SDK를 제공할 경우 필요한 결과물 예시다. 현재 install 대상 목록이 아니다.
 
 ```text
 PSTK Packet SDK/
 ├─ include/
 │  ├─ pstk_packet_export.h
-│  └─ pstk/packet/PacketToolApi.h
+│  └─ pstk/packet/TkPacketTool.h
 ├─ lib/pstk_packet.lib
 └─ bin/pstk_packet.dll
 ```
 
-수동 SDK, 설치된 CMake package와 동일 build tree consumer의 binary 관계는 [`SharedLibraryBinaryModel.md`](../cpp/SharedLibraryBinaryModel.md)에서 설명한다. 현재 target에는 아직 `install()`과 package export 규칙이 없다.
+수동 SDK, 설치된 CMake package와 동일 build tree consumer의 binary 관계는 [`SharedLibraryBinaryModel.md`](../cpp/SharedLibraryBinaryModel.md)에서 설명한다. 현재 CLI 배포는 위 import library와 compiler API header를 설치하지 않는다.
 
 ## Packet target의 symbol visibility 설정
 
@@ -578,7 +578,7 @@ API version != 1U
 - Windows에서 import library와 DLL 소비 검증
 - 실제 packet schema, encode와 decode API가 추가된 뒤 기능 테스트 확장
 
-배포 자동화 범위는 선택한 소비 방식에 따라 나뉜다.
+현재 배포 자동화는 [CLI와 언어별 support 설치](CMakeInstall.md)로 구성한다. 다음 compiler API SDK 배포 방식은 현재 install 범위에 포함하지 않는다.
 
 - Binary SDK 방식: public/generated header, DLL과 import library를 정해진 SDK 디렉터리에 패키징
 - CMake package 방식: install directory, `INSTALL_INTERFACE`, target export와 package config 추가

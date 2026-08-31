@@ -26,6 +26,7 @@
             "displayName": "ToolKit Release",
             "description": "Build the tools and tests with release settings",
             "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "installDir": "${sourceDir}/out/build/dist/${presetName}/pstk-packet",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
@@ -46,7 +47,10 @@
         {
             "name": "build-release",
             "configurePreset": "release",
-            "configuration": "Release"
+            "configuration": "Release",
+            "targets": [
+                "install"
+            ]
         }
     ],
     "testPresets": [

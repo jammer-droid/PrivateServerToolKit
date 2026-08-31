@@ -2,15 +2,27 @@
 
 `CMakePresets.json`은 빌드 규칙을 정의하지 않는다. `CMakeLists.txt`에 정의된 빌드 규칙을 어떤 옵션과 경로로 실행할지 이름이 있는 프리셋으로 저장한다.
 
-현재 프로젝트는 다음 세 프리셋을 제공한다.
+현재 프로젝트는 다음 여섯 프리셋을 제공한다.
 
 | 단계               | 프리셋 이름 | 실행 명령                          |
 | ------------------ | ----------- | ---------------------------------- |
 | Configure/Generate | `dev`       | `cmake --preset dev`               |
+| Configure/Generate | `release`   | `cmake --preset release`           |
 | Build              | `build-dev` | `cmake --build --preset build-dev` |
+| Build              | `build-release` | `cmake --build --preset build-release` |
 | Test               | `test-dev`  | `ctest --preset test-dev`          |
+| Test               | `test-release` | `ctest --preset test-release`      |
 
-## 현재 내용
+`build-release`는 실행할 target을 `install`로 지정하여 Release 빌드와
+배포 폴더 설치를 함께 수행한다. 설치
+규칙과 결과 폴더는 [CMake install 가이드](CMakeInstall.md)에서 설명한다.
+
+## 기본 흐름 예시
+
+아래 JSON은 실제 파일 전체를 복사한 것이 아니라 `dev`의
+Configure/Build/Test 흐름을 설명하기 위한 교육용 축약 예시다. 실제 파일은
+[CMakePresets.json](../../CMakePresets.json)이며 `release`, `build-release`,
+`test-release`, vcpkg toolchain과 manifest 설정도 포함되어 있다.
 
 ```json
 {
@@ -218,6 +230,87 @@ Visual Studio처럼 한 빌드 트리에 Debug와 Release를 함께 제공하는
 | Makefiles, Ninja                  | `CMAKE_BUILD_TYPE` |
 | Visual Studio, Ninja Multi-Config | `configuration`    |
 
+## Release preset과 install
+
+`release` configure preset은 Debug와 별도의 build directory를 사용한다.
+다음 JSON은 전체 preset이 아니라 경로 관련 필드만 발췌한 예시다.
+
+```json
+{
+    "name": "release",
+    "binaryDir": "${sourceDir}/out/build/${presetName}",
+    "installDir": "${sourceDir}/out/build/dist/${presetName}/pstk-packet"
+}
+```
+
+현재 값은 다음처럼 계산된다.
+
+```text
+binaryDir: out/build/release
+installDir: out/build/dist/release/pstk-packet
+```
+
+Release build preset은 다음처럼 `install` target을 기본 target으로 선택한다.
+
+```json
+{
+    "name": "build-release",
+    "configurePreset": "release",
+    "configuration": "Release",
+    "targets": [
+        "install"
+    ]
+}
+```
+
+`installDir`는 configure 단계에서 `CMAKE_INSTALL_PREFIX`로 사용될 설치
+기준 경로다. configure preset의 경로 필드와 build preset의 `targets`는
+[CMake Presets manual](https://cmake.org/cmake/help/v3.24/manual/cmake-presets.7.html)에
+정의된 방식으로 적용된다. 프리셋의 설치 경로를 추가하거나 변경했다면 먼저
+configure를 다시 실행해야 한다.
+
+```shell
+cmake --preset release
+cmake --build --preset build-release
+```
+
+`build-release`의 `targets`는 `install` 하나로 설정되어 있다. 현재 CMake
+기본값에서는 install target이 기본 `all` dependency를 먼저 빌드한 뒤 설치를
+수행한다. 이 dependency 동작은
+[`CMAKE_SKIP_INSTALL_ALL_DEPENDENCY`](https://cmake.org/cmake/help/v3.24/variable/CMAKE_SKIP_INSTALL_ALL_DEPENDENCY.html)의
+기본값과 관련된다. 설치 단계가 테스트를 실행하거나 Packet CLI를 실행하는
+것은 아니다.
+
+명령행에서 `--target`을 지정하면 preset의 기본 target을 대신한다. Build
+preset과 명령행 target 선택은 [CMake Presets manual](https://cmake.org/cmake/help/v3.24/manual/cmake-presets.7.html)을
+기준으로 한다.
+
+```shell
+# CLI target만 빌드하고 install target은 실행하지 않음
+cmake --build --preset build-release --target pstk_packet_cli
+```
+
+이미 Release 산출물을 빌드한 뒤 설치만 다시 수행하려면 다음처럼 build
+directory를 직접 지정한다.
+
+```shell
+cmake --install out/build/release --config Release
+```
+
+이 명령은 빌드를 다시 수행하지 않는다. 설치 위치를 한 번만 바꾸려면
+`--prefix`로 설정된 설치 경로를 덮어쓸 수 있다. 다음 예시는 macOS/Linux
+shell 문법이며 preset 파일이나 cache 값을 변경하지 않는다.
+
+```shell
+cmake --install out/build/release \
+  --config Release \
+  --prefix "$PWD/out/build/dist/custom/pstk-packet"
+```
+
+`cmake --install`에는 CMake install preset을 선택하는 `--preset` 명령이
+없다. 따라서 `cmake --install --preset ...` 형식은 사용하지 않고 build
+directory를 직접 전달한다.
+
 ## Test preset: `test-dev`
 
 ```json
@@ -376,7 +469,7 @@ ctest --list-presets
 ctest --preset test-dev -N
 ```
 
-각 명령은 configure, build, test 종류에 해당하는 프리셋을 보여준다. 세 종류에서 같은 이름을 사용해도 명령 종류가 다르기 때문에 충돌하지 않지만, 현재 프로젝트는 역할을 바로 구분할 수 있도록 `dev`, `build-dev`, `test-dev`를 사용한다.
+각 명령은 configure, build, test 종류에 해당하는 프리셋을 보여준다. 세 종류에서 같은 이름을 사용해도 명령 종류가 다르기 때문에 충돌하지 않는다. 현재 프로젝트는 개발 흐름에 `dev`, `build-dev`, `test-dev`, Release 설치 흐름에 `release`, `build-release`, `test-release`를 사용한다.
 
 ## 복기 체크
 

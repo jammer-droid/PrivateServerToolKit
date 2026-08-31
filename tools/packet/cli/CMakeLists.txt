@@ -30,6 +30,25 @@ set_target_properties(
         OUTPUT_NAME pstk-packet
 )
 
+if(APPLE)
+    set_target_properties(
+        pstk_packet_cli
+        PROPERTIES
+            INSTALL_RPATH "@loader_path" # 실행 파일이 있는 위치 기준 shared lib 탐색
+    )
+endif()
+
+install(
+    TARGETS pstk_packet_cli
+    RUNTIME DESTINATION bin
+)
+
+install(
+    FILES
+        packet.ini
+    DESTINATION bin
+)
+
 add_custom_target(
     pstk_packet_cli_config
     COMMAND

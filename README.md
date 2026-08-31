@@ -66,6 +66,19 @@ cmake --fresh --preset dev
 
 vcpkg manifest와 CMake 연동에 대한 자세한 내용은 [Manifest mode](https://learn.microsoft.com/en-us/vcpkg/concepts/manifest-mode)와 [CMake integration](https://learn.microsoft.com/en-us/vcpkg/users/buildsystems/cmake-integration)을 참고한다.
 
+## Release 배포
+
+프로젝트 루트에서 다음 명령을 실행한다.
+
+```sh
+cmake --preset release
+cmake --build --preset build-release
+```
+
+`build-release`는 `install` target을 실행하므로 빌드 후 `out/build/dist/release/pstk-packet/`에 CLI, runtime shared library, 기본 INI와 C++/C# codec support를 모은다. 테스트 실행과 CLI를 통한 packet 생성은 포함하지 않으며, `build-dev`에는 설치가 묶여 있지 않다.
+
+직접 `cmake --install`을 실행하거나 배포 경로를 바꾸는 방법은 [CMake install 가이드](docs/cmake/CMakeInstall.md)를, `installDir`와 `targets: ["install"]`의 연결은 [preset 해설](docs/cmake/CMakePreset.md)을 참고한다.
+
 ## Pre-commit formatting
 
 저장소의 hook을 활성화하면 커밋 대상으로 stage한 `.cpp`와 `.h` 파일을 root `.clang-format`으로 자동 포맷하고 다시 stage한다.
