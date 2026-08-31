@@ -56,6 +56,8 @@ ctest --preset test-dev
 
 Generated C# packet code의 준비, Debug/Release 빌드와 xUnit 테스트는 [.NET 가이드](dotnet/README.md)를 참고한다. 위 CTest 명령은 .NET 테스트를 실행하지 않는다.
 
+이미 빌드한 CLI의 단일 파일·중첩 디렉터리 입력과 C++/C# 생성 설정을 확인하려면 [CLI smoke 가이드](tools/packet/cli/tests/README.md)를 참고한다. 이 검증은 `cmake -P`로 직접 실행하며 CTest나 기본 빌드에 등록하지 않는다.
+
 toolchain 또는 manifest 설정을 변경한 뒤 CMake cache를 새로 구성하려면 다음 명령을 사용한다.
 
 ```sh

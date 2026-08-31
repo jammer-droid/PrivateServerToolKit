@@ -672,13 +672,20 @@ pstk-packet/
 
 ### 검증 경계
 
-CLI는 **INI 설정이 실제 생성에 반영되는지**만 직접 실행해 확인한다. 별도 CLI 단위 테스트 파일, 테스트 target이나 전용 테스트 harness는 만들지 않으며 이미 검증된 codec/generator 내용을 CLI에서 재검증하지 않는다.
+CLI는 **INI 설정이 실제 생성에 반영되는지**만 직접 실행해 확인한다. 다른 사용자도 같은 확인을 반복할 수 있도록 fixture JSON과 수동 실행용 CMake smoke 스크립트를 제공한다. 별도 CLI 단위 테스트 suite나 CTest target은 추가하지 않으며 이미 검증된 codec/generator 내용을 CLI에서 재검증하지 않는다.
 
 - `cpp`/`csharp` 선택에 맞는 파일이 지정한 output에 생성되는지 확인한다.
 - 단일 파일과 재귀 directory 입력이 각각 반영되는지 확인한다.
 - INI와 다른 working directory에서 실행해도 상대 input/output 기준이 유지되는지 확인한다.
 - Namespace 지정/생략이 생성 결과에 반영되는지 확인한다.
 - 배포 폴더의 CLI로 위 설정 적용을 확인하고 사용 명령과 결과를 기록한다. 새로운 namespace 생략 동작 자체의 검증은 P3-S1의 library/generator 범위에서 담당한다.
+
+수동 검증 진입점은 `tools/packet/cli/tests/smoke.cmake`이며 사용법과 fixture 출처는 [CLI smoke 가이드](../../tools/packet/cli/tests/README.md)에 기록한다.
+
+- Fixture는 실제 PrivateServer의 `MovementInput`, `WorldTimeSyncRequest`, `WorldTimeSyncResponse` V1 wire layout을 schema로 옮긴다. 앞의 두 파일은 fixture 루트에, 응답 파일은 하위 directory에 둔다. World의 별도 semantic validation을 복제하지 않는다.
+- C++/C# 각각 단일 파일 입력과 namespace 지정, 전체 directory 입력과 namespace 생략을 실행한다. 단일 입력은 생성 파일 1개, directory 입력은 하위 경로를 포함한 생성 파일 3개가 나와야 한다.
+- 스크립트는 이미 빌드한 CLI 경로를 받고 실행별 새 `out/build/packet-cli-smoke` 하위 directory에서 fixture 복사본, INI와 결과를 관리한다. INI와 다른 working directory에서 실행하고 결과를 보존해 이전 산출물로 성공을 잘못 판단하지 않게 한다.
+- 종료 코드, 예상 생성 파일 목록, DTO 선언과 namespace 반영만 확인한다. 자동 build, .NET 실행, generated-code compile 또는 wire codec 재검증은 하지 않는다.
 
 ### 구현 slice와 순서
 
@@ -700,7 +707,7 @@ CLI는 **INI 설정이 실제 생성에 반영되는지**만 직접 실행해 �
 - Seam: Packet CLI 실행 파일과 CMake 연결, root `vcpkg.json`의 SimpleIni dependency, 기존 언어별 public compile API.
 - Invariant: INI/경로 탐색은 CLI에만 두고 shared compiler와 Common의 책임을 확장하지 않는다. 정렬한 입력 전체를 한 batch로 전달한다.
 - Acceptance: 언어, 단일/재귀 입력, INI 기준 상대 경로, 출력과 optional namespace가 생성 결과에 반영되고 compiler 결과/diagnostic이 사용자에게 전달된다.
-- Verification: `out/build` 아래의 설정과 schema로 CLI를 직접 실행해 설정 적용을 확인한다. 새 CLI 테스트 suite나 codec 재검증은 추가하지 않는다.
+- Verification: fixture와 수동 CMake smoke 스크립트로 `out/build` 아래에서 CLI를 실행해 설정 적용을 확인한다. 새 CLI 단위 테스트 suite, CTest 등록이나 codec 재검증은 추가하지 않는다.
 
 #### P3-S3 — 배포 폴더와 사용 가이드
 
@@ -709,7 +716,7 @@ CLI는 **INI 설정이 실제 생성에 반영되는지**만 직접 실행해 �
 - Seam: CMake의 배포 산출물 구성, Common/Packet public support, C# support와 README/사용 문서.
 - Invariant: 실제 게임에 generator shared library를 요구하지 않으며 consumer의 build/CI/Git 정책을 대신 결정하지 않는다.
 - Acceptance: macOS arm64와 Windows x64에서 배포 폴더의 CLI가 shared library를 로드하고 INI에 맞는 결과를 생성한다. 필요한 C++ header와 C# support가 함께 제공된다.
-- Verification: 각 대상 플랫폼의 배포 폴더에서 설정 적용 실행을 확인하고 결과를 기록한다. PrivateServer/Godot 빌드·통신 검증이나 별도 CLI 테스트 harness는 포함하지 않는다.
+- Verification: 각 대상 플랫폼의 배포 폴더에서 설정 적용 실행을 확인하고 결과를 기록한다. P3-S2의 수동 smoke 스크립트를 재사용할 수 있으며 PrivateServer/Godot 빌드·통신 검증이나 추가 CLI 테스트 suite는 포함하지 않는다.
 
 ### 현재 상태와 다음 세션 진입점
 

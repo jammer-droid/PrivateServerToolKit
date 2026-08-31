@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "packet": {
+    "name": "MovementInput",
+    "id": 257,
+    "payloadVersion": 1,
+    "fields": [
+      { "name": "controlledEntityGeneration", "type": "uint32" },
+      { "name": "targetServerTick", "type": "uint32" },
+      { "name": "moveX", "type": "int16" },
+      { "name": "moveY", "type": "int16" }
+    ]
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "packet": {
+    "name": "WorldTimeSyncResponse",
+    "id": 391,
+    "payloadVersion": 1,
+    "fields": [
+      { "name": "probeSequence", "type": "uint32" },
+      { "name": "serverTick", "type": "uint32" }
+    ]
+  }
+}
