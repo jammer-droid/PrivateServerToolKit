@@ -30,6 +30,19 @@ set_target_properties(
         OUTPUT_NAME pstk-packet
 )
 
+add_custom_target(
+    pstk_packet_cli_config
+    COMMAND
+    "${CMAKE_COMMAND}"
+    -E
+    copy_if_different
+    "${CMAKE_CURRENT_SOURCE_DIR}/packet.ini"
+    "$<TARGET_FILE_DIR:pstk_packet_cli>/packet.ini"
+    VERBATIM
+)
+
+add_dependencies(pstk_packet_cli pstk_packet_cli_config)
+
 if(WIN32)
     add_custom_command(
         TARGET pstk_packet_cli
