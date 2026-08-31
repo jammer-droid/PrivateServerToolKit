@@ -27,7 +27,7 @@ GitHub Issue #1은 schema를 source of truth로 삼아 C++/C# fixed-layout packe
 - Direction 해석과 handler 등록을 포함한 transport routing, session/entity ownership과 gameplay semantic validation
 - PrivateServer/Godot의 실제 적용, build/CI hook, generated source의 Git 포함 여부와 stale output 관리
 
-Typed Service Host, middleware, command/event dispatch, async unary call lifecycle, schema direction metadata, 중앙 packet catalog와 자동 registration, Protobuf wire format, runtime reflection과 schema hot reload는 범위 밖이다. Service Host와 unary call은 Issue #2가 소유한다.
+Typed Service Host, middleware, command/event dispatch, async unary call lifecycle, schema direction metadata, 중앙 packet catalog와 자동 registration, Protobuf wire format, runtime reflection과 schema hot reload는 범위 밖이다. Service Host의 최신 로컬 합의 범위는 [Issue #2 설계](issue-2-typed-service-host.md)를 따른다. 범용 unary 자동 호출 관리는 현재 #2의 필수 범위에서도 제외했으며, tracker 미동기화 상태는 해당 문서에 기록한다.
 
 Generated C# source의 실제 `.NET` compile과 C++/C# golden byte conformance는 CMake 기반 compiler 구현과 다른 toolchain을 사용하므로 [Issue #3 — Generated C# codec .NET build와 C++/C# wire conformance](https://github.com/jammer-droid/PrivateServerToolKit/issues/3)로 분리했으며, 해당 issue는 2026-08-29 완료했다.
 
@@ -268,7 +268,7 @@ Phase 0은 다음 조건을 충족하여 완료됐다.
 
 ### 확정된 범위
 
-Phase 1은 build-time JSON schema compiler와 C++17 생성기만 구현한다. Runtime JSON parsing, C# 생성, consumer build integration, Issue #2의 Service Host/unary call lifecycle과 gameplay semantic validation은 포함하지 않는다. `MovementInput`은 예시 전용 타입이 아니라 첫 end-to-end vertical slice다.
+Phase 1은 build-time JSON schema compiler와 C++17 생성기만 구현한다. Runtime JSON parsing, C# 생성, consumer build integration, Service Host를 포함한 runtime과 gameplay semantic validation은 포함하지 않는다. `MovementInput`은 예시 전용 타입이 아니라 첫 end-to-end vertical slice다.
 
 #### Schema 계약
 
@@ -587,6 +587,8 @@ Issue #3은 CMake/CTest에 `.NET` 실행을 등록하지 않고 자신의 `.NET`
 ### 후속 Service Host
 
 Generated packet을 typed service 호출로 연결하는 application-facing I/O, middleware pipeline, command/event dispatch와 async unary lifecycle은 Issue #1의 Phase 4에서 제거하고 [Issue #2](https://github.com/jammer-droid/PrivateServerToolKit/issues/2)로 이관했다. Issue #2는 Issue #1의 C++/C# codec과 CLI/support 배포를 기반으로 별도 목표, 책임 경계, 설계 refinement와 완료 조건을 소유한다.
+
+이는 최초 분리 경위다. 이후 합의한 #2의 입력 middleware·명시적 등록·독립 adapter 중심 범위와 범용 RPC/후처리의 보류는 [현재 설계 문서](issue-2-typed-service-host.md)를 확인한다.
 
 ## Phase 3 — C++ CLI와 배포
 
