@@ -20,6 +20,10 @@ _Avoid_: RPC runtime, NetworkRuntime, WorldRuntime
 Host가 연결한 타입 있는 요청을 받아 서비스 로직과 도메인 검증을 수행하는 호출 대상이다. 등록된다는 것이 서비스 객체나 게임 상태의 소유권을 Host로 이전한다는 뜻은 아니다.
 _Avoid_: Packet decoder, transport callback
 
+**Service Binding**:
+패킷 타입을 서비스 안의 특정 handler에 연결하는 선언이다. 서비스 등록은 해당 서비스의 binding 묶음을 Host에 연결하는 것이며, 요청 하나가 서비스의 모든 handler를 호출한다는 뜻은 아니다.
+_Avoid_: Service discovery, broadcast subscription
+
 **Host Input Adapter**:
 NetworkRuntime의 패킷과 필요한 연결 이벤트를 Host의 독립적인 입력 계약에 연결하는 역할이다. 패킷별 Decode와 검증 자체는 Host에 남긴다.
 _Avoid_: Protocol validator, World executor
