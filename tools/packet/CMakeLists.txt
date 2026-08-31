@@ -72,6 +72,7 @@ generate_export_header(
     EXPORT_MACRO_NAME PSTK_PACKET_API
 )
 
+add_subdirectory(cli)
 
 if(BUILD_TESTING)
     add_subdirectory(tests)
