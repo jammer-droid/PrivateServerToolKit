@@ -2,15 +2,15 @@
 
 - Issue: [jammer-droid/PrivateServerToolKit#1](https://github.com/jammer-droid/PrivateServerToolKit/issues/1)
 - Issue state: Open
-- Last verified: 2026-08-29
+- Last verified: 2026-08-31
 
 ## 문서 역할
 
-GitHub Issue #1은 schema를 source of truth로 삼아 C++/C# fixed-layout packet code를 생성하고 두 consumer build에 연결하는 상위 범위와 완료 조건을 소유한다.
+GitHub Issue #1은 schema를 source of truth로 삼아 C++/C# fixed-layout packet code를 생성하고, 미리 빌드한 C++ CLI와 언어별 support를 전달하는 상위 범위와 완료 조건을 소유한다. 실제 consumer의 build 연결과 통신 적용은 해당 consumer 작업에서 결정한다.
 
 이 문서는 Issue #1의 세부 계약, 하위 Phase, 구현 순서와 검증 기준을 관리한다. 기존 `Phase 0: Common Contract`은 독립 프로젝트 Phase가 아니라 Phase 1 Packet Compiler가 의존하는 Issue #1의 선행 slice로 통합한다.
 
-기존 `Phase 4 — Async unary RPC 계층`은 network와 application service 사이의 command/event/unary lifecycle, middleware와 adapter까지 포함하는 [Issue #2 — Typed Service Host와 middleware pipeline](https://github.com/jammer-droid/PrivateServerToolKit/issues/2)으로 분리·확장했다. Issue #1은 해당 runtime을 구현하지 않고 packet/schema foundation과 consumer build integration까지만 소유한다.
+기존 `Phase 4 — Async unary RPC 계층`은 network와 application service 사이의 command/event/unary lifecycle, middleware와 adapter까지 포함하는 [Issue #2 — Typed Service Host와 middleware pipeline](https://github.com/jammer-droid/PrivateServerToolKit/issues/2)으로 분리·확장했다. Issue #1은 해당 runtime을 구현하지 않고 packet/schema compiler, CLI와 support 배포까지만 소유한다.
 
 ## Issue 경계
 
@@ -18,29 +18,31 @@ GitHub Issue #1은 schema를 source of truth로 삼아 C++/C# fixed-layout packe
 
 - 언어 독립 message/field descriptor와 schema parser
 - C++/C# fixed-layout DTO와 codec source
-- Packet ID를 포함한 generated code의 consumer build integration
+- INI 설정으로 shared compiler를 호출하는 C++ CLI
+- 미리 빌드한 CLI, shared library와 generated code에 필요한 언어별 support 배포 폴더
 
 수기 코드와 기존 runtime 책임으로 유지하는 것:
 
 - NetworkRuntime의 6-byte transport framing과 socket/IOCP buffer lifetime
 - Direction 해석과 handler 등록을 포함한 transport routing, session/entity ownership과 gameplay semantic validation
+- PrivateServer/Godot의 실제 적용, build/CI hook, generated source의 Git 포함 여부와 stale output 관리
 
 Typed Service Host, middleware, command/event dispatch, async unary call lifecycle, schema direction metadata, 중앙 packet catalog와 자동 registration, Protobuf wire format, runtime reflection과 schema hot reload는 범위 밖이다. Service Host와 unary call은 Issue #2가 소유한다.
 
-Generated C# source의 실제 `.NET` compile과 C++/C# golden byte conformance는 CMake 기반 compiler 구현과 다른 toolchain을 사용하므로 [Issue #3 — Generated C# codec .NET build와 C++/C# wire conformance](https://github.com/jammer-droid/PrivateServerToolKit/issues/3)로 분리했다.
+Generated C# source의 실제 `.NET` compile과 C++/C# golden byte conformance는 CMake 기반 compiler 구현과 다른 toolchain을 사용하므로 [Issue #3 — Generated C# codec .NET build와 C++/C# wire conformance](https://github.com/jammer-droid/PrivateServerToolKit/issues/3)로 분리했으며, 해당 issue는 2026-08-29 완료했다.
 
 ## 구현 순서
 
 1. Phase 0 — Common contract 선행 slice
 2. Phase 1 — Packet compiler core와 C++ 생성
 3. Phase 2 — C# source generation
-4. Phase 3 — Generated code build integration
+4. Phase 3 — C++ CLI와 배포
 
 Phase 0 common contract, Phase 1 C++ compiler와 Phase 2 C# source generation은 구현과 검증을 완료했다. Phase 2는 `fddbc86`에서 언어 독립 compiler pipeline을 추출하고 `f3be9d3`에서 C# source generator와 공용 `TkPacketCompileInfo` public path를 연결했다. C# compile과 cross-language conformance는 Issue #3에서 `dotnet` toolchain으로 검증하고 CMake/CTest에 등록하지 않는다.
 
-Issue #3은 Issue #1의 Phase 3을 대체하지 않는다. Generated C# compile과 wire correctness를 먼저 검증한 뒤 Phase 3에서 검증된 source의 SDK 배포, build hook과 consumer integration을 다룬다.
+Issue #3은 Issue #1의 Phase 3을 대체하지 않는다. Issue #3에서 검증한 compiler/codec을 바탕으로 Phase 3은 CLI와 support 배포, INI 설정에 따른 생성 결과 확인을 다룬다.
 
-Phase 3은 Issue #3 완료 뒤 진입한다. Schema에 direction metadata를 추가하거나 중앙 packet catalog와 자동 registration을 생성하지 않는다. Direction과 handler binding은 PrivateServer와 Godot C# client의 사용 및 등록 문맥에서 해석하고, Phase 3은 generated source를 두 consumer의 build input으로 연결하는 경계에 집중한다. 구체적인 SDK 배포, build hook과 stale output 정책은 Phase 3 진입 시 grilling으로 확정한다.
+Phase 3 grilling은 2026-08-31 완료했다. 기존 consumer build integration 계획을 C++ CLI 전달 범위로 변경했으며, 실제 PrivateServer/Godot 적용은 Issue #1의 완료 조건에서 제외한다. Schema direction metadata, 중앙 packet catalog와 자동 registration은 추가하지 않는다. 구현은 아직 시작하지 않았으며 아래 P3-S1부터 순서대로 진행한다.
 
 ## Phase 0 — Common contract 선행 slice
 
@@ -356,8 +358,8 @@ PSTK_PACKET_API TkResult TkPacketCompileCpp(
 ```
 
 - 모든 pointer와 문자열은 호출 동안만 borrowed다.
-- `compileInfo`, `inputPaths`, 각 input path, `outputDirectory`, `namespaceName`은 non-null이어야 하고 문자열은 non-empty여야 하며 `inputPathCount > 0`이어야 한다. 이 호출 계약을 위반하면 diagnostic 없이 `TK_ERROR_INVALID_ARGUMENT`를 반환한다.
-- C++ namespace는 schema가 아니라 required compile info로 전달한다. `namespace`는 C++ keyword이므로 field 이름은 `namespaceName`을 사용한다.
+- Phase 1 구현 기준으로 `compileInfo`, `inputPaths`, 각 input path, `outputDirectory`, `namespaceName`은 non-null이어야 하고 문자열은 non-empty여야 하며 `inputPathCount > 0`이어야 한다. 이 호출 계약을 위반하면 diagnostic 없이 `TK_ERROR_INVALID_ARGUMENT`를 반환한다. P3-S1에서 `namespaceName`만 optional로 변경한다.
+- C++ namespace는 schema가 아니라 compile info로 전달한다. 현재 구현은 필수이며, P3-S1에서 null/empty일 때 namespace wrapper를 생략하도록 변경한다. `namespace`는 C++ keyword이므로 field 이름은 `namespaceName`을 사용한다.
 - Diagnostic callback은 값으로 전달하며 `callback == nullptr`이면 disabled다.
 - 파일 open/read/write 실패에는 공용 `TK_ERROR_IO`를 사용하고 schema 또는 payload 해석 실패에는 `TK_ERROR_INVALID_DATA`를 사용한다.
 - Packet 전용 result type이나 layer별 result type은 만들지 않는다.
@@ -476,7 +478,7 @@ Compiler API consumer와 generated-code consumer는 다른 계약을 사용한�
 - 언어 간 공통 계약은 packet ID, payload version, payload size, field layout과 wire bytes다. API 표현은 각 언어에 맞게 다를 수 있다.
 - C++은 ToolKit의 주 대상이므로 기존 generated header의 `TkResult`, Diagnostic과 `TkPacketCodecSupport.h` 의존을 유지한다.
 
-Generated C# source의 최소 runtime target은 `net8.0`이다. SDK 설치·배포, support source 전달과 consumer build integration은 Phase 3에서 다룬다.
+Generated C# source의 최소 runtime target은 `net8.0`이다. CLI와 언어별 support 전달은 Phase 3에서 다루며, 실제 consumer build integration은 해당 consumer 작업에 남긴다.
 
 ### 언어 독립 generation seam
 
@@ -520,7 +522,7 @@ Pointer, string, callback, invalid argument, diagnostic과 file I/O 계약은 `T
 ### Generated C# 계약
 
 - Schema마다 `<PacketName>.generated.cs` 하나를 생성한다.
-- C# namespace는 required `TkPacketCompileInfo::namespaceName`으로 전달하고 schema에 저장하지 않는다.
+- C# namespace는 `TkPacketCompileInfo::namespaceName`으로 전달하고 schema에 저장하지 않는다. Phase 2 구현은 필수이며, P3-S1에서 null/empty일 때 namespace wrapper를 생략하도록 변경한다.
 - DTO는 `public readonly record struct`로 생성한다.
 - Generated C#의 public property는 Schema의 field name을 변환하지 않고 그대로 사용한다. 언어별 naming convention을 위한 case 변환이나 naming style 정규식 검사는 추가하지 않는다.
 - `PacketId`, `PayloadVersion`과 `PayloadBytes`를 공개 constant로 생성한다.
@@ -531,7 +533,7 @@ Pointer, string, callback, invalid argument, diagnostic과 file I/O 계약은 `T
 - 16/32/64-bit signed·unsigned integer는 `System.Buffers.Binary.BinaryPrimitives`의 little-endian operation을 사용하고 8-bit integer는 직접 indexing한다.
 - Gameplay semantic validation은 generated codec에 추가하지 않는다.
 
-`TkPacketCodecSupport.cs`는 packet마다 생성하지 않고 SDK가 제공하는 고정 source로 유지한다. 정확한 source 경로, namespace, visibility와 packaging은 P2-S2 구현 가이드와 Phase 3 배포 설계에서 필요한 최소 범위로 확정한다.
+`TkPacketCodecSupport.cs`는 packet마다 생성하지 않고 `tools/packet/support/csharp/`의 고정 source로 유지한다. Phase 3 배포 폴더에 이 source를 함께 제공하며, consumer가 generated C# source와 함께 자신의 .NET 프로젝트에서 컴파일한다.
 
 ### 검증 경계
 
@@ -568,7 +570,7 @@ CMake/CTest는 `dotnet`을 탐색하거나 `.csproj`를 build/test하지 않는�
 
 ### 현재 상태와 다음 세션 진입점
 
-Phase 2 design grilling과 P2-S1/P2-S2 구현은 2026-08-29 완료했다. C++/C# public compiler와 generator 관련 focused CTest 17개가 통과했으며, `.NET` compile과 runtime wire conformance는 완료 근거에 포함하지 않고 Issue #3으로 넘겼다. 다음 작업은 Issue #3 refinement와 구현이고, 그 완료 뒤 Issue #1 Phase 3 grilling으로 돌아온다.
+Phase 2 design grilling과 P2-S1/P2-S2 구현은 2026-08-29 완료했다. C++/C# public compiler와 generator 관련 focused CTest 17개가 통과했으며, `.NET` compile과 runtime wire conformance는 Phase 2 완료 근거에 포함하지 않고 Issue #3으로 넘겼다. 이후 Issue #3도 완료했으며, 현재 다음 작업은 Phase 3의 P3-S1이다.
 
 ### 분리된 후속 Issue #3
 
@@ -580,12 +582,149 @@ Phase 2 design grilling과 P2-S1/P2-S2 구현은 2026-08-29 완료했다. C++/C#
 - C++ Encode/C# Decode와 C# Encode/C++ Decode의 wire parity
 - Signed/unsigned integer boundary와 C# `TryEncode`/`TryDecode` 실행 계약
 
-Issue #3은 CMake/CTest에 `.NET` 실행을 등록하지 않고 자신의 `.NET` build/test 명령을 소유한다. Issue #1의 남은 Phase 3은 Issue #3이 wire correctness를 검증한 뒤 consumer build integration을 시작한다.
+Issue #3은 CMake/CTest에 `.NET` 실행을 등록하지 않고 자신의 `.NET` build/test 명령을 소유한다. 해당 issue는 2026-08-29 완료했으며 검증 근거는 [Issue #3 디자인 문서](issue-3-generated-csharp-conformance.md)에 기록했다. Issue #1의 남은 Phase 3은 이 결과를 재사용해 CLI와 support 배포를 진행한다.
 
 ### 후속 Service Host
 
-Generated packet을 typed service 호출로 연결하는 application-facing I/O, middleware pipeline, command/event dispatch와 async unary lifecycle은 Issue #1의 Phase 4에서 제거하고 [Issue #2](https://github.com/jammer-droid/PrivateServerToolKit/issues/2)로 이관했다. Issue #2는 Issue #1의 C++/C# codec과 consumer build integration을 사용하지만 별도 목표, 책임 경계, 설계 refinement와 완료 조건을 소유한다.
+Generated packet을 typed service 호출로 연결하는 application-facing I/O, middleware pipeline, command/event dispatch와 async unary lifecycle은 Issue #1의 Phase 4에서 제거하고 [Issue #2](https://github.com/jammer-droid/PrivateServerToolKit/issues/2)로 이관했다. Issue #2는 Issue #1의 C++/C# codec과 CLI/support 배포를 기반으로 별도 목표, 책임 경계, 설계 refinement와 완료 조건을 소유한다.
+
+## Phase 3 — C++ CLI와 배포
+
+### 목적과 책임 경계
+
+패킷 생성은 게임 runtime이 아니라 개발·빌드 과정의 전처리 작업이다. Consumer가 ToolKit 소스를 직접 빌드하거나 compiler API 호출 프로그램을 따로 작성하지 않아도 미리 빌드한 CLI로 packet source를 생성할 수 있게 한다.
+
+```text
+INI 설정
+  -> C++ CLI: 설정 해석과 입력 경로 수집
+  -> TkPacketCompileInfo
+  -> TkPacketCompileCpp / TkPacketCompileCSharp
+  -> 기존 shared compiler: schema -> descriptor -> source -> file commit
+```
+
+- 기존 `pstk_packet` shared library를 generator engine으로 유지한다. CLI에 schema parser, layout, generator 또는 file committer를 복제하지 않는다.
+- CLI는 INI, 경로 수집, compile info 구성, 언어별 API 선택과 결과/diagnostic 출력을 담당하는 얇은 실행 파일이다. .NET CLI나 새 범용 tool framework는 추가하지 않는다.
+- INI parser는 vcpkg의 [SimpleIni](https://github.com/brofield/simpleini)를 사용한다. CLI의 private dependency이며 Common과 shared compiler에는 INI 처리를 추가하지 않는다.
+- Compiler API consumer와 generated-code consumer의 의존성은 [ADR 0005](../adr/0005-generated-code-consumer-boundary.md)를 유지한다. Native shared library는 생성 시 CLI가 사용하며, generated packet을 쓰는 게임 runtime에 링크를 강제하지 않는다.
+- Generated C++은 Common/codec support header를 include하고, generated C#은 고정 C# support source와 함께 컴파일한다. C# consumer에 `TkResult`, Diagnostic 또는 native DLL binding을 추가하지 않는다.
+
+### 실행과 INI 계약
+
+설정 파일 하나를 명시적으로 전달한다. 초기 버전은 설정 자동 탐색이나 CLI option override를 추가하지 않는다.
+
+```sh
+pstk-packet packet.ini
+```
+
+```ini
+[packet]
+language=cpp
+input=./schemas
+output=./generated/cpp
+namespace=
+```
+
+- `language`: 필수, `cpp` 또는 `csharp`. 한 번의 실행은 한 언어만 생성한다.
+- `input`: 필수, 단일 `.json` 파일 또는 schema directory.
+- `output`: 필수, 생성 파일을 기록할 directory.
+- `namespace`: 선택. 생략하거나 빈 값이면 generated DTO를 global namespace에 둔다. 값이 있으면 선택한 언어의 namespace로 그대로 전달한다.
+- C++/C#을 모두 생성하려면 각각의 설정으로 실행한다. Public ABI에 language enum이나 새 compile info type을 추가하지 않는다.
+
+### 경로와 입력 수집
+
+- 상대 `input`/`output`은 실행 working directory가 아니라 **INI 파일이 있는 directory**를 기준으로 해석한다. 절대 경로는 그대로 사용한다.
+- `.json` 파일을 지정하면 해당 파일 하나만 처리한다.
+- Directory를 지정하면 하위 directory까지 재귀 탐색하여 `.json` 파일을 수집한다.
+- 수집한 경로를 정렬해 순서를 고정하고 기존 public compile API에 한 batch로 전달한다. Shared compiler는 directory를 탐색하지 않고 명시적인 파일 목록을 받는다.
+- Schema 검증, batch name/ID 중복 확인, 첫 오류 중단, deterministic output과 file commit은 기존 shared compiler 계약을 재사용한다.
+- 출력은 기존 packet별 `<PacketName>.generated.h` 또는 `<PacketName>.generated.cs`다. CLI가 별도 codec 형식을 만들지 않는다.
+
+### Optional namespace 변경 계약
+
+- `TkPacketCompileInfo::namespaceName`은 `nullptr` 또는 빈 문자열이면 namespace 생략을 뜻하도록 변경한다. Struct layout과 언어별 public function signature는 유지한다.
+- C++/C# generator 모두 namespace 선언과 대응하는 wrapper를 생략하고 global namespace에 DTO를 생성한다. C++ anonymous namespace로 대체하지 않는다.
+- Non-empty namespace를 전달하는 기존 동작과 나머지 필수 인자 검증은 유지한다.
+- 이 항목은 현재 구현과 달라지는 새 shared-library 동작이다. P3-S1에서 compiler/generator 검증을 보완하고 CLI 검증과 구분한다.
+
+### 배포와 consumer 책임
+
+플랫폼별로 미리 빌드한 다음 형태의 폴더를 전달한다. 아래는 배포 layout 계약이며 아직 생성된 산출물이 아니다.
+
+```text
+pstk-packet/
+  bin/
+    pstk-packet 실행 파일
+    pstk_packet shared library
+  include/
+    pstk/...                     # C++ Common/codec support public headers
+  support/
+    csharp/
+      TkPacketCodecSupport.cs
+```
+
+- 초기 배포·실행 확인 대상은 macOS arm64와 Windows x64다. 각 플랫폼에서 native build와 실행을 확인하고, macOS 결과로 Windows 검증을 대신하지 않는다.
+- 배포 폴더의 CLI가 함께 제공한 shared library를 찾고 실행할 수 있어야 한다. Consumer가 ToolKit source/build tree를 가져오도록 요구하지 않는다.
+- Linux와 다른 architecture는 필요 시 후속으로 다룬다. 이 Phase에서 자동 Release 업로드나 별도 installer까지 확장하지 않는다.
+- 이 저장소의 빌드·실행 확인용 생성물은 기존처럼 `out/build` 아래에 두며 Git에서 제외한다.
+- 외부 consumer는 자신의 출력 경로, generated source의 Git 포함 여부, 실행 시점과 build/CI hook을 결정한다. 매 빌드마다 생성하도록 강제하지 않는다.
+- 기존 final과 byte-identical하면 write를 생략하는 정책은 그대로 재사용한다. 삭제되거나 이름이 바뀐 schema의 오래된 생성물을 자동 삭제하는 기능은 추가하지 않는다.
+- PrivateServer/Godot의 실제 적용과 통신 확인은 consumer 작업이며 Issue #1의 완료 조건이 아니다.
+
+### 검증 경계
+
+CLI는 **INI 설정이 실제 생성에 반영되는지**만 직접 실행해 확인한다. 별도 CLI 단위 테스트 파일, 테스트 target이나 전용 테스트 harness는 만들지 않으며 이미 검증된 codec/generator 내용을 CLI에서 재검증하지 않는다.
+
+- `cpp`/`csharp` 선택에 맞는 파일이 지정한 output에 생성되는지 확인한다.
+- 단일 파일과 재귀 directory 입력이 각각 반영되는지 확인한다.
+- INI와 다른 working directory에서 실행해도 상대 input/output 기준이 유지되는지 확인한다.
+- Namespace 지정/생략이 생성 결과에 반영되는지 확인한다.
+- 배포 폴더의 CLI로 위 설정 적용을 확인하고 사용 명령과 결과를 기록한다. 새로운 namespace 생략 동작 자체의 검증은 P3-S1의 library/generator 범위에서 담당한다.
+
+### 구현 slice와 순서
+
+순서는 **P3-S1 → P3-S2 → P3-S3**이다. 기존 Phase 번호는 유지하고 consumer integration 작업을 아래 CLI 범위로 대체한다.
+
+#### P3-S1 — C++/C# namespace 선택 지원
+
+- Outcome: Public compile API와 두 generator가 namespace 없는 source 생성을 지원한다.
+- Dependency: Phase 2와 Issue #3 완료.
+- Seam: `TkPacketCompileInfo::namespaceName`, `tools/packet/src/generator/cpp/`, `tools/packet/src/generator/csharp/`와 기존 Packet 테스트.
+- Invariant: ABI layout, wire layout, non-empty namespace 생성 내용과 file commit 정책을 유지한다.
+- Acceptance: null/empty namespace가 성공하고 두 언어 모두 namespace wrapper 없이 DTO를 생성한다. 기존 namespace 지정 경로도 유지된다.
+- Verification: 기존 compiler/generator 검증에 namespace 생략 case만 보완한다. 생성 source가 해당 언어에서 컴파일되는지 확인하되 .NET은 기존 독립 toolchain을 사용하며 CMake/CTest에 연결하지 않는다.
+
+#### P3-S2 — INI 기반 C++ CLI
+
+- Outcome: `pstk-packet <config.ini>`가 설정과 입력 경로를 compile info로 변환하고 shared compiler를 호출한다.
+- Dependency: P3-S1 완료.
+- Seam: Packet CLI 실행 파일과 CMake 연결, root `vcpkg.json`의 SimpleIni dependency, 기존 언어별 public compile API.
+- Invariant: INI/경로 탐색은 CLI에만 두고 shared compiler와 Common의 책임을 확장하지 않는다. 정렬한 입력 전체를 한 batch로 전달한다.
+- Acceptance: 언어, 단일/재귀 입력, INI 기준 상대 경로, 출력과 optional namespace가 생성 결과에 반영되고 compiler 결과/diagnostic이 사용자에게 전달된다.
+- Verification: `out/build` 아래의 설정과 schema로 CLI를 직접 실행해 설정 적용을 확인한다. 새 CLI 테스트 suite나 codec 재검증은 추가하지 않는다.
+
+#### P3-S3 — 배포 폴더와 사용 가이드
+
+- Outcome: Prebuilt CLI/shared library와 언어별 support를 배포 layout으로 모으고 INI 예제 및 실행 방법을 문서화한다.
+- Dependency: P3-S2 완료.
+- Seam: CMake의 배포 산출물 구성, Common/Packet public support, C# support와 README/사용 문서.
+- Invariant: 실제 게임에 generator shared library를 요구하지 않으며 consumer의 build/CI/Git 정책을 대신 결정하지 않는다.
+- Acceptance: macOS arm64와 Windows x64에서 배포 폴더의 CLI가 shared library를 로드하고 INI에 맞는 결과를 생성한다. 필요한 C++ header와 C# support가 함께 제공된다.
+- Verification: 각 대상 플랫폼의 배포 폴더에서 설정 적용 실행을 확인하고 결과를 기록한다. PrivateServer/Godot 빌드·통신 검증이나 별도 CLI 테스트 harness는 포함하지 않는다.
+
+### 현재 상태와 다음 세션 진입점
+
+- Design: 2026-08-31 grilling 완료. 기존 tracker/design의 consumer integration 범위를 이 Phase의 CLI 계약으로 변경한다.
+- Implementation: **0/3 완료**. 현재 코드는 namespace를 필수로 검사하며 CLI와 배포 규칙은 아직 없다.
+- Next: **P3-S1**의 namespace 인자 검증과 C++/C# wrapper 생성을 수정하는 가이드부터 진행한다.
+- 검증: 이번 문서 반영은 구현·빌드·실행 결과가 아니다. 특히 Windows x64 배포 검증을 완료한 것으로 간주하지 않는다.
+- 보류: Consumer별 적용/build hook/stale 관리와 추가 플랫폼. CLI 파일 배치와 CMake 배포 명령의 세부 형태는 각 slice 구현 가이드에서 최소한으로 정한다. 현재 계약을 막는 미해결 결정은 없다.
 
 ## Issue 완료 기준
 
-Issue 전체 완료 기준은 GitHub Issue #1을 source of truth로 삼는다. 이 문서에서는 각 Phase에 진입할 때 확정한 세부 검증 계약을 추가한다.
+Issue 전체 완료 기준은 GitHub Issue #1을 source of truth로 삼으며, 2026-08-31 확정한 범위는 다음과 같다.
+
+- C++/C# 생성과 Issue #3의 golden byte conformance가 완료된다.
+- Prebuilt C++ CLI가 INI 설정을 읽어 언어, 입력, 출력과 optional namespace에 맞는 결과를 생성한다.
+- macOS arm64/Windows x64 배포 폴더에 CLI, shared library와 필요한 언어별 support가 포함되고 각 플랫폼에서 설정 적용 실행을 확인한다.
+- Public API, schema/generated-code 계약, 배포 구성과 INI 사용 예제가 문서화된다.
+- 기존 transport/runtime ownership을 침범하지 않는다. 두 consumer의 실제 build 연결이나 request/event 교환은 완료 조건에 포함하지 않는다.
