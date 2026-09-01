@@ -1,0 +1,29 @@
+find_package(GTest CONFIG REQUIRED)
+# CMake가 운영체제의 스레드 지원 방식을 찾아주는 내장 패키지
+find_package(Threads REQUIRED)
+
+include(GoogleTest)
+
+add_executable(
+    pstk_execution_tests
+    ExecutionTests.cpp
+)
+
+target_compile_features(
+    pstk_execution_tests
+    PRIVATE
+    cxx_std_17
+)
+
+target_link_libraries(
+    pstk_execution_tests
+    PRIVATE
+    PSTK::Execution
+    GTest::gtest_main
+    Threads::Threads # std::thread를 이식성 있게 빌드하기 위해 링킹
+)
+
+gtest_discover_tests(
+    pstk_execution_tests
+    TEST_PREFIX "pstk.execution."
+)

@@ -18,6 +18,7 @@ option(
 include(CTest)
 
 add_subdirectory(common)
+add_subdirectory(execution)
 
 if (PSTK_BUILD_PACKET_TOOL)
     add_subdirectory(tools/packet)
