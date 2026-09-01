@@ -26,6 +26,9 @@ int main(void)
     passed &= Expect(TK_ERROR_BUFFER_TOO_SMALL == -3, "TK_ERROR_BUFFER_TOO_SMALL value changed");
     passed &= Expect(TK_ERROR_OUT_OF_MEMORY == -4, "TK_ERROR_OUT_OF_MEMORY value changed");
     passed &= Expect(TK_ERROR_INVALID_DATA == -5, "TK_ERROR_INVALID_DATA value changed");
+    passed &= Expect(TK_ERROR_INVALID_STATE == -7, "TK_ERROR_INVALID_STATE value changed");
+    passed &= Expect(TK_ERROR_CAPACITY_EXCEEDED == -8, "TK_ERROR_CAPACITY_EXCEEDED value changed");
+    passed &= Expect(TK_ERROR_REJECTED == -9, "TK_ERROR_REJECTED value changed");
 
     passed &= Expect(TkIsValidByteRange(NULL, 0), "null empty range must be valid");
     passed &= Expect(TkIsValidByteRange(&byte, 0), "non-null empty range must be valid");
