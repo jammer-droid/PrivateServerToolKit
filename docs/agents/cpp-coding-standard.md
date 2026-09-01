@@ -15,7 +15,7 @@
 
 ## C-compatible public contract
 
-`common` header와 Packet Tool의 공개 경계는 C++ consumer가 사용하는 C ABI 형태의 계약이다. 이 형태는 C++ ABI의 compiler별 모호함을 줄이고 외부 symbol과 data layout을 단순하게 유지하기 위한 것이며, C 언어 consumer 지원을 의미하지 않는다.
+PrivateServerToolKit의 compiled tool과 runtime component는 기본적으로 shared library로 제공하며 public binary 경계는 [ADR 0006](../adr/0006-fix-shared-library-public-boundary-to-c-abi.md)에 따라 C ABI로 고정한다. `common` header와 Packet Tool에 이미 적용한 형태를 후속 component에도 유지하여 C++ ABI의 compiler별 모호함을 줄이고 외부 symbol과 data layout을 단순하게 한다. 이는 C 언어 consumer 지원을 의미하지 않는다.
 
 - `typedef struct`, `typedef enum`, lowerCamelCase field와 이미 공개된 symbol 및 numeric value를 유지한다.
 - 공개 계약을 `enum class`, reference parameter, constructor 또는 C++ member function으로 바꾸지 않는다.
@@ -25,8 +25,10 @@
 - 한 module에서 할당한 메모리는 같은 module이 해제한다. Module이 ownership을 넘긴다면 대응하는 destroy/free API를 같은 경계에 제공한다.
 - Public C API에서 하나의 operation이나 object 설정을 묶는 parameter block은 Vulkan 스타일의 `Info` suffix를 사용한다. 생성 요청은 `CreateInfo`, compile 요청은 `CompileInfo`처럼 동작을 이름에 포함하며, `Options`를 범용 parameter bag 이름으로 사용하지 않는다.
 - 하나의 callback과 `userData`를 묶는 parameter block은 단수형 `CallbackInfo`를 사용한다. 서로 다른 callback이 여러 개 있지 않다면 `Callbacks`라는 복수형 이름을 사용하지 않는다.
+- Template, type traits, macro와 RAII가 필요한 C++ 편의 API는 consumer가 compile하는 facade로 제공할 수 있다. Facade는 stable C ABI를 호출하는 얇은 계층으로 유지하고 shared mutable state, scheduling policy나 DLL 핵심 동작을 public inline body에 두지 않는다.
+- Generated C++ DTO·codec과 internal static library처럼 shared-library symbol을 직접 구성하지 않는 source·implementation contract는 public binary ABI와 구분한다.
 
-공개 경계에 채택한 C header 표현은 C++ 스타일로 기계적으로 바꾸지 않는다. 기존 common C11 contract test는 작은 POD header의 회귀 검증으로 유지하되, 실제 C 또는 다른 언어 FFI consumer가 생기기 전까지 개별 tool API에 C translation unit 전용 test를 추가하지 않는다.
+공개 경계에 채택한 C header 표현은 C++ 스타일로 기계적으로 바꾸지 않는다. 새로운 component에서 제한된 C++ ABI와 Pimpl을 public binary 경계의 대안으로 다시 선택하지 않는다. 기존 common C11 contract test는 작은 POD header의 회귀 검증으로 유지하되, 실제 C 또는 다른 언어 FFI consumer가 생기기 전까지 개별 tool API에 C translation unit 전용 test를 추가하지 않는다.
 
 ## Result, diagnostic과 assertion
 
@@ -60,5 +62,6 @@
 - `docs/adr/0001-use-byte-views-for-buffer-access.md`
 - `docs/adr/0003-use-tkresult-for-cpp-failures.md`
 - `docs/adr/0004-use-common-diagnostic-callbacks.md`
+- `docs/adr/0006-fix-shared-library-public-boundary-to-c-abi.md`
 - `docs/cpp/SharedLibraryBinaryModel.md`
 - `docs/cmake/PacketTarget.md`

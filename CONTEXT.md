@@ -25,8 +25,20 @@ _Avoid_: Packet decoder, transport callback
 _Avoid_: Service discovery, broadcast subscription
 
 **Host Input Adapter**:
-NetworkRuntime의 패킷과 필요한 연결 이벤트를 Host의 독립적인 입력 계약에 연결하는 역할이다. 패킷별 Decode와 검증 자체는 Host에 남긴다.
+NetworkRuntime의 패킷과 필요한 연결 이벤트를 owning Ingress Job으로 만들어 Host ingress lane에 연결하는 역할이다. Queue·worker·ordering 같은 입력 실행 정책을 소유하며 패킷별 Decode와 검증 자체는 Host Core에 남긴다.
 _Avoid_: Protocol validator, World executor
+
+**Host Connection Key**:
+특정 NetworkRuntime의 session 타입을 노출하지 않고 요청 발신자와 응답 대상을 식별하는 generation-safe 값이다. Service Binding을 찾는 PacketId와 구분한다.
+_Avoid_: Service ID, Packet ID
+
+**Host Ingress Lane**:
+같은 Host Connection Key의 Ingress Job을 같은 순서로 소비하는 입력 실행 구획이다. Lane 안에는 한 명의 논리적 drain owner만 존재하고 서로 다른 lane은 병렬로 실행할 수 있다.
+_Avoid_: Global Host worker, World executor
+
+**Ingress Job**:
+NetworkRuntime에서 Host Core까지 아직 Decode하지 않은 packet과 그 raw payload의 수명을 소유하는 작업이다. Queue를 통과할 때 borrowed byte view만 단독으로 보관하지 않는다.
+_Avoid_: Service Job, borrowed payload
 
 **Host Output Adapter**:
 Host가 Encode한 데이터를 특정 NetworkRuntime의 송신 기능에 연결하는 역할이다. 송신 요청의 수락과 상대의 수신 완료를 구분한다.
@@ -35,6 +47,10 @@ _Avoid_: Completion middleware, service handler
 **Service Executor**:
 Host가 넘긴 요청 데이터와 handler 호출 작업을 consumer가 정한 실행 영역에 맡기는 역할이다. World executor는 이 역할을 World 쪽 실행 규칙에 연결한 것을 가리키며, 작업 접수와 실제 실행 완료는 다르다.
 _Avoid_: Thread pool, transport adapter
+
+**Service Job**:
+Host Core가 검증·Decode한 typed request와 handler 호출 thunk를 소유하고 Service Executor에 넘기는 실행 작업이다. Handler는 job이 실행되는 동안 request를 읽기 전용 reference로 소비한다.
+_Avoid_: Ingress Job, raw packet
 
 **WorldRuntime**:
 게임 서비스 입력을 tick과 ECS 등의 실행 규칙에 따라 소비하는 재사용 실행 기반의 가칭이다. 이 기반을 게임별 서비스·component·system과 조립한 실행 프로그램은 World Server로 구분한다.
