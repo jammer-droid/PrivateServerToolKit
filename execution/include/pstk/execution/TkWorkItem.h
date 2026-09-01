@@ -6,10 +6,14 @@ namespace pstk::execution
 using TkWorkInvoke = void (*)(void *) noexcept;
 using TkWorkDestroy = void (*)(void *) noexcept;
 
+void NoOpInvoke(void *) noexcept;
+void NoOpDestroy(void *) noexcept;
+
 class TkWorkItem final
 {
   public:
-    TkWorkItem(void *const context, const TkWorkInvoke invoke, const TkWorkDestroy destroy) noexcept;
+    TkWorkItem(void *const context, const TkWorkInvoke invoke = NoOpInvoke,
+               const TkWorkDestroy destroy = NoOpDestroy) noexcept;
 
     ~TkWorkItem() noexcept;
 

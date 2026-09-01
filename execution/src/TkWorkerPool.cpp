@@ -14,18 +14,6 @@
 
 namespace pstk::execution
 {
-namespace
-{
-
-void NoopInvoke(void *) noexcept
-{
-}
-
-void NoopDestroy(void *) noexcept
-{
-}
-
-} // namespace
 
 class TkWorkerPool::Impl final
 {
@@ -34,8 +22,8 @@ class TkWorkerPool::Impl final
     enum class State
     {
         Running,
-        StoppingDrain,
-        StoppingDiscard,
+        StoppingDrain,   // Stop after finish Drain
+        StoppingDiscard, // Stop after finish Discard
         Stopped
     };
 
@@ -123,6 +111,9 @@ class TkWorkerPool::Impl final
         condition_.notify_all();
         JoinWorkers();
 
+        // mode == StoppingDrain인 경우에는 WorkerMain에서 readyQueue를 소비하고 thread join을 하고
+        // mode == StoppingDiscard인 경우에는 WorkerMain에서 readyQueue를 소비하지 않고 즉시 thread join을 한다.
+        // 따라서 readyQueue에 남아 있는 item을 버리는 작업을 별도로 진행한다.
         if (mode == TkWorkerPoolStopMode::Discard)
         {
             DiscardQueued();
@@ -141,8 +132,7 @@ class TkWorkerPool::Impl final
     {
         while (true)
         {
-            TkWorkItem item(nullptr, &NoopInvoke, &NoopDestroy);
-
+            TkWorkItem item(nullptr);
             {
                 std::unique_lock<std::mutex> lock(mutex_);
                 condition_.wait(lock, [this]() { return queuedCount_ != 0 || state_ != State::Running; });
@@ -216,22 +206,20 @@ class TkWorkerPool::Impl final
     {
         while (true)
         {
+            TkWorkItem item(nullptr);
             {
-                TkWorkItem item(nullptr, &NoopInvoke, &NoopDestroy);
+                std::lock_guard<std::mutex> lock(mutex_);
+                if (queuedCount_ == 0)
                 {
-                    std::lock_guard<std::mutex> lock(mutex_);
-                    if (queuedCount_ == 0)
-                    {
-                        return;
-                    }
-
-                    if (!readyQueue_->TryPop(&item))
-                    {
-                        return;
-                    }
-
-                    --queuedCount_;
+                    return;
                 }
+
+                if (!readyQueue_->TryPop(&item))
+                {
+                    return;
+                }
+
+                --queuedCount_;
             }
         }
     }

@@ -5,6 +5,9 @@
 namespace pstk::execution
 {
 
+void NoOpInvoke(void *) noexcept {};
+void NoOpDestroy(void *) noexcept {};
+
 TkWorkItem::TkWorkItem(void *const context, const TkWorkInvoke invoke, const TkWorkDestroy destroy) noexcept
     : context_(context), invoke_(invoke), destroy_(destroy)
 {
