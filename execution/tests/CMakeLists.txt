@@ -7,6 +7,7 @@ include(GoogleTest)
 add_executable(
     pstk_execution_tests
     ExecutionTests.cpp
+    TkWorkerPoolTests.cpp
 )
 
 target_compile_features(
@@ -20,7 +21,6 @@ target_link_libraries(
     PRIVATE
     PSTK::Execution
     GTest::gtest_main
-    Threads::Threads # std::thread를 이식성 있게 빌드하기 위해 링킹
 )
 
 gtest_discover_tests(

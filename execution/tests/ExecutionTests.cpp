@@ -1,9 +1,8 @@
-#include <pstk/execution/TkBoundedMpscQueue.hpp>
+#include <pstk/execution/TkBoundedMpmcQueue.hpp>
 #include <pstk/execution/TkWorkItem.h>
 
 #include <gtest/gtest.h>
 
-#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <memory>
@@ -44,7 +43,7 @@ struct MoveOnlyValue
     int value;
 };
 
-using MoveOnlyQueue = pstk::execution::TkBoundedMpscQueue<MoveOnlyValue>;
+using MoveOnlyQueue = pstk::execution::TkBoundedMpmcQueue<MoveOnlyValue>;
 
 static_assert(!std::is_default_constructible<pstk::execution::TkWorkItem>::value,
               "TkWorkItem requires explicit callbacks");
@@ -118,7 +117,7 @@ void NoopDestroy(void *) noexcept
 
 } // namespace
 
-TEST(TkBoundedMpscQueueContract, RejectsInvalidCapacityAndPreservesOutput)
+TEST(TkBoundedMpmcQueueContract, RejectsInvalidCapacityAndPreservesOutput)
 {
     std::unique_ptr<MoveOnlyQueue> queue;
 
@@ -139,7 +138,7 @@ TEST(TkBoundedMpscQueueContract, RejectsInvalidCapacityAndPreservesOutput)
     EXPECT_EQ(queue.get(), original);
 }
 
-TEST(TkBoundedMpscQueueContract, PreservesInputAndOutputOnFullOrEmpty)
+TEST(TkBoundedMpmcQueueContract, PreservesInputAndOutputOnFullOrEmpty)
 {
     std::unique_ptr<MoveOnlyQueue> queue;
     ASSERT_EQ(MoveOnlyQueue::Create(2, &queue), TK_SUCCESS);
@@ -154,17 +153,17 @@ TEST(TkBoundedMpscQueueContract, PreservesInputAndOutputOnFullOrEmpty)
     EXPECT_EQ(rejected.value, 3);
 
     MoveOnlyValue output(100);
-    ASSERT_TRUE(queue->TryPop(output));
+    ASSERT_TRUE(queue->TryPop(&output));
     EXPECT_EQ(output.value, 1);
-    ASSERT_TRUE(queue->TryPop(output));
+    ASSERT_TRUE(queue->TryPop(&output));
     EXPECT_EQ(output.value, 2);
 
     output.value = 100;
-    EXPECT_FALSE(queue->TryPop(output));
+    EXPECT_FALSE(queue->TryPop(&output));
     EXPECT_EQ(output.value, 100);
 }
 
-TEST(TkBoundedMpscQueueContract, SupportsMoveOnlyNonDefaultConstructibleValuesAndWrapAround)
+TEST(TkBoundedMpmcQueueContract, SupportsMoveOnlyNonDefaultConstructibleValuesAndWrapAround)
 {
     std::unique_ptr<MoveOnlyQueue> queue;
     ASSERT_EQ(MoveOnlyQueue::Create(2, &queue), TK_SUCCESS);
@@ -175,12 +174,12 @@ TEST(TkBoundedMpscQueueContract, SupportsMoveOnlyNonDefaultConstructibleValuesAn
         ASSERT_TRUE(queue->TryPush(std::move(input)));
 
         MoveOnlyValue output(-1);
-        ASSERT_TRUE(queue->TryPop(output));
+        ASSERT_TRUE(queue->TryPop(&output));
         EXPECT_EQ(output.value, value);
     }
 }
 
-TEST(TkBoundedMpscQueueContract, SupportsMultipleProducersAndOneConsumer)
+TEST(TkBoundedMpmcQueueContract, SupportsMultipleProducersAndMultipleConsumers)
 {
     constexpr int producerCount = 4;
     constexpr int valuesPerProducer = 2000;
@@ -188,6 +187,8 @@ TEST(TkBoundedMpscQueueContract, SupportsMultipleProducersAndOneConsumer)
 
     std::unique_ptr<MoveOnlyQueue> queue;
     ASSERT_EQ(MoveOnlyQueue::Create(64, &queue), TK_SUCCESS);
+
+    constexpr int consumerCount = 4;
 
     std::vector<std::thread> producers;
     producers.reserve(producerCount);
@@ -206,50 +207,75 @@ TEST(TkBoundedMpscQueueContract, SupportsMultipleProducersAndOneConsumer)
         });
     }
 
-    std::vector<bool> seen(totalValues, false);
-    MoveOnlyValue output(-1);
-    int consumed = 0;
-    while (consumed < totalValues)
+    std::unique_ptr<std::atomic<bool>[]> seen(new std::atomic<bool>[totalValues]);
+    for (int value = 0; value < totalValues; ++value)
     {
-        if (!queue->TryPop(output))
-        {
-            std::this_thread::yield();
-            continue;
-        }
+        seen[value].store(false, std::memory_order_relaxed);
+    }
 
-        ++consumed;
+    std::atomic<int> consumed(0);
+    std::atomic<int> outOfRange(0);
+    std::atomic<int> duplicates(0);
+    std::vector<std::thread> consumers;
+    consumers.reserve(consumerCount);
+    for (int consumerIndex = 0; consumerIndex < consumerCount; ++consumerIndex)
+    {
+        consumers.emplace_back([&]() {
+            MoveOnlyValue output(-1);
+            while (consumed.load(std::memory_order_relaxed) < totalValues)
+            {
+                if (!queue->TryPop(&output))
+                {
+                    std::this_thread::yield();
+                    continue;
+                }
 
-        if (output.value < 0 || output.value >= totalValues)
-        {
-            ADD_FAILURE() << "consumer received an out-of-range value: " << output.value;
-            continue;
-        }
+                consumed.fetch_add(1, std::memory_order_relaxed);
+                if (output.value < 0 || output.value >= totalValues)
+                {
+                    outOfRange.fetch_add(1, std::memory_order_relaxed);
+                    continue;
+                }
 
-        if (seen[output.value])
-        {
-            ADD_FAILURE() << "consumer received duplicate value: " << output.value;
-            continue;
-        }
-
-        seen[output.value] = true;
+                if (seen[output.value].exchange(true, std::memory_order_acq_rel))
+                {
+                    duplicates.fetch_add(1, std::memory_order_relaxed);
+                }
+            }
+        });
     }
 
     for (std::thread &producer : producers)
     {
         producer.join();
     }
+    for (std::thread &consumer : consumers)
+    {
+        consumer.join();
+    }
 
-    EXPECT_EQ(consumed, totalValues);
-    EXPECT_TRUE(std::all_of(seen.begin(), seen.end(), [](bool value) { return value; }));
+    int missing = 0;
+    for (int value = 0; value < totalValues; ++value)
+    {
+        if (!seen[value].load(std::memory_order_acquire))
+        {
+            ++missing;
+        }
+    }
+
+    EXPECT_EQ(consumed.load(std::memory_order_relaxed), totalValues);
+    EXPECT_EQ(outOfRange.load(std::memory_order_relaxed), 0);
+    EXPECT_EQ(duplicates.load(std::memory_order_relaxed), 0);
+    EXPECT_EQ(missing, 0);
 }
 
-TEST(TkBoundedMpscQueueContract, DestroysQueuedValuesWhenQueueIsDestroyed)
+TEST(TkBoundedMpmcQueueContract, DestroysQueuedValuesWhenQueueIsDestroyed)
 {
     std::atomic<int> destructionCount(0);
 
     {
-        std::unique_ptr<pstk::execution::TkBoundedMpscQueue<DestructionProbe>> queue;
-        ASSERT_EQ(pstk::execution::TkBoundedMpscQueue<DestructionProbe>::Create(4, &queue), TK_SUCCESS);
+        std::unique_ptr<pstk::execution::TkBoundedMpmcQueue<DestructionProbe>> queue;
+        ASSERT_EQ(pstk::execution::TkBoundedMpmcQueue<DestructionProbe>::Create(4, &queue), TK_SUCCESS);
 
         ASSERT_TRUE(queue->TryPush(DestructionProbe(&destructionCount)));
         ASSERT_TRUE(queue->TryPush(DestructionProbe(&destructionCount)));

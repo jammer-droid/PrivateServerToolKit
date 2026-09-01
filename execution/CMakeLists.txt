@@ -1,7 +1,10 @@
+find_package(Threads REQUIRED)
+
 add_library(
     pstk_execution
     STATIC
     src/TkWorkItem.cpp
+    src/TkWorkerPool.cpp
 )
 
 add_library(
@@ -26,6 +29,7 @@ target_link_libraries(
     pstk_execution
     PUBLIC
     PSTK::Common
+    Threads::Threads
 )
 
 if(BUILD_TESTING)

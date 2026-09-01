@@ -3,6 +3,7 @@
 #include <pstk/TkResult.h>
 
 #include <atomic>
+#include <cassert>
 #include <cstddef>
 #include <limits>
 #include <memory>
@@ -13,12 +14,12 @@
 namespace pstk::execution
 {
 
-template <typename T> class TkBoundedMpscQueue final
+template <typename T> class TkBoundedMpmcQueue final
 {
     static_assert(std::is_nothrow_move_constructible<T>::value,
-                  "TkBoundedMpscQueue requires nothrow move construction");
-    static_assert(std::is_nothrow_move_assignable<T>::value, "TkBoundedMpscQueue requires nothrow move assignment");
-    static_assert(std::is_nothrow_destructible<T>::value, "TkBoundedMpscQueue requires nothrow destruction");
+                  "TkBoundedMpmcQueue requires nothrow move construction");
+    static_assert(std::is_nothrow_move_assignable<T>::value, "TkBoundedMpmcQueue requires nothrow move assignment");
+    static_assert(std::is_nothrow_destructible<T>::value, "TkBoundedMpmcQueue requires nothrow destruction");
 
     struct Slot
     {
@@ -31,7 +32,7 @@ template <typename T> class TkBoundedMpscQueue final
     };
 
   public:
-    static TkResult Create(const std::size_t capacity, std::unique_ptr<TkBoundedMpscQueue<T>> *const outQueue) noexcept
+    static TkResult Create(const std::size_t capacity, std::unique_ptr<TkBoundedMpmcQueue<T>> *const outQueue) noexcept
     {
         if (outQueue == nullptr || !IsValidCapacity(capacity))
         {
@@ -40,7 +41,7 @@ template <typename T> class TkBoundedMpscQueue final
 
         try
         {
-            std::unique_ptr<TkBoundedMpscQueue<T>> queue(new TkBoundedMpscQueue<T>(capacity));
+            std::unique_ptr<TkBoundedMpmcQueue<T>> queue(new TkBoundedMpmcQueue<T>(capacity));
             *outQueue = std::move(queue);
         }
         catch (const std::bad_alloc &)
@@ -51,22 +52,23 @@ template <typename T> class TkBoundedMpscQueue final
         return TK_SUCCESS;
     }
 
-    ~TkBoundedMpscQueue() noexcept
+    ~TkBoundedMpmcQueue() noexcept
     {
+        std::size_t position = dequeuePosition_.load(std::memory_order_relaxed);
         const std::size_t endPosition = enqueuePosition_.load(std::memory_order_relaxed);
-        while (dequeuePosition_ != endPosition)
+        while (position != endPosition)
         {
-            Slot &slot = slots_[dequeuePosition_ & capacityMask_];
+            Slot &slot = slots_[position & capacityMask_];
             ItemAt(slot)->~T();
-            ++dequeuePosition_;
+            ++position;
         }
     }
 
-    TkBoundedMpscQueue(const TkBoundedMpscQueue &) = delete;
-    TkBoundedMpscQueue &operator=(const TkBoundedMpscQueue &) = delete;
+    TkBoundedMpmcQueue(const TkBoundedMpmcQueue &) = delete;
+    TkBoundedMpmcQueue &operator=(const TkBoundedMpmcQueue &) = delete;
 
-    TkBoundedMpscQueue(TkBoundedMpscQueue &&) = delete;
-    TkBoundedMpscQueue &operator=(TkBoundedMpscQueue &&) = delete;
+    TkBoundedMpmcQueue(TkBoundedMpmcQueue &&) = delete;
+    TkBoundedMpmcQueue &operator=(TkBoundedMpmcQueue &&) = delete;
 
     bool TryPush(T &&value) noexcept
     {
@@ -107,33 +109,51 @@ template <typename T> class TkBoundedMpscQueue final
         return true;
     }
 
-    bool TryPop(T &out) noexcept
+    bool TryPop(T *const outItem) noexcept
     {
-        const std::size_t position = dequeuePosition_;
-        Slot &slot = slots_[position & capacityMask_];
-        const std::size_t sequence = slot.sequence.load(std::memory_order_acquire);
-        const std::ptrdiff_t difference = SequenceDifference(sequence, position + 1);
+        assert(outItem != nullptr);
 
-        if (difference != 0)
+        std::size_t position = dequeuePosition_.load(std::memory_order_relaxed);
+        Slot *slot = nullptr;
+
+        while (true)
         {
-            return false;
+            slot = &slots_[position & capacityMask_];
+            const std::size_t sequence = slot->sequence.load(std::memory_order_acquire);
+            const std::ptrdiff_t difference = SequenceDifference(sequence, position + 1);
+
+            if (difference == 0)
+            {
+                if (dequeuePosition_.compare_exchange_weak(position, position + 1, std::memory_order_relaxed,
+                                                           std::memory_order_relaxed))
+                {
+                    break;
+                }
+            }
+            else if (difference < 0)
+            {
+                return false;
+            }
+            else
+            {
+                position = dequeuePosition_.load(std::memory_order_relaxed);
+            }
         }
 
-        T *const item = ItemAt(slot);
-        out = std::move(*item);
+        T *const item = ItemAt(*slot);
+        *outItem = std::move(*item);
         item->~T();
-
-        slot.sequence.store(position + capacity_, std::memory_order_release);
-        dequeuePosition_ = position + 1;
-
+        slot->sequence.store(position + capacity_, std::memory_order_release);
         return true;
     }
 
   private:
-    explicit TkBoundedMpscQueue(const std::size_t capacity)
-        : slots_(new Slot[capacity]), capacity_(capacity), capacityMask_(capacity - 1), enqueuePosition_(0),
-          dequeuePosition_(0)
+    explicit TkBoundedMpmcQueue(const std::size_t capacity)
+        : slots_(new Slot[capacity]), capacity_(capacity), capacityMask_(capacity - 1)
     {
+        enqueuePosition_.store(0, std::memory_order_relaxed);
+        dequeuePosition_.store(0, std::memory_order_relaxed);
+
         for (std::size_t index = 0; index < capacity; ++index)
         {
             slots_[index].sequence.store(index, std::memory_order_relaxed);
@@ -176,6 +196,6 @@ template <typename T> class TkBoundedMpscQueue final
     const std::size_t capacityMask_;
 
     std::atomic<std::size_t> enqueuePosition_;
-    std::size_t dequeuePosition_;
+    std::atomic<std::size_t> dequeuePosition_;
 };
 } // namespace pstk::execution

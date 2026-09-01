@@ -303,7 +303,7 @@ Host core와 public 계약에는 `NrGateway`, `NrSessionSendChannel`, PrivateSer
 
 Input Adapter는 queue에 borrowed byte view만 남기지 않는다. 기존 NetworkRuntime의 move-only owning event를 보관하거나, 원본 storage의 lease를 소유하거나, 이동할 owner가 없으면 독립 payload storage를 만들어 Ingress Job의 수명을 보장해야 한다. Host lane worker는 Ingress Job이 살아 있는 동안 raw payload를 borrow하여 Core를 호출한다. Adapter가 특정 runtime의 표현을 변환하더라도 generated Decode와 패킷별 형식 검증은 Host의 책임으로 유지한다.
 
-여러 NetworkRuntime producer는 connection key로 고정된 ingress lane에 게시한다. 각 lane은 MPSC mailbox와 한 명의 논리적 drain owner를 사용하고, 서로 다른 lane은 shared worker pool에서 병렬 실행할 수 있다. 같은 connection의 job은 같은 lane으로 보내 입력 순서를 유지한다. 물리 worker는 drain cycle마다 달라질 수 있으며 Service Host Core가 thread를 생성하거나 특정 worker를 고정하지 않는다. 공용 scheduler의 bounded queue·drain budget·lost-wakeup·shutdown 계약은 아래 execution module에서 정하고, lane 수·connection-key hash와 queue full에 대한 transport 정책은 개별 Input Adapter 설정으로 남긴다.
+여러 NetworkRuntime producer는 connection key로 고정된 ingress lane에 게시한다. 각 lane은 bounded mailbox와 한 명의 논리적 drain owner를 사용하고, 서로 다른 lane은 shared worker pool에서 병렬 실행할 수 있다. 같은 connection의 job은 같은 lane으로 보내 입력 순서를 유지한다. 물리 worker는 drain cycle마다 달라질 수 있으며 Service Host Core가 thread를 생성하거나 특정 worker를 고정하지 않는다. 공용 scheduler의 bounded queue·drain budget·lost-wakeup·shutdown 계약은 아래 execution module에서 정하고, lane 수·connection-key hash와 queue full에 대한 transport 정책은 개별 Input Adapter 설정으로 남긴다.
 
 Output Adapter는 `JobExecute`를 수행한 World thread에서 동기 호출한다. Encoded payload view는 callback 동안만 유효하므로 adapter가 반환 이후 사용하려면 NetworkRuntime-owned send storage에 복사하거나 commit해야 한다. `TK_SUCCESS`는 send admission을 뜻할 뿐 실제 socket 완료나 상대 수신 완료가 아니며, 실패 시 Host가 자동 재시도하지 않는다. 여러 World worker의 동시 호출을 허용하므로 adapter가 사용하는 transport가 thread-safe하지 않으면 adapter가 직렬화한다.
 
@@ -455,13 +455,13 @@ TkResult OnTimeSync(const TkServiceContext& context,
 
 공용 실행 도구를 Host Core 내부 구현으로 숨겨 고정하지 않는다. Input Adapter가 ingress lane과 worker scheduling을 조립하고, 서비스별 World executor는 별도로 주입된다.
 
-#### `TkBoundedMpscQueue<T>`
+#### `TkBoundedMpmcQueue<T>`
 
-- 고정 capacity의 bounded MPSC ring이며 capacity는 2 이상 power-of-two다. 입력값을 반올림하지 않고 잘못된 capacity는 factory에서 `TK_ERROR_INVALID_ARGUMENT`으로 거절한다.
+- 고정 capacity의 bounded MPMC ring이며 capacity는 2 이상 power-of-two다. 입력값을 반올림하지 않고 잘못된 capacity는 factory에서 `TK_ERROR_INVALID_ARGUMENT`으로 거절한다.
 - Slot storage와 per-slot sequence는 생성 시 한 번 할당하며 hot path에 allocation을 두지 않는다. 별도 memory pool은 첫 버전에 추가하지 않는다.
 - Index는 monotonic position과 `position & (capacity - 1)`로 계산한다. Power-of-two 규칙을 execution module의 bounded queue에 공통 적용한다.
 - `TryPush(T&&)`는 non-blocking이고 full이면 입력 object를 move하지 않아 caller 소유 상태를 보존한다.
-- `TryPop(T& out) noexcept`는 성공할 때만 out에 move-assign하고 empty이면 out을 보존한다. `optional`은 사용하지 않는다.
+- `TryPop(T* outItem) noexcept`는 non-null pointer를 내부 precondition으로 하며, dequeue reservation 성공 후에만 `*outItem`에 move-assign한다. Empty 또는 reservation 실패면 `*outItem`을 보존한다. `optional`은 사용하지 않는다.
 - `T`는 `noexcept` move construction, move assignment와 destruction을 만족해야 하며 default construction과 copy는 요구하지 않는다.
 - Queue object는 non-copyable·non-movable이고 static `TkResult` factory가 owning smart pointer를 만든다. `Close`, wait, wakeup은 queue 책임이 아니다.
 - 파괴 전 producer/consumer quiescence는 외부 계약이다. Destructor는 남아 있는 element를 파괴한다.
@@ -480,7 +480,7 @@ using TkWorkDestroy = void (*)(void*) noexcept;
 
 #### `TkWorkerPool`
 
-- 고정 worker 수와 power-of-two capacity의 shared bounded ready ring을 생성 시 정한다. Ready ring은 여러 producer와 consumer가 쓰는 lock-based MPMC이며 mutex와 condition variable로 대기·wake를 관리한다.
+- 고정 worker 수와 power-of-two capacity의 shared bounded ready ring을 생성 시 정한다. Ready ring은 `TkBoundedMpmcQueue<TkWorkItem>`을 재사용하는 MPMC ring이며, WorkerPool의 mutex와 condition variable이 pool lifecycle·schedule admission·대기·wake를 소유한다. Queue 자체는 close·wait·wakeup을 하지 않는다.
 - Static factory 성공 시 worker thread를 시작하고 곧바로 Running이다. 별도 `Start`는 없다.
 - `TrySchedule(TkWorkItem&&)`는 짧은 queue mutex 구간만 사용하는 non-blocking admission이다. 성공은 item ownership consume, capacity 실패와 invalid state 실패는 caller 소유 보존이다.
 - Worker는 condition variable에서 대기하고 schedule은 `notify_one`, stop은 `notify_all`을 사용한다. WorkItem invoke는 queue mutex 밖에서 실행한다.
@@ -489,7 +489,7 @@ using TkWorkDestroy = void (*)(void*) noexcept;
 
 #### `TkSerialMailbox<T>`와 `TkMailboxScheduler<T>`
 
-- Mailbox는 bounded MPSC queue와 `Idle`, `Scheduled`, `Draining` CAS 상태만 가진다. 별도 gate·permit object를 외부에 노출하지 않는다.
+- Mailbox는 bounded MPMC queue를 재사용할 수 있고 `Idle`, `Scheduled`, `Draining` CAS 상태만 가진다. MPMC queue를 사용하더라도 CAS 상태가 active drain owner를 하나로 제한한다. 별도 gate·permit object를 외부에 노출하지 않는다.
 - Producer는 message publish 후 `Idle -> Scheduled` CAS에 성공한 경우에만 mailbox drain WorkItem을 ready queue에 게시한다. 이미 Scheduled/Draining이면 현재 owner가 후속 message를 관찰하므로 추가 예약하지 않는다.
 - Worker는 Scheduled mailbox를 Draining으로 전이해 `maxMessagesPerDrain` count budget만큼 소비한다. 이후 Idle로 release한 다음 queue를 다시 확인하고 남은 message가 있으면 스스로 재예약한다. Release 전 publish와 release 후 publish 모두 producer 또는 worker 중 하나가 예약을 책임져 orphan message를 만들지 않는다.
 - Scheduler는 WorkerPool과 생성 시 등록한 모든 Mailbox를 소유한다. 실행 중 register/unregister, slot reuse와 restart는 지원하지 않는다.
@@ -586,7 +586,7 @@ GitHub Issue 본문의 readiness, template-first facade와 stable slice 문구�
 | ID | Delivered outcome | Dependency | Status |
 | --- | --- | --- | --- |
 | E1 | Common `TkResult` control-flow 값 확장 | 없음 | Pending |
-| E2 | `pstk_execution`의 bounded MPSC queue와 move-only WorkItem | E1 | Pending |
+| E2 | `pstk_execution`의 bounded MPMC queue와 move-only WorkItem | E1 | Pending |
 | E3 | Bounded ready queue 기반 WorkerPool | E2 | Pending |
 | E4 | CAS serial mailbox와 owning MailboxScheduler | E3 | Pending |
 | H1 | Service Host shared target, public C ABI와 immutable registry | E4 delivery gate | Pending |
@@ -602,13 +602,13 @@ GitHub Issue 본문의 readiness, template-first facade와 stable slice 문구�
 - **Acceptance:** C/C++ Common contract가 모든 numeric value를 고정하고 기존 Packet Tool source가 새 값 추가로 영향을 받지 않는다.
 - **Verification:** Common contract compile/test와 전체 configure/build/CTest.
 
-### E2 — Bounded MPSC queue와 WorkItem
+### E2 — Bounded MPMC queue와 WorkItem
 
-- **Outcome:** `execution/` internal STATIC target, `TkBoundedMpscQueue<T>`와 `TkWorkItem`을 제공한다.
+- **Outcome:** `execution/` internal STATIC target, `TkBoundedMpmcQueue<T>`와 `TkWorkItem`을 제공한다.
 - **Dependency:** E1.
-- **Seam:** producer/consumer 사이의 move-only bounded admission과 arbitrary work lifecycle.
+- **Seam:** 여러 producer와 consumer 사이의 move-only bounded admission과 arbitrary work lifecycle.
 - **Invariant:** Full/empty 실패는 caller input/out을 보존하고, accepted item은 정확히 한 owner와 정확히 한 destroy path를 가진다. Queue hot path에는 allocation이 없다.
-- **Acceptance:** invalid capacity, wrap-around, empty/full, multi-producer single-consumer, move-only non-default type과 queued destruction을 검증한다. WorkItem 정상 경로는 invoke→destroy, discard는 destroy-only이며 no-op destroy도 같은 경로를 사용한다.
+- **Acceptance:** invalid capacity, wrap-around, empty/full, multi-producer multi-consumer, move-only non-default type과 queued destruction을 검증한다. WorkItem 정상 경로는 invoke→destroy, discard는 destroy-only이며 no-op destroy도 같은 경로를 사용한다.
 - **Verification:** deterministic unit tests, bounded concurrent stress와 sanitizer를 사용할 수 있는 preset에서는 address/undefined behavior 검사.
 
 ### E3 — WorkerPool
