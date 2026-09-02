@@ -5,6 +5,7 @@ include(GoogleTest)
 add_executable(
     pstk_service_host_tests
     TkServiceHostTests.cpp
+    TkServiceHostPipelineTests.cpp
 )
 
 target_compile_features(

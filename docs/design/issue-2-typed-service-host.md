@@ -319,6 +319,8 @@ Output Adapter는 `JobExecute`를 수행한 World thread에서 동기 호출한�
 
 Middleware callback은 read-only·reentrant 계약이며 여러 ingress lane에서 동시에 호출될 수 있다. 참조하는 policy snapshot은 concurrent read와 lifetime을 보장해야 하고, 인증 cache나 rate-limit counter 같은 mutable state가 필요하면 별도로 주입한 thread-safe policy object가 소유한다.
 
+모든 Service Host callback/thunk는 Diagnostic callback과 향후 Output Adapter callback을 포함해 C ABI를 넘어 예외를 던지지 않아야 하며, 정상적인 실패는 `TkResult`로 반환하고 계약 위반 예외는 `noexcept` 경계에서 `std::terminate`로 처리한다.
+
 Middleware는 별도 decision/result 타입을 만들지 않고 공용 `TkResult`를 반환한다. `TK_SUCCESS`이면 다음 middleware 또는 handler로 진행하고, 정책 거절에는 공용 값 `TK_ERROR_REJECTED`를 추가해 사용하기로 했다. 그 밖의 실패는 middleware 실행 실패로 취급한다. 구체 원인은 공용 Diagnostic으로 전달하며 Host가 diagnostic ID를 parsing해 제어 흐름을 정하지 않는다. `TK_ERROR_REJECTED`의 Common 구현과 consumer 대응은 후속 implementation slice에 포함해야 한다.
 
 **후처리 middleware는 이번 범위에서 제외한다.** World 완료 후 역순으로 middleware를 실행하거나, 완료 결과·응답을 공통 후처리 체인에 통과시키지 않는다. 미래 사용을 위한 빈 completion hook도 선행 추가하지 않는다.
@@ -590,7 +592,7 @@ GitHub Issue 본문의 readiness, template-first facade와 stable slice 문구�
 | E3 | Bounded ready queue 기반 WorkerPool | E2 | Completed |
 | E4 | CAS serial Work Lane과 owning WorkerScheduler | E3 | Completed |
 | H1 | Service Host shared target, public C ABI와 immutable registry | E4 delivery gate | Completed |
-| H2 | ProcessPacket, middleware와 one-way Service Job pipeline | H1 | Pending |
+| H2 | ProcessPacket, middleware와 one-way Service Job pipeline | H1 | Completed |
 | H3 | Request/response storage, Encode와 Output Adapter pipeline | H2 | Pending |
 | H4 | C++ typed facade와 TimeSync end-to-end acceptance | H3 | Pending |
 

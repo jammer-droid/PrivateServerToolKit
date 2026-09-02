@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdio>
 #include <limits>
 #include <memory>
 #include <new>
@@ -53,6 +54,12 @@ struct LookupEntry final
     std::size_t bindingIndex = 0;
 };
 
+enum class JobState
+{
+    Ready,
+    Executed
+};
+
 } // namespace
 
 struct TkServiceHost final
@@ -65,8 +72,29 @@ struct TkServiceHost final
     HostState state = HostState::Configuring;
 };
 
+struct TkServiceJob final
+{
+    TkServiceJob() noexcept = default;
+
+    void *allocation = nullptr;           // allocation bytes for TkServiceJob instance
+    std::size_t allocationAlignment = 0U; // align
+
+    void *requestStorage = nullptr; // storage for decoded Payload
+    TkHostConnectionKey connectionKey{};
+    void *serviceInstance = nullptr;
+    TkRequestDestroyCallback destroyRequest = nullptr;
+    TkOneWayHandlerCallback invokeHandler = nullptr;
+
+    JobState state = JobState::Ready;
+};
+
 namespace
 {
+
+inline constexpr const char *UnknownPacketId = "PSTK-SERVICE-HOST-UNKNOWN-PACKET";
+inline constexpr const char *InvalidPayloadSizeId = "PSTK-SERVICE-HOST-INVALID-PAYLOAD-SIZE";
+inline constexpr const char *ExecutorSubmitFailedId = "PSTK-SERVICE-HOST-EXECUTOR-SUBMIT-FAILED";
+inline constexpr const char *HandlerFailedId = "PSTK-SERVICE-HOST-HANDLER-FAILED";
 
 bool IsPowerOfTwo(const std::size_t value) noexcept
 {
@@ -120,6 +148,42 @@ bool HasPacketId(const std::vector<StoredBinding> &bindings, const uint16_t pack
     }
 
     return false;
+}
+
+void EmitServiceDiagnostic(const TkDiagnosticCallbackInfo diagnostic, const char *const id,
+                           const char *const message) noexcept
+{
+    const TkDiagnostic serviceDiagnostic = {
+        TK_DIAGNOSTIC_ERROR,
+        id,
+        message,
+        {nullptr, 0U, 0U, 0U},
+    };
+    TkEmitDiagnostic(diagnostic, &serviceDiagnostic);
+}
+
+void EmitUnknownPacketDiagnostic(const uint16_t packetId, const TkDiagnosticCallbackInfo diagnostic) noexcept
+{
+    char message[96]{};
+    std::snprintf(message, sizeof(message), "packet id %u is not registered", static_cast<unsigned int>(packetId));
+    EmitServiceDiagnostic(diagnostic, UnknownPacketId, message);
+}
+
+void EmitInvalidPayloadSizeDiagnostic(const std::size_t expectedSize, const std::size_t actualSize,
+                                      const TkDiagnosticCallbackInfo diagnostic) noexcept
+{
+    char message[128]{};
+    std::snprintf(message, sizeof(message), "payload size must be exactly %zu bytes; actual size is %zu bytes",
+                  expectedSize, actualSize);
+    EmitServiceDiagnostic(diagnostic, InvalidPayloadSizeId, message);
+}
+
+void EmitResultDiagnostic(const char *const id, const char *const operation, const TkResult result,
+                          const TkDiagnosticCallbackInfo diagnostic) noexcept
+{
+    char message[128]{};
+    std::snprintf(message, sizeof(message), "%s failed with result %d", operation, static_cast<int>(result));
+    EmitServiceDiagnostic(diagnostic, id, message);
 }
 
 TkResult ValidateBinding(const TkServiceBindingInfo &binding) noexcept
@@ -218,6 +282,190 @@ TkResult StageRegistration(const TkServiceHost &host, const TkServiceRegistratio
 
     *outService = std::move(stagedService);
     return TK_SUCCESS;
+}
+
+// std::lower_bound는 comp의 결과가 'true'이면 탐색 범위를 start = mid+1로 이동한다.
+// 따라서 packetId와 같은 값을 찾으려면 candidate.packetId >= value가 되는 첫 구간을 찾아야 한다.
+// - *mid < value : 이 경우에는 mid의 위치가 value보다 작기 때문에 start = mid + 1 로 이동한다.
+// - *mid >= value : 이 경우에는 mid가 value보다 크거나 같은 구간에 속하기 때문에 end = mid 로 이동한다.
+const StoredBinding *FindBinding(const TkServiceHost &host, const uint16_t packetId) noexcept
+{
+    const std::vector<LookupEntry>::const_iterator entry =
+        std::lower_bound(host.lookup.begin(), host.lookup.end(), packetId,
+                         [](const LookupEntry &candidate, const uint16_t value) { return candidate.packetId < value; });
+    if (entry == host.lookup.end() || entry->packetId != packetId)
+    {
+        return nullptr;
+    }
+
+    return &host.services[entry->serviceIndex].bindings[entry->bindingIndex];
+}
+
+const StoredService *FindService(const TkServiceHost &host, const uint16_t packetId) noexcept
+{
+    const std::vector<LookupEntry>::const_iterator entry =
+        std::lower_bound(host.lookup.begin(), host.lookup.end(), packetId,
+                         [](const LookupEntry &candidate, const uint16_t value) { return candidate.packetId < value; });
+    if (entry == host.lookup.end() || entry->packetId != packetId)
+    {
+        return nullptr;
+    }
+
+    return &host.services[entry->serviceIndex];
+}
+
+// value를 value 이상인 가장 가까운 alignment 배수로 올림 정렬한다.
+// alignment는 2의 거듭제곱이고 mask는 alignment - 1이다.
+// (value + mask)에서 alignment 나머지를 나타내는 하위 비트를 ~mask로 제거한다.
+bool TryAlignUp(const std::size_t value, const std::size_t alignment, std::size_t *const outValue) noexcept
+{
+    const std::size_t mask = alignment - 1U;
+    if (value > std::numeric_limits<std::size_t>::max() - mask)
+    {
+        return false;
+    }
+
+    *outValue = (value + mask) & ~mask;
+    return true;
+}
+
+TkResult AllocateOneWayJob(const TkHostConnectionKey connectionKey, const StoredService &service,
+                           const StoredBinding &binding, TkServiceJob **const outJob) noexcept
+{
+    if (outJob == nullptr)
+    {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+
+    const std::size_t requestAlignment = binding.info.request.requestAlignment;
+    const std::size_t allocationAlignment = std::max(alignof(TkServiceJob), requestAlignment);
+
+    std::size_t requestOffset = 0U;
+    if (!TryAlignUp(sizeof(TkServiceJob), requestAlignment, &requestOffset) ||
+        requestOffset > std::numeric_limits<std::size_t>::max() - binding.info.request.requestSize)
+    {
+        return TK_ERROR_OUT_OF_MEMORY;
+    }
+
+    const std::size_t allocationSize = requestOffset + binding.info.request.requestSize;
+
+    // 전역 메모리 할당 함수를 직접 호출 (객체 생성자는 실행하지 않음)
+    // 결과는 raw memory
+    void *const allocation = ::operator new(allocationSize, std::align_val_t(allocationAlignment), std::nothrow);
+    if (allocation == nullptr)
+    {
+        return TK_ERROR_OUT_OF_MEMORY;
+    }
+
+    // 전역 allocation function 사용을 지정한 new-expression
+    // 메모리를 확보하거나 지정된 위치를 받은 다음 T의 생성자 실행
+    TkServiceJob *const job = new (allocation) TkServiceJob();
+    job->allocation = allocation;
+    job->allocationAlignment = allocationAlignment;
+    job->requestStorage = static_cast<void *>(static_cast<unsigned char *>(allocation) + requestOffset);
+    job->connectionKey = connectionKey;
+    job->serviceInstance = service.serviceInstance;
+    job->destroyRequest = binding.info.request.destroyRequest;
+    job->invokeHandler = binding.info.operation.oneWay.invokeHandler;
+    *outJob = job;
+    return TK_SUCCESS;
+}
+
+void FreeJobAllocation(TkServiceJob *const job) noexcept
+{
+    if (job == nullptr)
+    {
+        return;
+    }
+
+    const std::size_t allocationAlignment = job->allocationAlignment;
+    void *const allocation = job->allocation;
+    job->~TkServiceJob();
+
+    ::operator delete(allocation, std::align_val_t(allocationAlignment));
+}
+
+void DestroyJob(TkServiceJob *const job) noexcept
+{
+    if (job == nullptr)
+    {
+        return;
+    }
+
+    job->destroyRequest(job->requestStorage);
+    FreeJobAllocation(job);
+}
+
+TkResult ProcessPacket(const TkServiceHost &host, const TkHostConnectionKey connectionKey, const uint16_t packetId,
+                       const TkByteView payload, const TkDiagnosticCallbackInfo diagnostic) noexcept
+{
+    const StoredBinding *const binding = FindBinding(host, packetId);
+    const StoredService *const service = FindService(host, packetId);
+    if (binding == nullptr || service == nullptr)
+    {
+        EmitUnknownPacketDiagnostic(packetId, diagnostic);
+        return TK_ERROR_INVALID_DATA;
+    }
+
+    if (payload.size != binding->info.request.payloadBytes)
+    {
+        EmitInvalidPayloadSizeDiagnostic(binding->info.request.payloadBytes, payload.size, diagnostic);
+        return TK_ERROR_INVALID_DATA;
+    }
+
+    if (binding->info.type != TK_BINDING_TYPE_ONE_WAY)
+    {
+        return TK_ERROR_INVALID_STATE;
+    }
+
+    TkServiceJob *job = nullptr;
+    const TkResult allocationResult = AllocateOneWayJob(connectionKey, *service, *binding, &job);
+    if (allocationResult != TK_SUCCESS)
+    {
+        return allocationResult;
+    }
+
+    TkResult result = binding->info.request.decodeRequest(payload, job->requestStorage, diagnostic);
+    if (result != TK_SUCCESS)
+    {
+        FreeJobAllocation(job);
+        return result;
+    }
+
+    const TkServiceMiddlewareCallInfo middlewareCallInfo = {connectionKey, packetId};
+    for (const TkServiceMiddlewareInfo &middleware : service->middlewares)
+    {
+        result = middleware.callback(&middlewareCallInfo, diagnostic, middleware.userData);
+        if (result != TK_SUCCESS)
+        {
+            DestroyJob(job);
+            return result;
+        }
+    }
+
+    result = service->executor.callback(job, service->executor.userData);
+    if (result == TK_SUCCESS)
+    {
+        job = nullptr;
+        return TK_SUCCESS;
+    }
+
+    EmitResultDiagnostic(ExecutorSubmitFailedId, "executor submit", result, diagnostic);
+    DestroyJob(job);
+    return result;
+}
+
+TkResult InvokeOneWayHandler(TkServiceJob &job, const TkDiagnosticCallbackInfo diagnostic) noexcept
+{
+    job.state = JobState::Executed;
+    const TkServiceContext context = {job.connectionKey};
+    const TkResult result = job.invokeHandler(job.serviceInstance, &context, job.requestStorage);
+    if (result != TK_SUCCESS)
+    {
+        EmitResultDiagnostic(HandlerFailedId, "service handler", result, diagnostic);
+    }
+
+    return result;
 }
 
 } // namespace
@@ -369,4 +617,42 @@ PSTK_SERVICE_HOST_API TkResult TkServiceHostFinalizeRegistration(TkServiceHost *
 PSTK_SERVICE_HOST_API void TkServiceHostDestroy(TkServiceHost *const host)
 {
     delete host;
+}
+
+PSTK_SERVICE_HOST_API TkResult TkServiceHostProcessPacket(TkServiceHost *const host,
+                                                          const TkHostConnectionKey connectionKey,
+                                                          const uint16_t packetId, const TkByteView payload,
+                                                          const TkDiagnosticCallbackInfo diagnostic)
+{
+    if (host == nullptr || !TkIsValidByteRange(payload.data, payload.size) || connectionKey.generation == 0U)
+    {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (host->state != HostState::Ready)
+    {
+        return TK_ERROR_INVALID_STATE;
+    }
+
+    return ProcessPacket(*host, connectionKey, packetId, payload, diagnostic);
+}
+
+PSTK_SERVICE_HOST_API TkResult TkServiceJobExecute(TkServiceJob *const job, const TkDiagnosticCallbackInfo diagnostic)
+{
+    if (job == nullptr)
+    {
+        return TK_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (job->state != JobState::Ready)
+    {
+        return TK_ERROR_INVALID_STATE;
+    }
+
+    return InvokeOneWayHandler(*job, diagnostic);
+}
+
+PSTK_SERVICE_HOST_API void TkServiceJobDestroy(TkServiceJob *const job)
+{
+    DestroyJob(job);
 }
