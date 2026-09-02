@@ -186,3 +186,100 @@ gtest_discover_tests(
     pstk_packet_generated_codec_tests
     TEST_PREFIX "pstk.packet.generated-codec."
 )
+
+add_executable(
+    pstk_packet_generate_time_sync_sources
+    TkPacketGenerateTimeSyncSources.cpp
+)
+
+target_compile_features(
+    pstk_packet_generate_time_sync_sources
+    PRIVATE
+    cxx_std_17
+)
+
+target_include_directories(
+    pstk_packet_generate_time_sync_sources
+    PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/../include"
+    "${CMAKE_CURRENT_BINARY_DIR}/.."
+)
+
+target_link_libraries(
+    pstk_packet_generate_time_sync_sources
+    PRIVATE
+    pstk_packet_cpp_generator
+)
+
+set(PSTK_SERVICE_HOST_GENERATED_TEST_DIR "${CMAKE_CURRENT_BINARY_DIR}/service-host-generated")
+set(PSTK_SERVICE_HOST_GENERATED_REQUEST
+    "${PSTK_SERVICE_HOST_GENERATED_TEST_DIR}/WorldTimeSyncRequest.generated.h")
+set(PSTK_SERVICE_HOST_GENERATED_RESPONSE
+    "${PSTK_SERVICE_HOST_GENERATED_TEST_DIR}/WorldTimeSyncResponse.generated.h")
+
+add_custom_command(
+    OUTPUT
+    "${PSTK_SERVICE_HOST_GENERATED_REQUEST}"
+    "${PSTK_SERVICE_HOST_GENERATED_RESPONSE}"
+
+    COMMAND
+    "${CMAKE_COMMAND}"
+    -E
+    make_directory
+    "${PSTK_SERVICE_HOST_GENERATED_TEST_DIR}"
+
+    COMMAND
+    pstk_packet_generate_time_sync_sources
+    "${CMAKE_CURRENT_SOURCE_DIR}/../cli/tests/schemas/WorldTimeSyncRequest.json"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../cli/tests/schemas/server/WorldTimeSyncResponse.json"
+    "${PSTK_SERVICE_HOST_GENERATED_TEST_DIR}"
+
+    DEPENDS
+    pstk_packet_generate_time_sync_sources
+    "${CMAKE_CURRENT_SOURCE_DIR}/../cli/tests/schemas/WorldTimeSyncRequest.json"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../cli/tests/schemas/server/WorldTimeSyncResponse.json"
+
+    VERBATIM
+)
+
+add_custom_target(
+    pstk_service_host_time_sync_sources
+    DEPENDS
+    "${PSTK_SERVICE_HOST_GENERATED_REQUEST}"
+    "${PSTK_SERVICE_HOST_GENERATED_RESPONSE}"
+)
+
+add_executable(
+    pstk_service_host_time_sync_tests
+    TkServiceHostTimeSyncTests.cpp
+)
+
+add_dependencies(
+    pstk_service_host_time_sync_tests
+    pstk_service_host_time_sync_sources
+)
+
+target_compile_features(
+    pstk_service_host_time_sync_tests
+    PRIVATE
+    cxx_std_17
+)
+
+target_include_directories(
+    pstk_service_host_time_sync_tests
+    PRIVATE
+    "${PSTK_SERVICE_HOST_GENERATED_TEST_DIR}"
+)
+
+target_link_libraries(
+    pstk_service_host_time_sync_tests
+    PRIVATE
+    PSTK::ServiceHost
+    PSTK::Packet
+    GTest::gtest_main
+)
+
+gtest_discover_tests(
+    pstk_service_host_time_sync_tests
+    TEST_PREFIX "pstk.service-host.typed."
+)

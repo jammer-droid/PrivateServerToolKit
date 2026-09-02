@@ -594,7 +594,7 @@ GitHub Issue 본문의 readiness, template-first facade와 stable slice 문구�
 | H1 | Service Host shared target, public C ABI와 immutable registry | E4 delivery gate | Completed |
 | H2 | ProcessPacket, middleware와 one-way Service Job pipeline | H1 | Completed |
 | H3 | Request/response storage, Encode와 Output Adapter pipeline | H2 | Completed |
-| H4 | C++ typed facade와 TimeSync end-to-end acceptance | H3 | Pending |
+| H4 | C++ typed facade와 TimeSync end-to-end acceptance | H3 | Completed |
 
 ### E1 — Common result 확장
 
@@ -682,4 +682,4 @@ owned request bytes
 
 - **Verification:** supported/unsupported handler trait compile checks, one-way와 request/response facade unit tests, shared target을 통한 TimeSync integration test와 전체 CTest.
 
-H4까지 통과하면 #2의 로컬 design completion criteria를 충족한다. 실제 NetworkRuntime·WorldRuntime 연결, timeout·late/duplicate completion, client stub과 World drain 정책은 이 완료 판정에 포함하지 않는다. 다음 구현 진입점은 `$lean-implementation` Guide mode의 E1이다.
+H4까지 통과하여 #2의 로컬 design completion criteria를 충족했다. 실제 NetworkRuntime·WorldRuntime 연결, timeout·late/duplicate completion, client stub과 World drain 정책은 이 완료 판정에 포함하지 않는다.

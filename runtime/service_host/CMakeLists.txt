@@ -55,6 +55,7 @@ install(
 install(
     FILES
     include/pstk/service_host/TkServiceHost.h
+    include/pstk/service_host/TkServiceBinding.hpp
     "${CMAKE_CURRENT_BINARY_DIR}/pstk_service_host_export.h"
     DESTINATION include/pstk/service_host
 )

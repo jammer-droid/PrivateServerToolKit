@@ -7,6 +7,7 @@ add_executable(
     TkServiceHostTests.cpp
     TkServiceHostPipelineTests.cpp
     TkServiceHostResponseTests.cpp
+    TkServiceBindingTests.cpp
 )
 
 target_compile_features(
