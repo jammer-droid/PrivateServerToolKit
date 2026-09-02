@@ -589,7 +589,7 @@ GitHub Issue 본문의 readiness, template-first facade와 stable slice 문구�
 | E2 | `pstk_execution`의 bounded MPMC queue와 move-only WorkItem | E1 | Completed |
 | E3 | Bounded ready queue 기반 WorkerPool | E2 | Completed |
 | E4 | CAS serial Work Lane과 owning WorkerScheduler | E3 | Completed |
-| H1 | Service Host shared target, public C ABI와 immutable registry | E4 delivery gate | Pending |
+| H1 | Service Host shared target, public C ABI와 immutable registry | E4 delivery gate | Completed |
 | H2 | ProcessPacket, middleware와 one-way Service Job pipeline | H1 | Pending |
 | H3 | Request/response storage, Encode와 Output Adapter pipeline | H2 | Pending |
 | H4 | C++ typed facade와 TimeSync end-to-end acceptance | H3 | Pending |
