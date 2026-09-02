@@ -1,4 +1,4 @@
-#include <pstk/execution/TkSerialMailbox.hpp>
+#include <pstk/execution/TkSerialWorkLane.hpp>
 
 #include <gtest/gtest.h>
 
@@ -66,7 +66,7 @@ MoveOnlyValue::MoveOnlyValue(MoveOnlyValue &&other) noexcept : value(other.value
     other.gate = nullptr;
 }
 
-using Mailbox = pstk::execution::TkSerialMailbox<MoveOnlyValue>;
+using WorkLane = pstk::execution::TkSerialWorkLane<MoveOnlyValue>;
 
 struct DestructionProbe
 {
@@ -112,7 +112,7 @@ struct DestructionProbe
     bool active;
 };
 
-using ProbeMailbox = pstk::execution::TkSerialMailbox<DestructionProbe>;
+using ProbeWorkLane = pstk::execution::TkSerialWorkLane<DestructionProbe>;
 
 template <typename Predicate> bool WaitFor(Predicate &&predicate)
 {
@@ -131,135 +131,135 @@ template <typename Predicate> bool WaitFor(Predicate &&predicate)
 
 } // namespace
 
-TEST(TkSerialMailboxContract, RejectsInvalidCapacityAndPreservesOutput)
+TEST(TkSerialWorkLaneContract, RejectsInvalidCapacityAndPreservesOutput)
 {
-    std::unique_ptr<Mailbox> mailbox;
+    std::unique_ptr<WorkLane> workLane;
 
-    EXPECT_EQ(Mailbox::Create(2, nullptr), TK_ERROR_INVALID_ARGUMENT);
-    EXPECT_EQ(Mailbox::Create(0, &mailbox), TK_ERROR_INVALID_ARGUMENT);
-    EXPECT_EQ(mailbox.get(), nullptr);
-    EXPECT_EQ(Mailbox::Create(1, &mailbox), TK_ERROR_INVALID_ARGUMENT);
-    EXPECT_EQ(Mailbox::Create(3, &mailbox), TK_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(WorkLane::Create(2, nullptr), TK_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(WorkLane::Create(0, &workLane), TK_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(workLane.get(), nullptr);
+    EXPECT_EQ(WorkLane::Create(1, &workLane), TK_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(WorkLane::Create(3, &workLane), TK_ERROR_INVALID_ARGUMENT);
 
-    ASSERT_EQ(Mailbox::Create(2, &mailbox), TK_SUCCESS);
-    Mailbox *const original = mailbox.get();
-    EXPECT_EQ(Mailbox::Create(3, &mailbox), TK_ERROR_INVALID_ARGUMENT);
-    EXPECT_EQ(mailbox.get(), original);
+    ASSERT_EQ(WorkLane::Create(2, &workLane), TK_SUCCESS);
+    WorkLane *const original = workLane.get();
+    EXPECT_EQ(WorkLane::Create(3, &workLane), TK_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(workLane.get(), original);
 }
 
-TEST(TkSerialMailboxContract, PublishesWithSingleScheduleSignalAndPreservesFullInput)
+TEST(TkSerialWorkLaneContract, PublishesWithSingleScheduleSignalAndPreservesFullInput)
 {
-    std::unique_ptr<Mailbox> mailbox;
-    ASSERT_EQ(Mailbox::Create(2, &mailbox), TK_SUCCESS);
+    std::unique_ptr<WorkLane> workLane;
+    ASSERT_EQ(WorkLane::Create(2, &workLane), TK_SUCCESS);
 
     MoveOnlyValue first(1);
     bool shouldSchedule = false;
-    ASSERT_EQ(mailbox->TryPublish(std::move(first), &shouldSchedule), TK_SUCCESS);
+    ASSERT_EQ(workLane->TryPublish(std::move(first), &shouldSchedule), TK_SUCCESS);
     EXPECT_TRUE(shouldSchedule);
 
     MoveOnlyValue second(2);
     shouldSchedule = true;
-    ASSERT_EQ(mailbox->TryPublish(std::move(second), &shouldSchedule), TK_SUCCESS);
+    ASSERT_EQ(workLane->TryPublish(std::move(second), &shouldSchedule), TK_SUCCESS);
     EXPECT_FALSE(shouldSchedule);
 
     MoveOnlyValue rejected(3);
     shouldSchedule = true;
-    EXPECT_EQ(mailbox->TryPublish(std::move(rejected), &shouldSchedule), TK_ERROR_CAPACITY_EXCEEDED);
+    EXPECT_EQ(workLane->TryPublish(std::move(rejected), &shouldSchedule), TK_ERROR_CAPACITY_EXCEEDED);
     EXPECT_EQ(rejected.value, 3);
     EXPECT_TRUE(shouldSchedule);
 
     MoveOnlyValue nullOutput(4);
-    EXPECT_EQ(mailbox->TryPublish(std::move(nullOutput), nullptr), TK_ERROR_INVALID_ARGUMENT);
+    EXPECT_EQ(workLane->TryPublish(std::move(nullOutput), nullptr), TK_ERROR_INVALID_ARGUMENT);
     EXPECT_EQ(nullOutput.value, 4);
 }
 
-TEST(TkSerialMailboxContract, PopsFifoAndPreservesEmptyOutput)
+TEST(TkSerialWorkLaneContract, PopsFifoAndPreservesEmptyOutput)
 {
-    std::unique_ptr<Mailbox> mailbox;
-    ASSERT_EQ(Mailbox::Create(4, &mailbox), TK_SUCCESS);
-    EXPECT_TRUE(mailbox->IsQuiescent());
+    std::unique_ptr<WorkLane> workLane;
+    ASSERT_EQ(WorkLane::Create(4, &workLane), TK_SUCCESS);
+    EXPECT_TRUE(workLane->IsQuiescent());
 
     bool shouldSchedule = false;
-    ASSERT_EQ(mailbox->TryPublish(MoveOnlyValue(1), &shouldSchedule), TK_SUCCESS);
-    EXPECT_FALSE(mailbox->IsQuiescent());
-    ASSERT_EQ(mailbox->TryPublish(MoveOnlyValue(2), &shouldSchedule), TK_SUCCESS);
-    ASSERT_EQ(mailbox->BeginDrain(), TK_SUCCESS);
+    ASSERT_EQ(workLane->TryPublish(MoveOnlyValue(1), &shouldSchedule), TK_SUCCESS);
+    EXPECT_FALSE(workLane->IsQuiescent());
+    ASSERT_EQ(workLane->TryPublish(MoveOnlyValue(2), &shouldSchedule), TK_SUCCESS);
+    ASSERT_EQ(workLane->BeginDrain(), TK_SUCCESS);
 
     MoveOnlyValue output(100);
-    ASSERT_TRUE(mailbox->TryPop(&output));
+    ASSERT_TRUE(workLane->TryPop(&output));
     EXPECT_EQ(output.value, 1);
-    ASSERT_TRUE(mailbox->TryPop(&output));
+    ASSERT_TRUE(workLane->TryPop(&output));
     EXPECT_EQ(output.value, 2);
 
     output.value = 100;
-    EXPECT_FALSE(mailbox->TryPop(&output));
+    EXPECT_FALSE(workLane->TryPop(&output));
     EXPECT_EQ(output.value, 100);
 
     shouldSchedule = true;
-    ASSERT_EQ(mailbox->FinishDrain(&shouldSchedule), TK_SUCCESS);
+    ASSERT_EQ(workLane->FinishDrain(&shouldSchedule), TK_SUCCESS);
     EXPECT_FALSE(shouldSchedule);
-    EXPECT_TRUE(mailbox->IsQuiescent());
+    EXPECT_TRUE(workLane->IsQuiescent());
 }
 
-TEST(TkSerialMailboxContract, RejectsInvalidStateTransitionsAndPreservesOutput)
+TEST(TkSerialWorkLaneContract, RejectsInvalidStateTransitionsAndPreservesOutput)
 {
-    std::unique_ptr<Mailbox> mailbox;
-    ASSERT_EQ(Mailbox::Create(2, &mailbox), TK_SUCCESS);
+    std::unique_ptr<WorkLane> workLane;
+    ASSERT_EQ(WorkLane::Create(2, &workLane), TK_SUCCESS);
 
-    EXPECT_EQ(mailbox->BeginDrain(), TK_ERROR_INVALID_STATE);
+    EXPECT_EQ(workLane->BeginDrain(), TK_ERROR_INVALID_STATE);
     bool shouldSchedule = true;
-    EXPECT_EQ(mailbox->FinishDrain(&shouldSchedule), TK_ERROR_INVALID_STATE);
+    EXPECT_EQ(workLane->FinishDrain(&shouldSchedule), TK_ERROR_INVALID_STATE);
     EXPECT_TRUE(shouldSchedule);
 
-    ASSERT_EQ(mailbox->TryPublish(MoveOnlyValue(1), &shouldSchedule), TK_SUCCESS);
-    EXPECT_EQ(mailbox->FinishDrain(&shouldSchedule), TK_ERROR_INVALID_STATE);
+    ASSERT_EQ(workLane->TryPublish(MoveOnlyValue(1), &shouldSchedule), TK_SUCCESS);
+    EXPECT_EQ(workLane->FinishDrain(&shouldSchedule), TK_ERROR_INVALID_STATE);
     EXPECT_TRUE(shouldSchedule);
-    EXPECT_EQ(mailbox->BeginDrain(), TK_SUCCESS);
-    EXPECT_EQ(mailbox->BeginDrain(), TK_ERROR_INVALID_STATE);
+    EXPECT_EQ(workLane->BeginDrain(), TK_SUCCESS);
+    EXPECT_EQ(workLane->BeginDrain(), TK_ERROR_INVALID_STATE);
 
     MoveOnlyValue output(0);
-    ASSERT_TRUE(mailbox->TryPop(&output));
-    EXPECT_EQ(mailbox->FinishDrain(nullptr), TK_ERROR_INVALID_ARGUMENT);
-    ASSERT_EQ(mailbox->FinishDrain(&shouldSchedule), TK_SUCCESS);
-    EXPECT_EQ(mailbox->FinishDrain(&shouldSchedule), TK_ERROR_INVALID_STATE);
+    ASSERT_TRUE(workLane->TryPop(&output));
+    EXPECT_EQ(workLane->FinishDrain(nullptr), TK_ERROR_INVALID_ARGUMENT);
+    ASSERT_EQ(workLane->FinishDrain(&shouldSchedule), TK_SUCCESS);
+    EXPECT_EQ(workLane->FinishDrain(&shouldSchedule), TK_ERROR_INVALID_STATE);
 }
 
-TEST(TkSerialMailboxContract, FinishRechecksMessagesPublishedWhileDraining)
+TEST(TkSerialWorkLaneContract, FinishRechecksMessagesPublishedWhileDraining)
 {
-    std::unique_ptr<Mailbox> mailbox;
-    ASSERT_EQ(Mailbox::Create(2, &mailbox), TK_SUCCESS);
+    std::unique_ptr<WorkLane> workLane;
+    ASSERT_EQ(WorkLane::Create(2, &workLane), TK_SUCCESS);
 
     bool shouldSchedule = false;
-    ASSERT_EQ(mailbox->TryPublish(MoveOnlyValue(1), &shouldSchedule), TK_SUCCESS);
+    ASSERT_EQ(workLane->TryPublish(MoveOnlyValue(1), &shouldSchedule), TK_SUCCESS);
     ASSERT_TRUE(shouldSchedule);
-    ASSERT_EQ(mailbox->BeginDrain(), TK_SUCCESS);
+    ASSERT_EQ(workLane->BeginDrain(), TK_SUCCESS);
 
     MoveOnlyValue output(0);
-    ASSERT_TRUE(mailbox->TryPop(&output));
+    ASSERT_TRUE(workLane->TryPop(&output));
 
-    ASSERT_EQ(mailbox->TryPublish(MoveOnlyValue(2), &shouldSchedule), TK_SUCCESS);
+    ASSERT_EQ(workLane->TryPublish(MoveOnlyValue(2), &shouldSchedule), TK_SUCCESS);
     EXPECT_FALSE(shouldSchedule);
     shouldSchedule = false;
-    ASSERT_EQ(mailbox->FinishDrain(&shouldSchedule), TK_SUCCESS);
+    ASSERT_EQ(workLane->FinishDrain(&shouldSchedule), TK_SUCCESS);
     EXPECT_TRUE(shouldSchedule);
 
-    ASSERT_EQ(mailbox->BeginDrain(), TK_SUCCESS);
-    ASSERT_TRUE(mailbox->TryPop(&output));
+    ASSERT_EQ(workLane->BeginDrain(), TK_SUCCESS);
+    ASSERT_TRUE(workLane->TryPop(&output));
     EXPECT_EQ(output.value, 2);
-    ASSERT_EQ(mailbox->FinishDrain(&shouldSchedule), TK_SUCCESS);
+    ASSERT_EQ(workLane->FinishDrain(&shouldSchedule), TK_SUCCESS);
     EXPECT_FALSE(shouldSchedule);
 }
 
-TEST(TkSerialMailboxContract, ProducerWinsAfterFinishObservesEmpty)
+TEST(TkSerialWorkLaneContract, ProducerWinsAfterFinishObservesEmpty)
 {
-    std::unique_ptr<Mailbox> mailbox;
-    ASSERT_EQ(Mailbox::Create(2, &mailbox), TK_SUCCESS);
+    std::unique_ptr<WorkLane> workLane;
+    ASSERT_EQ(WorkLane::Create(2, &workLane), TK_SUCCESS);
 
     bool shouldSchedule = false;
-    ASSERT_EQ(mailbox->TryPublish(MoveOnlyValue(1), &shouldSchedule), TK_SUCCESS);
-    ASSERT_EQ(mailbox->BeginDrain(), TK_SUCCESS);
+    ASSERT_EQ(workLane->TryPublish(MoveOnlyValue(1), &shouldSchedule), TK_SUCCESS);
+    ASSERT_EQ(workLane->BeginDrain(), TK_SUCCESS);
     MoveOnlyValue output(0);
-    ASSERT_TRUE(mailbox->TryPop(&output));
+    ASSERT_TRUE(workLane->TryPop(&output));
 
     PublishGate gate;
     MoveOnlyValue item(2, &gate);
@@ -267,13 +267,13 @@ TEST(TkSerialMailboxContract, ProducerWinsAfterFinishObservesEmpty)
     std::atomic<bool> producerShouldSchedule{false};
     std::thread producer([&]() {
         bool producerSignal = false;
-        producerResult.store(mailbox->TryPublish(std::move(item), &producerSignal), std::memory_order_release);
+        producerResult.store(workLane->TryPublish(std::move(item), &producerSignal), std::memory_order_release);
         producerShouldSchedule.store(producerSignal, std::memory_order_release);
     });
 
     const bool moveStarted = WaitFor([&]() { return gate.moveStarted.load(std::memory_order_acquire); });
     shouldSchedule = true;
-    const TkResult finishResult = mailbox->FinishDrain(&shouldSchedule);
+    const TkResult finishResult = workLane->FinishDrain(&shouldSchedule);
 
     gate.allowMove.store(true, std::memory_order_release);
     producer.join();
@@ -284,27 +284,27 @@ TEST(TkSerialMailboxContract, ProducerWinsAfterFinishObservesEmpty)
     EXPECT_EQ(producerResult.load(std::memory_order_acquire), TK_SUCCESS);
     EXPECT_TRUE(producerShouldSchedule.load(std::memory_order_acquire));
 
-    ASSERT_EQ(mailbox->BeginDrain(), TK_SUCCESS);
-    ASSERT_TRUE(mailbox->TryPop(&output));
+    ASSERT_EQ(workLane->BeginDrain(), TK_SUCCESS);
+    ASSERT_TRUE(workLane->TryPop(&output));
     EXPECT_EQ(output.value, 2);
-    ASSERT_EQ(mailbox->FinishDrain(&shouldSchedule), TK_SUCCESS);
+    ASSERT_EQ(workLane->FinishDrain(&shouldSchedule), TK_SUCCESS);
     EXPECT_FALSE(shouldSchedule);
 }
 
-TEST(TkSerialMailboxContract, SupportsMultipleProducersWithOneDrainOwner)
+TEST(TkSerialWorkLaneContract, SupportsMultipleProducersWithOneDrainOwner)
 {
     constexpr int producerCount = 4;
     constexpr int valuesPerProducer = 250;
     constexpr int totalValues = producerCount * valuesPerProducer + 1;
 
-    std::unique_ptr<Mailbox> mailbox;
-    ASSERT_EQ(Mailbox::Create(64, &mailbox), TK_SUCCESS);
+    std::unique_ptr<WorkLane> workLane;
+    ASSERT_EQ(WorkLane::Create(64, &workLane), TK_SUCCESS);
 
     bool shouldSchedule = false;
-    ASSERT_EQ(mailbox->TryPublish(MoveOnlyValue(0), &shouldSchedule), TK_SUCCESS);
+    ASSERT_EQ(workLane->TryPublish(MoveOnlyValue(0), &shouldSchedule), TK_SUCCESS);
     ASSERT_TRUE(shouldSchedule);
-    ASSERT_EQ(mailbox->BeginDrain(), TK_SUCCESS);
-    EXPECT_EQ(mailbox->BeginDrain(), TK_ERROR_INVALID_STATE);
+    ASSERT_EQ(workLane->BeginDrain(), TK_SUCCESS);
+    EXPECT_EQ(workLane->BeginDrain(), TK_ERROR_INVALID_STATE);
 
     std::unique_ptr<std::atomic<int>[]> seen(new std::atomic<int>[totalValues]);
     for (int index = 0; index < totalValues; ++index)
@@ -326,7 +326,7 @@ TEST(TkSerialMailboxContract, SupportsMultipleProducersWithOneDrainOwner)
                 for (int attempt = 0; attempt < 1000000; ++attempt)
                 {
                     bool producerSignal = true;
-                    const TkResult result = mailbox->TryPublish(std::move(item), &producerSignal);
+                    const TkResult result = workLane->TryPublish(std::move(item), &producerSignal);
                     if (result == TK_SUCCESS)
                     {
                         if (producerSignal)
@@ -361,7 +361,7 @@ TEST(TkSerialMailboxContract, SupportsMultipleProducersWithOneDrainOwner)
     MoveOnlyValue output(-1);
     while (producerDone.load(std::memory_order_acquire) != producerCount)
     {
-        if (!mailbox->TryPop(&output))
+        if (!workLane->TryPop(&output))
         {
             std::this_thread::yield();
             continue;
@@ -384,7 +384,7 @@ TEST(TkSerialMailboxContract, SupportsMultipleProducersWithOneDrainOwner)
         producer.join();
     }
 
-    while (mailbox->TryPop(&output))
+    while (workLane->TryPop(&output))
     {
         if (output.value < 0 || output.value >= totalValues ||
             seen[output.value].fetch_add(1, std::memory_order_relaxed) != 0)
@@ -393,7 +393,7 @@ TEST(TkSerialMailboxContract, SupportsMultipleProducersWithOneDrainOwner)
         }
     }
 
-    ASSERT_EQ(mailbox->FinishDrain(&shouldSchedule), TK_SUCCESS);
+    ASSERT_EQ(workLane->FinishDrain(&shouldSchedule), TK_SUCCESS);
     EXPECT_FALSE(shouldSchedule);
     EXPECT_EQ(producerFailure.load(std::memory_order_relaxed), 0);
     for (int id = 0; id < totalValues; ++id)
@@ -402,16 +402,16 @@ TEST(TkSerialMailboxContract, SupportsMultipleProducersWithOneDrainOwner)
     }
 }
 
-TEST(TkSerialMailboxContract, DestroysQueuedItemsWhenMailboxIsDestroyed)
+TEST(TkSerialWorkLaneContract, DestroysQueuedItemsWhenWorkLaneIsDestroyed)
 {
     std::atomic<int> destructionCount{0};
     {
-        std::unique_ptr<ProbeMailbox> mailbox;
-        ASSERT_EQ(ProbeMailbox::Create(4, &mailbox), TK_SUCCESS);
+        std::unique_ptr<ProbeWorkLane> workLane;
+        ASSERT_EQ(ProbeWorkLane::Create(4, &workLane), TK_SUCCESS);
 
         bool shouldSchedule = false;
-        ASSERT_EQ(mailbox->TryPublish(DestructionProbe(&destructionCount), &shouldSchedule), TK_SUCCESS);
-        ASSERT_EQ(mailbox->TryPublish(DestructionProbe(&destructionCount), &shouldSchedule), TK_SUCCESS);
+        ASSERT_EQ(workLane->TryPublish(DestructionProbe(&destructionCount), &shouldSchedule), TK_SUCCESS);
+        ASSERT_EQ(workLane->TryPublish(DestructionProbe(&destructionCount), &shouldSchedule), TK_SUCCESS);
         EXPECT_EQ(destructionCount.load(std::memory_order_relaxed), 0);
     }
 
