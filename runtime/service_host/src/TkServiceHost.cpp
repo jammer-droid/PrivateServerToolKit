@@ -83,7 +83,17 @@ struct TkServiceJob final
     TkHostConnectionKey connectionKey{};
     void *serviceInstance = nullptr;
     TkRequestDestroyCallback destroyRequest = nullptr;
+    TkBindingType bindingType = TK_BINDING_TYPE_ONE_WAY;
     TkOneWayHandlerCallback invokeHandler = nullptr;
+
+    TkHostOutputCallbackInfo outputAdapter{};
+    uint16_t responsePacketId = 0U;
+    std::size_t responsePayloadBytes = 0U;
+    void *responseStorage = nullptr;
+    uint8_t *encodedResponse = nullptr;
+    TkResponseHandlerCallback invokeResponseHandler = nullptr;
+    TkResponseEncodeCallback encodeResponse = nullptr;
+    TkResponseDestroyCallback destroyResponse = nullptr;
 
     JobState state = JobState::Ready;
 };
@@ -95,6 +105,7 @@ inline constexpr const char *UnknownPacketId = "PSTK-SERVICE-HOST-UNKNOWN-PACKET
 inline constexpr const char *InvalidPayloadSizeId = "PSTK-SERVICE-HOST-INVALID-PAYLOAD-SIZE";
 inline constexpr const char *ExecutorSubmitFailedId = "PSTK-SERVICE-HOST-EXECUTOR-SUBMIT-FAILED";
 inline constexpr const char *HandlerFailedId = "PSTK-SERVICE-HOST-HANDLER-FAILED";
+inline constexpr const char *OutputFailedId = "PSTK-SERVICE-HOST-OUTPUT-FAILED";
 
 bool IsPowerOfTwo(const std::size_t value) noexcept
 {
@@ -329,29 +340,88 @@ bool TryAlignUp(const std::size_t value, const std::size_t alignment, std::size_
     return true;
 }
 
-TkResult AllocateOneWayJob(const TkHostConnectionKey connectionKey, const StoredService &service,
-                           const StoredBinding &binding, TkServiceJob **const outJob) noexcept
+struct ServiceJobLayout final
+{
+    std::size_t allocationAlignment = 0U;
+    std::size_t requestOffset = 0U;
+    std::size_t responseOffset = 0U;
+    std::size_t encodedResponseOffset = 0U;
+    std::size_t allocationSize = 0U;
+};
+
+bool TryAddSize(const std::size_t left, const std::size_t right, std::size_t *const outValue) noexcept
+{
+    if (left > std::numeric_limits<std::size_t>::max() - right)
+    {
+        return false;
+    }
+
+    *outValue = left + right;
+    return true;
+}
+
+bool TryBuildServiceJobLayout(const TkServiceBindingInfo &binding, ServiceJobLayout *const outLayout) noexcept
+{
+    if (outLayout == nullptr)
+    {
+        return false;
+    }
+
+    const std::size_t requestAlignment = binding.request.requestAlignment;
+    const std::size_t responseAlignment = binding.type == TK_BINDING_TYPE_REQUEST_RESPONSE
+                                              ? binding.operation.requestResponse.responseAlignment
+                                              : alignof(uint8_t);
+    const std::size_t allocationAlignment =
+        std::max(alignof(TkServiceJob), std::max(requestAlignment, responseAlignment));
+
+    ServiceJobLayout layout{};
+    layout.allocationAlignment = allocationAlignment;
+    if (!TryAlignUp(sizeof(TkServiceJob), requestAlignment, &layout.requestOffset) ||
+        !TryAddSize(layout.requestOffset, binding.request.requestSize, &layout.responseOffset))
+    {
+        return false;
+    }
+
+    if (binding.type == TK_BINDING_TYPE_REQUEST_RESPONSE)
+    {
+        if (!TryAlignUp(layout.responseOffset, responseAlignment, &layout.responseOffset) ||
+            !TryAddSize(layout.responseOffset, binding.operation.requestResponse.responseSize,
+                        &layout.encodedResponseOffset) ||
+            !TryAddSize(layout.encodedResponseOffset, binding.operation.requestResponse.payloadBytes,
+                        &layout.allocationSize))
+        {
+            return false;
+        }
+    }
+    else
+    {
+        layout.encodedResponseOffset = layout.responseOffset;
+        layout.allocationSize = layout.responseOffset;
+    }
+
+    *outLayout = layout;
+    return true;
+}
+
+TkResult AllocateServiceJob(const TkHostConnectionKey connectionKey, const TkHostOutputCallbackInfo outputAdapter,
+                            const StoredService &service, const StoredBinding &binding,
+                            TkServiceJob **const outJob) noexcept
 {
     if (outJob == nullptr)
     {
         return TK_ERROR_INVALID_ARGUMENT;
     }
 
-    const std::size_t requestAlignment = binding.info.request.requestAlignment;
-    const std::size_t allocationAlignment = std::max(alignof(TkServiceJob), requestAlignment);
-
-    std::size_t requestOffset = 0U;
-    if (!TryAlignUp(sizeof(TkServiceJob), requestAlignment, &requestOffset) ||
-        requestOffset > std::numeric_limits<std::size_t>::max() - binding.info.request.requestSize)
+    ServiceJobLayout layout{};
+    if (!TryBuildServiceJobLayout(binding.info, &layout))
     {
         return TK_ERROR_OUT_OF_MEMORY;
     }
 
-    const std::size_t allocationSize = requestOffset + binding.info.request.requestSize;
-
     // 전역 메모리 할당 함수를 직접 호출 (객체 생성자는 실행하지 않음)
     // 결과는 raw memory
-    void *const allocation = ::operator new(allocationSize, std::align_val_t(allocationAlignment), std::nothrow);
+    void *const allocation =
+        ::operator new(layout.allocationSize, std::align_val_t(layout.allocationAlignment), std::nothrow);
     if (allocation == nullptr)
     {
         return TK_ERROR_OUT_OF_MEMORY;
@@ -361,12 +431,28 @@ TkResult AllocateOneWayJob(const TkHostConnectionKey connectionKey, const Stored
     // 메모리를 확보하거나 지정된 위치를 받은 다음 T의 생성자 실행
     TkServiceJob *const job = new (allocation) TkServiceJob();
     job->allocation = allocation;
-    job->allocationAlignment = allocationAlignment;
-    job->requestStorage = static_cast<void *>(static_cast<unsigned char *>(allocation) + requestOffset);
+    job->allocationAlignment = layout.allocationAlignment;
+    job->requestStorage = static_cast<void *>(static_cast<unsigned char *>(allocation) + layout.requestOffset);
     job->connectionKey = connectionKey;
     job->serviceInstance = service.serviceInstance;
     job->destroyRequest = binding.info.request.destroyRequest;
-    job->invokeHandler = binding.info.operation.oneWay.invokeHandler;
+    job->bindingType = binding.info.type;
+    job->outputAdapter = outputAdapter;
+    if (binding.info.type == TK_BINDING_TYPE_ONE_WAY)
+    {
+        job->invokeHandler = binding.info.operation.oneWay.invokeHandler;
+    }
+    else
+    {
+        const TkRequestResponseBindingInfo &response = binding.info.operation.requestResponse;
+        job->responsePacketId = response.packetId;
+        job->responsePayloadBytes = response.payloadBytes;
+        job->responseStorage = static_cast<void *>(static_cast<unsigned char *>(allocation) + layout.responseOffset);
+        job->encodedResponse = static_cast<uint8_t *>(allocation) + layout.encodedResponseOffset;
+        job->invokeResponseHandler = response.invokeHandler;
+        job->encodeResponse = response.encodeResponse;
+        job->destroyResponse = response.destroyResponse;
+    }
     *outJob = job;
     return TK_SUCCESS;
 }
@@ -413,13 +499,8 @@ TkResult ProcessPacket(const TkServiceHost &host, const TkHostConnectionKey conn
         return TK_ERROR_INVALID_DATA;
     }
 
-    if (binding->info.type != TK_BINDING_TYPE_ONE_WAY)
-    {
-        return TK_ERROR_INVALID_STATE;
-    }
-
     TkServiceJob *job = nullptr;
-    const TkResult allocationResult = AllocateOneWayJob(connectionKey, *service, *binding, &job);
+    const TkResult allocationResult = AllocateServiceJob(connectionKey, host.outputAdapter, *service, *binding, &job);
     if (allocationResult != TK_SUCCESS)
     {
         return allocationResult;
@@ -457,7 +538,6 @@ TkResult ProcessPacket(const TkServiceHost &host, const TkHostConnectionKey conn
 
 TkResult InvokeOneWayHandler(TkServiceJob &job, const TkDiagnosticCallbackInfo diagnostic) noexcept
 {
-    job.state = JobState::Executed;
     const TkServiceContext context = {job.connectionKey};
     const TkResult result = job.invokeHandler(job.serviceInstance, &context, job.requestStorage);
     if (result != TK_SUCCESS)
@@ -466,6 +546,39 @@ TkResult InvokeOneWayHandler(TkServiceJob &job, const TkDiagnosticCallbackInfo d
     }
 
     return result;
+}
+
+TkResult InvokeRequestResponseHandler(TkServiceJob &job, const TkDiagnosticCallbackInfo diagnostic) noexcept
+{
+    const TkServiceContext context = {job.connectionKey};
+    const TkResult handlerResult =
+        job.invokeResponseHandler(job.serviceInstance, &context, job.requestStorage, job.responseStorage);
+    if (handlerResult != TK_SUCCESS)
+    {
+        EmitResultDiagnostic(HandlerFailedId, "service handler", handlerResult, diagnostic);
+        return handlerResult;
+    }
+
+    const TkMutableByteView output = {job.encodedResponse, job.responsePayloadBytes};
+    const TkResult encodeResult = job.encodeResponse(job.responseStorage, output, diagnostic);
+    job.destroyResponse(job.responseStorage);
+    if (encodeResult != TK_SUCCESS)
+    {
+        return encodeResult;
+    }
+
+    const TkHostOutputInfo outputInfo = {
+        job.connectionKey,
+        job.responsePacketId,
+        {job.encodedResponse, job.responsePayloadBytes},
+    };
+    const TkResult outputResult = job.outputAdapter.callback(&outputInfo, job.outputAdapter.userData);
+    if (outputResult != TK_SUCCESS)
+    {
+        EmitResultDiagnostic(OutputFailedId, "host output adapter", outputResult, diagnostic);
+    }
+
+    return outputResult;
 }
 
 } // namespace
@@ -649,7 +762,18 @@ PSTK_SERVICE_HOST_API TkResult TkServiceJobExecute(TkServiceJob *const job, cons
         return TK_ERROR_INVALID_STATE;
     }
 
-    return InvokeOneWayHandler(*job, diagnostic);
+    job->state = JobState::Executed;
+    if (job->bindingType == TK_BINDING_TYPE_ONE_WAY)
+    {
+        return InvokeOneWayHandler(*job, diagnostic);
+    }
+
+    if (job->bindingType == TK_BINDING_TYPE_REQUEST_RESPONSE)
+    {
+        return InvokeRequestResponseHandler(*job, diagnostic);
+    }
+
+    return TK_ERROR_INVALID_STATE;
 }
 
 PSTK_SERVICE_HOST_API void TkServiceJobDestroy(TkServiceJob *const job)
