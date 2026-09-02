@@ -7,6 +7,7 @@ include(GoogleTest)
 add_executable(
     pstk_execution_tests
     ExecutionTests.cpp
+    TkSerialMailboxTests.cpp
     TkWorkerPoolTests.cpp
 )
 

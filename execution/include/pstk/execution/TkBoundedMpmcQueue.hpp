@@ -147,6 +147,18 @@ template <typename T> class TkBoundedMpmcQueue final
         return true;
     }
 
+    // 현재 dequeuePosition이 가리키는 Slot이 Pop을 할 수 있는 상태인지 확인.
+    // 결과값을 반환하는 과정에서 Slot의 상태가 변경될 수 있음.
+    bool HasReadyItem() const noexcept
+    {
+        const std::size_t position = dequeuePosition_.load(std::memory_order_relaxed);
+
+        const Slot &slot = slots_[position & capacityMask_];
+        const std::size_t sequence = slot.sequence.load(std::memory_order_acquire);
+
+        return SequenceDifference(sequence, position + 1) == 0;
+    }
+
   private:
     explicit TkBoundedMpmcQueue(const std::size_t capacity)
         : slots_(new Slot[capacity]), capacity_(capacity), capacityMask_(capacity - 1)
