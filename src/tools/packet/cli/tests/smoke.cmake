@@ -17,12 +17,13 @@ if(IS_DIRECTORY "${_cli_path}")
     message(FATAL_ERROR "PSTK_PACKET_CLI must be a file, not a directory: ${_cli_path}")
 endif()
 
-# tests -> cli -> packet -> tools -> repository root
+# tests -> cli -> packet -> tools -> src -> repository root
 get_filename_component(_tests_dir "${CMAKE_CURRENT_LIST_DIR}" ABSOLUTE)
 get_filename_component(_cli_source_dir "${_tests_dir}" DIRECTORY)
 get_filename_component(_packet_source_dir "${_cli_source_dir}" DIRECTORY)
 get_filename_component(_tools_source_dir "${_packet_source_dir}" DIRECTORY)
-get_filename_component(_repo_root "${_tools_source_dir}" DIRECTORY)
+get_filename_component(_src_source_dir "${_tools_source_dir}" DIRECTORY)
+get_filename_component(_repo_root "${_src_source_dir}" DIRECTORY)
 
 set(_schema_source_dir "${_tests_dir}/schemas")
 if(NOT IS_DIRECTORY "${_schema_source_dir}")

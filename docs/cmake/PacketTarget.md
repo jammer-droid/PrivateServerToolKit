@@ -1,6 +1,6 @@
 # Packet DLL CMake target 해설
 
-이 문서는 `tools/packet/CMakeLists.txt`에 정의된 Packet DLL target을 설명한다. 현재 목표는 다음과 같다.
+이 문서는 `src/tools/packet/CMakeLists.txt`에 정의된 Packet DLL target을 설명한다. 현재 목표는 다음과 같다.
 
 - Packet Tool 구현을 플랫폼별 shared library로 빌드한다.
 - 외부에 공개할 C API만 명시적으로 export한다.
@@ -174,10 +174,10 @@ target_include_directories(
 $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 ```
 
-현재 `CMakeLists.txt`가 `tools/packet`에 있으므로 source 경로는 다음과 같다.
+현재 `CMakeLists.txt`가 `src/tools/packet`에 있으므로 source 경로는 다음과 같다.
 
 ```text
-tools/packet/include
+src/tools/packet/include
 └─ pstk/packet/PacketToolApi.h
 ```
 
@@ -219,11 +219,12 @@ cmake --preset dev
 Source tree                         Build tree
 PrivateServerToolKit/               PrivateServerToolKit/out/build/dev/
 ├─ CMakeLists.txt                   ├─ CMakeCache.txt
-└─ tools/                           ├─ 생성된 빌드 시스템 파일
-   └─ packet/                       └─ tools/packet/
-      ├─ CMakeLists.txt                ├─ pstk_packet_export.h
-      ├─ include/                       └─ library/test 빌드 결과
-      └─ src/
+└─ src/                             ├─ 생성된 빌드 시스템 파일
+   └─ tools/                        └─ tools/packet/
+      └─ packet/                       ├─ pstk_packet_export.h
+         ├─ CMakeLists.txt            └─ library/test 빌드 결과
+         ├─ include/
+         └─ src/
 ```
 
 여기서 **같은 build tree**라는 말은 target들이 같은 `CMakeLists.txt` 파일에 정의되어 있다는 뜻이 아니다. 루트에서 시작한 한 번의 configure 과정에 `add_subdirectory()`로 연결되어, 같은 CMake target graph에 포함되었다는 뜻이다.
@@ -232,11 +233,11 @@ PrivateServerToolKit/               PrivateServerToolKit/out/build/dev/
 
 ```text
 Root CMakeLists.txt
-└─ add_subdirectory(tools/packet)
-   └─ tools/packet/CMakeLists.txt
+└─ add_subdirectory(src/tools/packet tools/packet)
+   └─ src/tools/packet/CMakeLists.txt
       ├─ add_library(pstk_packet ...)
       └─ add_subdirectory(tests)
-         └─ tools/packet/tests/CMakeLists.txt
+         └─ src/tools/packet/tests/CMakeLists.txt
             ├─ add_executable(pstk_packet_smoke ...)
             └─ target_link_libraries(
                    pstk_packet_smoke
@@ -445,7 +446,7 @@ if(BUILD_TESTING)
 endif()
 ```
 
-루트 `CMakeLists.txt`의 `include(CTest)`가 `BUILD_TESTING` option을 제공하고, 이 값이 `ON`일 때 `tools/packet/tests/CMakeLists.txt`를 현재 target graph에 포함한다.
+루트 `CMakeLists.txt`의 `include(CTest)`가 `BUILD_TESTING` option을 제공하고, 이 값이 `ON`일 때 `src/tools/packet/tests/CMakeLists.txt`를 현재 target graph에 포함한다.
 
 ```text
 BUILD_TESTING=ON

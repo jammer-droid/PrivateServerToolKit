@@ -19,14 +19,14 @@ golden bytes, xUnit 검증 범위와 dependency 순서가 있는 구현 slice를
 
 - C# generator는 `AllTypes`와 같은 `PacketDescriptor`에서 `record struct`,
   `PayloadVersion`, `PayloadBytes`, `TryEncode`와 `TryDecode`를 생성할 수 있다.
-- `tools/packet/support/csharp/TkPacketCodecSupport.cs`는 8개 정수 primitive의
+- `src/tools/packet/support/csharp/TkPacketCodecSupport.cs`는 8개 정수 primitive의
   little-endian read/write를 제공한다.
 - CMake custom command는 같은 `AllTypes` descriptor로
   `AllTypes.generated.h`와 `AllTypes.generated.cs`를 함께 생성해 선택한
   Debug/Release build tree에 남긴다.
 - `CMakePresets.json`은 대칭적인 Debug/Release configure, build와 test
   preset을 제공한다.
-- `dotnet/tests/packet/PstkPacketTests.csproj`는 generated C# source와 canonical
+- `src/dotnet/tests/packet/PstkPacketTests.csproj`는 generated C# source와 canonical
   support source를 `net8.0`으로 compile하고 xUnit/VSTest로 실행한다.
 - C++과 C# generated codec test는 동일한 32-byte golden wire와 integer
   boundary를 검증한다.
@@ -41,8 +41,8 @@ fixture를 요구한다. 이 design은 별도 fixture file 대신 양쪽 테스�
 
 - 같은 `AllTypes` descriptor에서 C++/C# test source를 함께 생성하고 build
   tree에 보존하는 CMake 경로
-- `dotnet/tests/packet/PstkPacketTests.csproj`와 공용
-  `dotnet/Directory.Build.props`
+- `src/dotnet/tests/packet/PstkPacketTests.csproj`와 공용
+  `src/dotnet/Directory.Build.props`
 - `net8.0`, xUnit v3와 VSTest 기반 `dotnet build`/`dotnet test`
 - Debug/Release generated source 경로와 이에 대응하는 CMake preset
 - 8개 정수 primitive의 boundary, golden wire와 C# failure 계약 검증
@@ -125,7 +125,7 @@ CMake preset은 native build configuration만 소유하며 `.NET` 명령을 포�
 ## .NET project 계약
 
 ```text
-dotnet/
+src/dotnet/
   Directory.Build.props
   tests/
     packet/
@@ -145,20 +145,20 @@ dotnet/
 - `PstkPacketTests.csproj`는 CMake를 실행하거나 CMake target을 의존성으로
   선언하지 않는다.
 
-`dotnet/Directory.Build.props`는 설정별 generated source 경로를 직접
+`src/dotnet/Directory.Build.props`는 설정별 generated source 경로를 직접
 기술한다. 경로 계산 helper를 만들지 않고 읽기 쉬운 상대 경로를 유지한다.
 
 ```xml
 <Project>
   <PropertyGroup Condition="'$(Configuration)' == 'Debug' and '$(PstkGeneratedSourceDir)' == ''">
     <PstkGeneratedSourceDir>
-      $(MSBuildThisFileDirectory)../out/build/dev/tools/packet/tests/generated
+      $(MSBuildThisFileDirectory)../../out/build/dev/tools/packet/tests/generated
     </PstkGeneratedSourceDir>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)' == 'Release' and '$(PstkGeneratedSourceDir)' == ''">
     <PstkGeneratedSourceDir>
-      $(MSBuildThisFileDirectory)../out/build/release/tools/packet/tests/generated
+      $(MSBuildThisFileDirectory)../../out/build/release/tools/packet/tests/generated
     </PstkGeneratedSourceDir>
   </PropertyGroup>
 </Project>
@@ -286,8 +286,8 @@ diagnostic test를 추가하지 않는다.
 - **Delivered outcome:** `PstkPacketTests.csproj`가 build tree의 generated C#
   source와 source tree의 canonical support source를 함께 compile한다.
 - **Dependency:** I3-S1.
-- **Relevant seam:** `dotnet/Directory.Build.props`,
-  `dotnet/tests/packet/PstkPacketTests.csproj`.
+- **Relevant seam:** `src/dotnet/Directory.Build.props`,
+  `src/dotnet/tests/packet/PstkPacketTests.csproj`.
 - **변경:** Debug/Release generated path, `net8.0`, xUnit v3/VSTest package와
   두 `Compile Include`를 추가한다. Generated source가 없으면 원인과 선행
   CMake build를 설명하는 오류를 제공한다.
@@ -324,8 +324,8 @@ cmake --preset dev
 cmake --build --preset build-dev --target pstk_packet_generated_codec_tests
 ctest --preset test-dev -R '^pstk\.packet\.generated-codec\.'
 
-dotnet build dotnet/tests/packet/PstkPacketTests.csproj -c Debug
-dotnet test dotnet/tests/packet/PstkPacketTests.csproj -c Debug --no-build
+dotnet build src/dotnet/tests/packet/PstkPacketTests.csproj -c Debug
+dotnet test src/dotnet/tests/packet/PstkPacketTests.csproj -c Debug --no-build
 ```
 
 Release:
@@ -335,8 +335,8 @@ cmake --preset release
 cmake --build --preset build-release --target pstk_packet_generated_codec_tests
 ctest --preset test-release -R '^pstk\.packet\.generated-codec\.'
 
-dotnet build dotnet/tests/packet/PstkPacketTests.csproj -c Release
-dotnet test dotnet/tests/packet/PstkPacketTests.csproj -c Release --no-build
+dotnet build src/dotnet/tests/packet/PstkPacketTests.csproj -c Release
+dotnet test src/dotnet/tests/packet/PstkPacketTests.csproj -c Release --no-build
 ```
 
 Issue 완료 전에는 전체 native regression도 한 번 확인한다.

@@ -17,10 +17,10 @@ option(
 # ctest 실행 -> test 프레임워크 실행 -> 전체 테스트 결과 집계
 include(CTest)
 
-add_subdirectory(common)
-add_subdirectory(runtime/service_host)
-add_subdirectory(execution)
+add_subdirectory(src/common common)
+add_subdirectory(src/runtime/service_host runtime/service_host)
+add_subdirectory(src/execution execution)
 
 if (PSTK_BUILD_PACKET_TOOL)
-    add_subdirectory(tools/packet)
+    add_subdirectory(src/tools/packet tools/packet)
 endif ()

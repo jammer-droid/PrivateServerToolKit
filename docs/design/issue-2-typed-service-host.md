@@ -66,7 +66,7 @@ Host Input Adapter
 ### 제공 형태와 public binary 경계
 
 - Service Host는 일반 C++17 library로 제공하며 compiled runtime의 기본 배포 형태는 Windows DLL과 Linux/macOS shared library다.
-- Module source는 `runtime/service_host/`, CMake target은 `pstk_service_host`, consumer alias는 `PSTK::ServiceHost`를 사용한다. Public C ABI header는 `pstk/service_host/TkServiceHost.h`, C++17 facade는 `pstk/service_host/TkServiceBinding.hpp`에 둔다.
+- Module source는 `src/runtime/service_host/`, CMake target은 `pstk_service_host`, consumer alias는 `PSTK::ServiceHost`를 사용한다. Public C ABI header는 `pstk/service_host/TkServiceHost.h`, C++17 facade는 `pstk/service_host/TkServiceBinding.hpp`에 둔다.
 - 모든 ToolKit shared-library public binary seam은 [ADR 0006](../adr/0006-fix-shared-library-public-boundary-to-c-abi.md)에 따라 `extern "C"` 함수, fixed-width scalar, C-compatible POD, function pointer와 opaque handle로 고정한다. STL, exception, RTTI, template, reference와 compiler-dependent C++ class layout을 export하지 않는다.
 - Template/type-traits 검증과 move-only RAII 편의는 `pstk::service` namespace의 consumer-compiled C++ facade가 담당한다. Host의 registry, pipeline state와 핵심 정책은 compiled runtime에 둔다. 첫 버전의 필수 사용 경로는 template-first 명시적 등록이며 전역 static initializer, attribute scanning과 project-wide discovery는 제공하지 않는다. Macro는 추가하더라도 이 facade를 감싸는 얇은 문법 편의로 제한하며 첫 완료 조건으로 삼지 않는다.
 - C++ facade는 packet 타입과 handler의 호환성을 compile time에 검증하고, generated metadata·borrowed service instance·Decode/파괴·handler 호출 thunk를 C ABI binding descriptor로 만든다. Host DLL은 service class나 member-function pointer의 C++ 표현을 알지 않는다.
@@ -451,7 +451,7 @@ TkResult OnTimeSync(const TkServiceContext& context,
 ### 별도 공용 실행 계층과 레퍼런스
 
 - 기존 header-only Common은 기초 타입·byte view·result·diagnostic 계약으로 유지한다. 실행 도구를 이 계층에 섞거나 generated codec consumer에 runtime binary 의존성을 강제하지 않는다.
-- NetworkRuntime·Host Input Adapter·향후 WorldRuntime이 공유할 queue와 scheduling 도구는 `execution/`의 internal STATIC target `pstk_execution`, namespace `pstk::execution`으로 구분한다. 외부 설치·public DLL ABI 대상이 아니며 각 runtime component가 내부 링크한다.
+- NetworkRuntime·Host Input Adapter·향후 WorldRuntime이 공유할 queue와 scheduling 도구는 `src/execution/`의 internal STATIC target `pstk_execution`, namespace `pstk::execution`으로 구분한다. 외부 설치·public DLL ABI 대상이 아니며 각 runtime component가 내부 링크한다.
 - Akka의 mailbox/job queue와 실행 예약 구조를 레퍼런스로 삼아 예약 상태를 Work Lane 안에 캡슐화한다. Producer publish와 worker의 release 후 recheck가 서로 보완해 drain 종료 경쟁의 lost wakeup을 닫는다.
 - Nakama의 match/tick 구조는 향후 WorldRuntime이 서비스 입력을 소비하는 방식을 설계할 때 참고한다. 이번 Host에 match/room 정책을 넣는 근거로 삼지 않는다.
 
@@ -599,14 +599,14 @@ GitHub Issue 본문의 readiness, template-first facade와 stable slice 문구�
 ### E1 — Common result 확장
 
 - **Outcome:** 기존 `TkResult`에 `TK_ERROR_INVALID_STATE = -7`, `TK_ERROR_CAPACITY_EXCEEDED = -8`, `TK_ERROR_REJECTED = -9`를 append한다.
-- **Seam:** `common/include/pstk/TkResult.h`의 project-wide control-flow contract.
+- **Seam:** `src/common/include/pstk/TkResult.h`의 project-wide control-flow contract.
 - **Invariant:** 기존 `0`, `-1`~`-6` numeric ABI를 변경하지 않고 모듈별 result를 추가하지 않는다.
 - **Acceptance:** C/C++ Common contract가 모든 numeric value를 고정하고 기존 Packet Tool source가 새 값 추가로 영향을 받지 않는다.
 - **Verification:** Common contract compile/test와 전체 configure/build/CTest.
 
 ### E2 — Bounded MPMC queue와 WorkItem
 
-- **Outcome:** `execution/` internal STATIC target, `TkBoundedMpmcQueue<T>`와 `TkWorkItem`을 제공한다.
+- **Outcome:** `src/execution/` internal STATIC target, `TkBoundedMpmcQueue<T>`와 `TkWorkItem`을 제공한다.
 - **Dependency:** E1.
 - **Seam:** 여러 producer와 consumer 사이의 move-only bounded admission과 arbitrary work lifecycle.
 - **Invariant:** Full/empty 실패는 caller input/out을 보존하고, accepted item은 정확히 한 owner와 정확히 한 destroy path를 가진다. Queue hot path에는 allocation이 없다.
@@ -633,7 +633,7 @@ GitHub Issue 본문의 readiness, template-first facade와 stable slice 문구�
 
 ### H1 — Public ABI와 immutable registry
 
-- **Outcome:** `runtime/service_host/`의 `pstk_service_host` shared target, public C header, module version query와 Configuring/Ready Host registry를 제공한다.
+- **Outcome:** `src/runtime/service_host/`의 `pstk_service_host` shared target, public C header, module version query와 Configuring/Ready Host registry를 제공한다.
 - **Dependency:** E4 delivery gate. Host target에는 `pstk_execution` link dependency를 추가하지 않는다.
 - **Seam:** `TkServiceHostCreate`, service-level descriptor 등록, `FinalizeRegistration`, `Destroy`.
 - **Invariant:** 모든 C ABI descriptor를 방어적으로 검증·복사하고 failed registration/finalize는 기존 상태를 보존한다. 같은 Host의 PacketId는 하나의 binding만 가진다.
@@ -664,7 +664,7 @@ GitHub Issue 본문의 readiness, template-first facade와 stable slice 문구�
 - **Dependency:** H3.
 - **Seam:** typed C++ service declaration을 stable C ABI descriptor/thunk와 startup registration으로 변환한다.
 - **Invariant:** Packet 타입과 handler를 모두 명시하고 지원 signature·`noexcept` 호환성을 compile time에 검증한다. Facade는 registry나 scheduling state를 소유하지 않는다.
-- **Acceptance:** 기존 [WorldTimeSyncRequest](../../tools/packet/cli/tests/schemas/WorldTimeSyncRequest.json)와 [WorldTimeSyncResponse](../../tools/packet/cli/tests/schemas/server/WorldTimeSyncResponse.json)을 사용해 아래 흐름을 특정 PrivateServer 없이 완료한다.
+- **Acceptance:** 기존 [WorldTimeSyncRequest](../../src/tools/packet/cli/tests/schemas/WorldTimeSyncRequest.json)와 [WorldTimeSyncResponse](../../src/tools/packet/cli/tests/schemas/server/WorldTimeSyncResponse.json)을 사용해 아래 흐름을 특정 PrivateServer 없이 완료한다.
 
 ```text
 owned request bytes

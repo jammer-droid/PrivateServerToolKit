@@ -1,4 +1,4 @@
-# common/CMakeLists.txt
+# src/common/CMakeLists.txt
 
 add_library(
     pstk_common

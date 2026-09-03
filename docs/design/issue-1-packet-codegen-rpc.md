@@ -185,9 +185,9 @@ TkEmitDiagnostic
 
 #### 4. Common C/C++ 계약 테스트 추가
 
-루트 CMake project를 `LANGUAGES C CXX`로 구성하고 `common/tests/`에 `pstk_common_contract_c`, `pstk_common_contract_cpp` 테스트 target을 둔다. Common은 header-only `INTERFACE` target이므로 언어 표준을 consumer에게 전파하지 않고, C11/C++17 요구사항은 각 테스트 target에 `PRIVATE`로 지정한다. Common 테스트는 `PSTK_BUILD_PACKET_TOOL=OFF`인 build에서도 구성·빌드·실행되어야 한다.
+루트 CMake project를 `LANGUAGES C CXX`로 구성하고 `src/common/tests/`에 `pstk_common_contract_c`, `pstk_common_contract_cpp` 테스트 target을 둔다. Common은 header-only `INTERFACE` target이므로 언어 표준을 consumer에게 전파하지 않고, C11/C++17 요구사항은 각 테스트 target에 `PRIVATE`로 지정한다. Common 테스트는 `PSTK_BUILD_PACKET_TOOL=OFF`인 build에서도 구성·빌드·실행되어야 한다.
 
-개발 의존성은 root `vcpkg.json`의 `tests` feature로 관리한다. C 계약 테스트는 CTest 실행 파일로 유지하고 C++ 계약 테스트는 GoogleTest와 `gtest_discover_tests()`를 사용한다. GoogleTest 탐색은 `common/tests/` 안에서만 수행하여 `BUILD_TESTING=OFF`인 Common consumer가 테스트 의존성을 요구하지 않게 한다.
+개발 의존성은 root `vcpkg.json`의 `tests` feature로 관리한다. C 계약 테스트는 CTest 실행 파일로 유지하고 C++ 계약 테스트는 GoogleTest와 `gtest_discover_tests()`를 사용한다. GoogleTest 탐색은 `src/common/tests/` 안에서만 수행하여 `BUILD_TESTING=OFF`인 Common consumer가 테스트 의존성을 요구하지 않게 한다.
 
 테스트 구조:
 
@@ -495,7 +495,7 @@ language-specific public compile API
 ```
 
 - `PacketCompiler`, `PacketCodeGenerator`와 `GeneratedFile`은 Packet Tool 내부 C++ 타입으로 유지하고 DLL ABI에 export하지 않는다.
-- Root `common`은 기존 C-compatible header-only 계약만 소유하고 Packet generation 오케스트레이션을 소유하지 않는다.
+- `src/common`은 기존 C-compatible header-only 계약만 소유하고 Packet generation 오케스트레이션을 소유하지 않는다.
 - 공통 `PacketCompiler`는 schema compile부터 생성 파일 commit까지 순서와 failure atomicity를 소유한다.
 - 언어별 generator는 `PacketDescriptor` 하나를 `GeneratedFile` 하나로 변환한다. Packet 개수에는 별도 상한을 두지 않는다.
 - Batch의 모든 source를 메모리에서 완성한 뒤 file commit을 시작한다.
@@ -533,7 +533,7 @@ Pointer, string, callback, invalid argument, diagnostic과 file I/O 계약은 `T
 - 16/32/64-bit signed·unsigned integer는 `System.Buffers.Binary.BinaryPrimitives`의 little-endian operation을 사용하고 8-bit integer는 직접 indexing한다.
 - Gameplay semantic validation은 generated codec에 추가하지 않는다.
 
-`TkPacketCodecSupport.cs`는 packet마다 생성하지 않고 `tools/packet/support/csharp/`의 고정 source로 유지한다. Phase 3 배포 폴더에 이 source를 함께 제공하며, consumer가 generated C# source와 함께 자신의 .NET 프로젝트에서 컴파일한다.
+`TkPacketCodecSupport.cs`는 packet마다 생성하지 않고 `src/tools/packet/support/csharp/`의 고정 source로 유지한다. Phase 3 배포 폴더에 이 source를 함께 제공하며, consumer가 generated C# source와 함께 자신의 .NET 프로젝트에서 컴파일한다.
 
 ### 검증 경계
 
@@ -555,7 +555,7 @@ CMake/CTest는 `dotnet`을 탐색하거나 `.csproj`를 build/test하지 않는�
 - Outcome: 기존 C++ 동작을 변경하지 않고 `PacketCompiler`, `PacketCodeGenerator`, `GeneratedFile`과 언어 독립 file committer를 Packet Tool 내부에 추출한다.
 - Dependency: Phase 1 완료.
 - Seam: `PacketDescriptorSet` 이후의 language-specific source generation.
-- Invariant: C++ public API, generated header 파일명·내용, failure atomicity와 commit 정책을 유지하고 root `common`을 확장하지 않는다.
+- Invariant: C++ public API, generated header 파일명·내용, failure atomicity와 commit 정책을 유지하고 `src/common`을 확장하지 않는다.
 - Acceptance: 기존 C++ compile path가 공통 pipeline을 사용하며 C++ compiler/generator/file-commit 검증이 기존과 동일하게 통과한다.
 - Verification: 새 세부 테스트를 추가하지 않고 기존 Packet C++ 테스트를 regression gate로 사용한다.
 
@@ -687,7 +687,7 @@ CLI는 **INI 설정이 실제 생성에 반영되는지**만 직접 실행해 �
 - Namespace 지정/생략이 생성 결과에 반영되는지 확인한다.
 - 배포 폴더의 CLI로 위 설정 적용을 확인하고 사용 명령과 결과를 기록한다. 새로운 namespace 생략 동작 자체의 검증은 P3-S1의 library/generator 범위에서 담당한다.
 
-수동 검증 진입점은 `tools/packet/cli/tests/smoke.cmake`이며 사용법과 fixture 출처는 [CLI smoke 가이드](../../tools/packet/cli/tests/README.md)에 기록한다.
+수동 검증 진입점은 `src/tools/packet/cli/tests/smoke.cmake`이며 사용법과 fixture 출처는 [CLI smoke 가이드](../../src/tools/packet/cli/tests/README.md)에 기록한다.
 
 - Fixture는 실제 PrivateServer의 `MovementInput`, `WorldTimeSyncRequest`, `WorldTimeSyncResponse` V1 wire layout을 schema로 옮긴다. 앞의 두 파일은 fixture 루트에, 응답 파일은 하위 directory에 둔다. World의 별도 semantic validation을 복제하지 않는다.
 - C++/C# 각각 단일 파일 입력과 namespace 지정, 전체 directory 입력과 namespace 생략을 실행한다. 단일 입력은 생성 파일 1개, directory 입력은 하위 경로를 포함한 생성 파일 3개가 나와야 한다.
@@ -702,7 +702,7 @@ CLI는 **INI 설정이 실제 생성에 반영되는지**만 직접 실행해 �
 
 - Outcome: Public compile API와 두 generator가 namespace 없는 source 생성을 지원한다.
 - Dependency: Phase 2와 Issue #3 완료.
-- Seam: `TkPacketCompileInfo::namespaceName`, `tools/packet/src/generator/cpp/`, `tools/packet/src/generator/csharp/`와 기존 Packet 테스트.
+- Seam: `TkPacketCompileInfo::namespaceName`, `src/tools/packet/src/generator/cpp/`, `src/tools/packet/src/generator/csharp/`와 기존 Packet 테스트.
 - Invariant: ABI layout, wire layout, non-empty namespace 생성 내용과 file commit 정책을 유지한다.
 - Acceptance: null/empty namespace가 성공하고 두 언어 모두 namespace wrapper 없이 DTO를 생성한다. 기존 namespace 지정 경로도 유지된다.
 - Verification: 기존 compiler/generator 검증에 namespace 생략 case만 보완한다. 생성 source가 해당 언어에서 컴파일되는지 확인하되 .NET은 기존 독립 toolchain을 사용하며 CMake/CTest에 연결하지 않는다.

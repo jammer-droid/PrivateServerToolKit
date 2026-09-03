@@ -23,7 +23,7 @@ option(
 include(CTest)
 
 if(PSTK_BUILD_PACKET_TOOL)
-    add_subdirectory(tools/packet)
+    add_subdirectory(src/tools/packet tools/packet)
 endif()
 ```
 
@@ -138,7 +138,7 @@ cmake -S . -B out/build/no-tests -DBUILD_TESTING=OFF
 
 ```cmake
 if(PSTK_BUILD_PACKET_TOOL)
-    add_subdirectory(tools/packet)
+    add_subdirectory(src/tools/packet tools/packet)
 endif()
 ```
 
@@ -146,7 +146,7 @@ endif()
 
 ```text
 PSTK_BUILD_PACKET_TOOL=ON
-    -> tools/packet/CMakeLists.txt를 읽음
+    -> src/tools/packet/CMakeLists.txt를 읽음
     -> Packet Tool target을 전체 빌드에 포함
 
 PSTK_BUILD_PACKET_TOOL=OFF
@@ -156,11 +156,11 @@ PSTK_BUILD_PACKET_TOOL=OFF
 
 `add_subdirectory()`는 디렉터리를 단순히 표시하는 명령이 아니다. 지정한 디렉터리의 `CMakeLists.txt`를 처리하고, 그 안에 정의된 target을 현재 빌드 시스템에 추가한다.
 
-현재 `tools/packet/CMakeLists.txt`에 실제 target이 없다면 Packet Tool 옵션이 `ON`이어도 아직 DLL은 생성되지 않는다.
+현재 `src/tools/packet/CMakeLists.txt`에 실제 target이 없다면 Packet Tool 옵션이 `ON`이어도 아직 DLL은 생성되지 않는다.
 
 ## Packet target에 둔 설정
 
-다음 설정은 각 target의 요구사항이므로 루트 전역 설정이 아니라 `tools/packet/CMakeLists.txt`의 Packet target에 지정한다.
+다음 설정은 각 target의 요구사항이므로 루트 전역 설정이 아니라 `src/tools/packet/CMakeLists.txt`의 Packet target에 지정한다.
 
 ```cmake
 add_library(pstk_packet SHARED ...)

@@ -5,10 +5,10 @@
   <!-- $(MSBuildThisFileDirectory): props 파일 위치 -->
 
   <PropertyGroup Condition="'$(Configuration)' == 'Debug' and '$(PstkGeneratedSourceDir)' == ''">
-    <PstkGeneratedSourceDir>$(MSBuildThisFileDirectory)../out/build/dev/tools/packet/tests/generated</PstkGeneratedSourceDir>
+    <PstkGeneratedSourceDir>$(MSBuildThisFileDirectory)../../out/build/dev/tools/packet/tests/generated</PstkGeneratedSourceDir>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)' == 'Release' and '$(PstkGeneratedSourceDir)' == ''">
-    <PstkGeneratedSourceDir>$(MSBuildThisFileDirectory)../out/build/release/tools/packet/tests/generated</PstkGeneratedSourceDir>
+    <PstkGeneratedSourceDir>$(MSBuildThisFileDirectory)../../out/build/release/tools/packet/tests/generated</PstkGeneratedSourceDir>
   </PropertyGroup>
 </Project>

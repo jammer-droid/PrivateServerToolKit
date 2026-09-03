@@ -72,7 +72,7 @@ install(
 )
 ```
 
-현재 Packet target 규칙은 [tools/packet/CMakeLists.txt](../../tools/packet/CMakeLists.txt)에
+현재 Packet target 규칙은 [src/tools/packet/CMakeLists.txt](../../src/tools/packet/CMakeLists.txt)에
 있다.
 
 `install(FILES ...)`에는 현재 소스 트리의 공개 파일을 전달한다. 지정한
@@ -88,7 +88,7 @@ install(
 )
 ```
 
-Common header 규칙은 [common/CMakeLists.txt](../../common/CMakeLists.txt)에
+Common header 규칙은 [src/common/CMakeLists.txt](../../src/common/CMakeLists.txt)에
 있다. 이 예시의 상대 `FILES` 경로는 해당 `CMakeLists.txt`의 source directory를
 기준으로 해석된다.
 
@@ -186,7 +186,7 @@ target만 빌드한다.
 ## CLI 설정 적용 확인
 
 설치 폴더의 CLI가 INI 설정을 반영하는지 확인할 때는 기존
-[CLI smoke 가이드](../../tools/packet/cli/tests/README.md)를 재사용한다.
+[CLI smoke 가이드](../../src/tools/packet/cli/tests/README.md)를 재사용한다.
 이 검증은 배포된 CLI 경로를 직접 전달하며 CTest나 기본 build target에
 자동 등록되지 않는다. generated source compile과 .NET 실행은 이 문서의
 검증 범위가 아니다.

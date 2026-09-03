@@ -40,7 +40,7 @@ CTest나 `.NET` 자동 integration에는 등록하지 않는다. 저장소 root�
 cmake --preset dev
 cmake --build --preset build-dev --target pstk_packet_cli
 cmake -DPSTK_PACKET_CLI=out/build/dev/tools/packet/cli/pstk-packet \
-  -P tools/packet/cli/tests/smoke.cmake
+  -P src/tools/packet/cli/tests/smoke.cmake
 ```
 
 Windows에서는 실제 configuration directory와 `.exe`를 포함한 경로를 전달한다.
@@ -49,7 +49,7 @@ Windows에서는 실제 configuration directory와 `.exe`를 포함한 경로를
 cmake --preset dev
 cmake --build --preset build-dev --target pstk_packet_cli
 cmake -DPSTK_PACKET_CLI=out/build/dev/tools/packet/cli/Debug/pstk-packet.exe `
-  -P tools/packet/cli/tests/smoke.cmake
+  -P src/tools/packet/cli/tests/smoke.cmake
 ```
 
 각 실행은 기존 결과를 지우지 않고

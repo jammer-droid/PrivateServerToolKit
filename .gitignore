@@ -1,7 +1,7 @@
 /build/
 /out/
-/dotnet/**/bin/
-/dotnet/**/obj/
+/src/dotnet/**/bin/
+/src/dotnet/**/obj/
 /.idea/
 /.cache/
 CMakeUserPresets.json
