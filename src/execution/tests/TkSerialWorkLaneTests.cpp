@@ -68,6 +68,28 @@ MoveOnlyValue::MoveOnlyValue(MoveOnlyValue &&other) noexcept : value(other.value
 
 using WorkLane = pstk::execution::TkSerialWorkLane<MoveOnlyValue>;
 
+struct RecordedValues
+{
+    int values[4]{};
+    std::size_t count = 0;
+};
+
+void RecordValue(void *const rawContext, MoveOnlyValue &&value) noexcept
+{
+    RecordedValues *const context = static_cast<RecordedValues *>(rawContext);
+    if (context->count >= 4)
+    {
+        ADD_FAILURE() << "Drain invoked more callbacks than expected";
+        return;
+    }
+
+    context->values[context->count++] = value.value;
+}
+
+void IgnoreValue(void *, MoveOnlyValue &&) noexcept
+{
+}
+
 struct DestructionProbe
 {
     explicit DestructionProbe(std::atomic<int> *const destructionCount) noexcept
@@ -173,7 +195,7 @@ TEST(TkSerialWorkLaneContract, PublishesWithSingleScheduleSignalAndPreservesFull
     EXPECT_EQ(nullOutput.value, 4);
 }
 
-TEST(TkSerialWorkLaneContract, PopsFifoAndPreservesEmptyOutput)
+TEST(TkSerialWorkLaneContract, DrainsFifoUpToBudgetAndReturnsReschedule)
 {
     std::unique_ptr<WorkLane> workLane;
     ASSERT_EQ(WorkLane::Create(4, &workLane), TK_SUCCESS);
@@ -183,48 +205,68 @@ TEST(TkSerialWorkLaneContract, PopsFifoAndPreservesEmptyOutput)
     ASSERT_EQ(workLane->TryPublish(MoveOnlyValue(1), &shouldSchedule), TK_SUCCESS);
     EXPECT_FALSE(workLane->IsQuiescent());
     ASSERT_EQ(workLane->TryPublish(MoveOnlyValue(2), &shouldSchedule), TK_SUCCESS);
-    ASSERT_EQ(workLane->BeginDrain(), TK_SUCCESS);
+    ASSERT_EQ(workLane->TryPublish(MoveOnlyValue(3), &shouldSchedule), TK_SUCCESS);
 
-    MoveOnlyValue output(100);
-    ASSERT_TRUE(workLane->TryPop(&output));
-    EXPECT_EQ(output.value, 1);
-    ASSERT_TRUE(workLane->TryPop(&output));
-    EXPECT_EQ(output.value, 2);
+    RecordedValues values;
+    ASSERT_EQ(workLane->Drain(2, &values, RecordValue, &shouldSchedule), TK_SUCCESS);
+    ASSERT_EQ(values.count, 2U);
+    EXPECT_EQ(values.values[0], 1);
+    EXPECT_EQ(values.values[1], 2);
+    EXPECT_TRUE(shouldSchedule);
+    EXPECT_FALSE(workLane->IsQuiescent());
 
-    output.value = 100;
-    EXPECT_FALSE(workLane->TryPop(&output));
-    EXPECT_EQ(output.value, 100);
-
-    shouldSchedule = true;
-    ASSERT_EQ(workLane->FinishDrain(&shouldSchedule), TK_SUCCESS);
+    ASSERT_EQ(workLane->Drain(2, &values, RecordValue, &shouldSchedule), TK_SUCCESS);
+    ASSERT_EQ(values.count, 3U);
+    EXPECT_EQ(values.values[2], 3);
     EXPECT_FALSE(shouldSchedule);
     EXPECT_TRUE(workLane->IsQuiescent());
 }
 
-TEST(TkSerialWorkLaneContract, RejectsInvalidStateTransitionsAndPreservesOutput)
+TEST(TkSerialWorkLaneContract, RejectsInvalidDrainRequestsAndPreservesOutput)
 {
     std::unique_ptr<WorkLane> workLane;
     ASSERT_EQ(WorkLane::Create(2, &workLane), TK_SUCCESS);
 
-    EXPECT_EQ(workLane->BeginDrain(), TK_ERROR_INVALID_STATE);
     bool shouldSchedule = true;
-    EXPECT_EQ(workLane->FinishDrain(&shouldSchedule), TK_ERROR_INVALID_STATE);
+    EXPECT_EQ(workLane->Drain(1, nullptr, IgnoreValue, &shouldSchedule), TK_ERROR_INVALID_STATE);
     EXPECT_TRUE(shouldSchedule);
 
     ASSERT_EQ(workLane->TryPublish(MoveOnlyValue(1), &shouldSchedule), TK_SUCCESS);
-    EXPECT_EQ(workLane->FinishDrain(&shouldSchedule), TK_ERROR_INVALID_STATE);
+    EXPECT_EQ(workLane->Drain(0, nullptr, IgnoreValue, &shouldSchedule), TK_ERROR_INVALID_ARGUMENT);
     EXPECT_TRUE(shouldSchedule);
-    EXPECT_EQ(workLane->BeginDrain(), TK_SUCCESS);
-    EXPECT_EQ(workLane->BeginDrain(), TK_ERROR_INVALID_STATE);
+    EXPECT_EQ(workLane->Drain(1, nullptr, nullptr, &shouldSchedule), TK_ERROR_INVALID_ARGUMENT);
+    EXPECT_TRUE(shouldSchedule);
+    EXPECT_EQ(workLane->Drain(1, nullptr, IgnoreValue, nullptr), TK_ERROR_INVALID_ARGUMENT);
 
-    MoveOnlyValue output(0);
-    ASSERT_TRUE(workLane->TryPop(&output));
-    EXPECT_EQ(workLane->FinishDrain(nullptr), TK_ERROR_INVALID_ARGUMENT);
-    ASSERT_EQ(workLane->FinishDrain(&shouldSchedule), TK_SUCCESS);
-    EXPECT_EQ(workLane->FinishDrain(&shouldSchedule), TK_ERROR_INVALID_STATE);
+    struct DrainContext
+    {
+        WorkLane *workLane;
+        int count = 0;
+    };
+    DrainContext context{workLane.get()};
+
+    ASSERT_EQ(workLane->Drain(
+                  1, &context,
+                  [](void *const rawContext, MoveOnlyValue &&value) noexcept {
+                      DrainContext *const drainContext = static_cast<DrainContext *>(rawContext);
+                      ++drainContext->count;
+                      EXPECT_EQ(value.value, 1);
+                      EXPECT_FALSE(drainContext->workLane->IsQuiescent());
+
+                      bool nestedShouldSchedule = true;
+                      EXPECT_EQ(drainContext->workLane->Drain(1, nullptr, IgnoreValue, &nestedShouldSchedule),
+                                TK_ERROR_INVALID_STATE);
+                      EXPECT_TRUE(nestedShouldSchedule);
+                  },
+                  &shouldSchedule),
+              TK_SUCCESS);
+    EXPECT_EQ(context.count, 1);
+    EXPECT_FALSE(shouldSchedule);
+    EXPECT_EQ(workLane->Drain(1, nullptr, IgnoreValue, &shouldSchedule), TK_ERROR_INVALID_STATE);
+    EXPECT_FALSE(shouldSchedule);
 }
 
-TEST(TkSerialWorkLaneContract, FinishRechecksMessagesPublishedWhileDraining)
+TEST(TkSerialWorkLaneContract, RechecksMessagesPublishedDuringDrainCallback)
 {
     std::unique_ptr<WorkLane> workLane;
     ASSERT_EQ(WorkLane::Create(2, &workLane), TK_SUCCESS);
@@ -232,62 +274,93 @@ TEST(TkSerialWorkLaneContract, FinishRechecksMessagesPublishedWhileDraining)
     bool shouldSchedule = false;
     ASSERT_EQ(workLane->TryPublish(MoveOnlyValue(1), &shouldSchedule), TK_SUCCESS);
     ASSERT_TRUE(shouldSchedule);
-    ASSERT_EQ(workLane->BeginDrain(), TK_SUCCESS);
 
-    MoveOnlyValue output(0);
-    ASSERT_TRUE(workLane->TryPop(&output));
+    struct PublishContext
+    {
+        WorkLane *workLane;
+        TkResult result = TK_ERROR_UNKNOWN;
+        bool shouldSchedule = true;
+    };
+    PublishContext context{workLane.get()};
 
-    ASSERT_EQ(workLane->TryPublish(MoveOnlyValue(2), &shouldSchedule), TK_SUCCESS);
-    EXPECT_FALSE(shouldSchedule);
-    shouldSchedule = false;
-    ASSERT_EQ(workLane->FinishDrain(&shouldSchedule), TK_SUCCESS);
+    ASSERT_EQ(workLane->Drain(
+                  1, &context,
+                  [](void *const rawContext, MoveOnlyValue &&value) noexcept {
+                      PublishContext *const publishContext = static_cast<PublishContext *>(rawContext);
+                      EXPECT_EQ(value.value, 1);
+                      publishContext->result =
+                          publishContext->workLane->TryPublish(MoveOnlyValue(2), &publishContext->shouldSchedule);
+                  },
+                  &shouldSchedule),
+              TK_SUCCESS);
+    EXPECT_EQ(context.result, TK_SUCCESS);
+    EXPECT_FALSE(context.shouldSchedule);
     EXPECT_TRUE(shouldSchedule);
 
-    ASSERT_EQ(workLane->BeginDrain(), TK_SUCCESS);
-    ASSERT_TRUE(workLane->TryPop(&output));
-    EXPECT_EQ(output.value, 2);
-    ASSERT_EQ(workLane->FinishDrain(&shouldSchedule), TK_SUCCESS);
+    RecordedValues values;
+    ASSERT_EQ(workLane->Drain(1, &values, RecordValue, &shouldSchedule), TK_SUCCESS);
+    ASSERT_EQ(values.count, 1U);
+    EXPECT_EQ(values.values[0], 2);
     EXPECT_FALSE(shouldSchedule);
 }
 
-TEST(TkSerialWorkLaneContract, ProducerWinsAfterFinishObservesEmpty)
+TEST(TkSerialWorkLaneContract, ProducerSchedulesAfterDrainObservesUnpublishedSlot)
 {
     std::unique_ptr<WorkLane> workLane;
     ASSERT_EQ(WorkLane::Create(2, &workLane), TK_SUCCESS);
 
     bool shouldSchedule = false;
     ASSERT_EQ(workLane->TryPublish(MoveOnlyValue(1), &shouldSchedule), TK_SUCCESS);
-    ASSERT_EQ(workLane->BeginDrain(), TK_SUCCESS);
-    MoveOnlyValue output(0);
-    ASSERT_TRUE(workLane->TryPop(&output));
 
     PublishGate gate;
+    std::atomic<bool> startProducer{false};
     MoveOnlyValue item(2, &gate);
     std::atomic<int> producerResult{TK_ERROR_UNKNOWN};
     std::atomic<bool> producerShouldSchedule{false};
     std::thread producer([&]() {
+        if (!WaitFor([&]() { return startProducer.load(std::memory_order_acquire); }))
+        {
+            return;
+        }
+
         bool producerSignal = false;
         producerResult.store(workLane->TryPublish(std::move(item), &producerSignal), std::memory_order_release);
         producerShouldSchedule.store(producerSignal, std::memory_order_release);
     });
 
-    const bool moveStarted = WaitFor([&]() { return gate.moveStarted.load(std::memory_order_acquire); });
+    struct DrainContext
+    {
+        PublishGate *gate;
+        std::atomic<bool> *startProducer;
+        bool moveStarted = false;
+    };
+    DrainContext context{&gate, &startProducer};
     shouldSchedule = true;
-    const TkResult finishResult = workLane->FinishDrain(&shouldSchedule);
+    const TkResult drainResult = workLane->Drain(
+        2, &context,
+        [](void *const rawContext, MoveOnlyValue &&value) noexcept {
+            DrainContext *const drainContext = static_cast<DrainContext *>(rawContext);
+            EXPECT_EQ(value.value, 1);
+            drainContext->startProducer->store(true, std::memory_order_release);
+            drainContext->moveStarted =
+                WaitFor([&]() { return drainContext->gate->moveStarted.load(std::memory_order_acquire); });
+        },
+        &shouldSchedule);
 
+    startProducer.store(true, std::memory_order_release);
     gate.allowMove.store(true, std::memory_order_release);
     producer.join();
 
-    ASSERT_TRUE(moveStarted);
-    ASSERT_EQ(finishResult, TK_SUCCESS);
+    ASSERT_TRUE(context.moveStarted);
+    ASSERT_EQ(drainResult, TK_SUCCESS);
     EXPECT_FALSE(shouldSchedule);
     EXPECT_EQ(producerResult.load(std::memory_order_acquire), TK_SUCCESS);
     EXPECT_TRUE(producerShouldSchedule.load(std::memory_order_acquire));
 
-    ASSERT_EQ(workLane->BeginDrain(), TK_SUCCESS);
-    ASSERT_TRUE(workLane->TryPop(&output));
-    EXPECT_EQ(output.value, 2);
-    ASSERT_EQ(workLane->FinishDrain(&shouldSchedule), TK_SUCCESS);
+    RecordedValues values;
+    ASSERT_EQ(workLane->Drain(1, &values, RecordValue, &shouldSchedule), TK_SUCCESS);
+    ASSERT_EQ(values.count, 1U);
+    EXPECT_EQ(values.values[0], 2);
     EXPECT_FALSE(shouldSchedule);
 }
 
@@ -303,8 +376,7 @@ TEST(TkSerialWorkLaneContract, SupportsMultipleProducersWithOneDrainOwner)
     bool shouldSchedule = false;
     ASSERT_EQ(workLane->TryPublish(MoveOnlyValue(0), &shouldSchedule), TK_SUCCESS);
     ASSERT_TRUE(shouldSchedule);
-    ASSERT_EQ(workLane->BeginDrain(), TK_SUCCESS);
-    EXPECT_EQ(workLane->BeginDrain(), TK_ERROR_INVALID_STATE);
+    std::atomic<bool> drainReady{true};
 
     std::unique_ptr<std::atomic<int>[]> seen(new std::atomic<int>[totalValues]);
     for (int index = 0; index < totalValues; ++index)
@@ -314,6 +386,15 @@ TEST(TkSerialWorkLaneContract, SupportsMultipleProducersWithOneDrainOwner)
 
     std::atomic<int> producerDone{0};
     std::atomic<int> producerFailure{0};
+    struct DrainContext
+    {
+        std::atomic<int> *seen;
+        std::atomic<int> *failure;
+        int valueCount;
+        int consumedCount = 0;
+    };
+    DrainContext context{seen.get(), &producerFailure, totalValues};
+
     std::thread producers[producerCount];
     for (int producerIndex = 0; producerIndex < producerCount; ++producerIndex)
     {
@@ -331,7 +412,7 @@ TEST(TkSerialWorkLaneContract, SupportsMultipleProducersWithOneDrainOwner)
                     {
                         if (producerSignal)
                         {
-                            producerFailure.fetch_add(1, std::memory_order_relaxed);
+                            drainReady.store(true, std::memory_order_release);
                         }
                         accepted = true;
                         break;
@@ -358,43 +439,44 @@ TEST(TkSerialWorkLaneContract, SupportsMultipleProducersWithOneDrainOwner)
         });
     }
 
-    MoveOnlyValue output(-1);
-    while (producerDone.load(std::memory_order_acquire) != producerCount)
-    {
-        if (!workLane->TryPop(&output))
+    const bool completed = WaitFor([&]() {
+        if (drainReady.exchange(false, std::memory_order_acq_rel))
         {
-            std::this_thread::yield();
-            continue;
+            bool reschedule = false;
+            const TkResult result = workLane->Drain(
+                64, &context,
+                [](void *const rawContext, MoveOnlyValue &&value) noexcept {
+                    DrainContext *const drainContext = static_cast<DrainContext *>(rawContext);
+                    ++drainContext->consumedCount;
+                    if (value.value < 0 || value.value >= drainContext->valueCount ||
+                        drainContext->seen[value.value].fetch_add(1, std::memory_order_relaxed) != 0)
+                    {
+                        drainContext->failure->fetch_add(1, std::memory_order_relaxed);
+                    }
+                },
+                &reschedule);
+
+            if (result != TK_SUCCESS)
+            {
+                producerFailure.fetch_add(1, std::memory_order_relaxed);
+            }
+
+            if (reschedule)
+            {
+                drainReady.store(true, std::memory_order_release);
+            }
         }
 
-        if (output.value < 0 || output.value >= totalValues)
-        {
-            producerFailure.fetch_add(1, std::memory_order_relaxed);
-            continue;
-        }
-
-        if (seen[output.value].fetch_add(1, std::memory_order_relaxed) != 0)
-        {
-            producerFailure.fetch_add(1, std::memory_order_relaxed);
-        }
-    }
+        return producerDone.load(std::memory_order_acquire) == producerCount && context.consumedCount == totalValues;
+    });
 
     for (std::thread &producer : producers)
     {
         producer.join();
     }
 
-    while (workLane->TryPop(&output))
-    {
-        if (output.value < 0 || output.value >= totalValues ||
-            seen[output.value].fetch_add(1, std::memory_order_relaxed) != 0)
-        {
-            producerFailure.fetch_add(1, std::memory_order_relaxed);
-        }
-    }
-
-    ASSERT_EQ(workLane->FinishDrain(&shouldSchedule), TK_SUCCESS);
-    EXPECT_FALSE(shouldSchedule);
+    EXPECT_TRUE(completed);
+    EXPECT_TRUE(workLane->IsQuiescent());
     EXPECT_EQ(producerFailure.load(std::memory_order_relaxed), 0);
     for (int id = 0; id < totalValues; ++id)
     {

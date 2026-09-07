@@ -14,7 +14,7 @@
 namespace pstk::execution
 {
 
-template <typename T> class TkWorkerScheduler;
+template <typename T> using TkWorkLaneInvoke = void (*)(void *, T &&) noexcept;
 
 template <typename T> class TkSerialWorkLane final
 {
@@ -95,9 +95,9 @@ template <typename T> class TkSerialWorkLane final
             source_ = nullptr;
         }
 
-        T *source_;
-        bool hasValue_;
-        alignas(T) std::byte storage_[sizeof(T)];
+        T *source_;                               // 임시로 가지고 있을 원본 포인터
+        bool hasValue_;                           // QueueValue 내부 값이 있는지
+        alignas(T) std::byte storage_[sizeof(T)]; // QueueValue 내부의 데이터. 원본에서 이동해 생성
     };
 
     using Queue = TkBoundedMpmcQueue<QueueValue>;
@@ -166,10 +166,14 @@ template <typename T> class TkSerialWorkLane final
         return TK_SUCCESS;
     }
 
-    // State
-    // Scheduled -> Draining
-    TkResult BeginDrain() noexcept
+    TkResult Drain(const std::size_t maxMessages, void *const context, const TkWorkLaneInvoke<T> invoke,
+                   bool *const outShouldSchedule) noexcept
     {
+        if (maxMessages == 0 || invoke == nullptr || outShouldSchedule == nullptr)
+        {
+            return TK_ERROR_INVALID_ARGUMENT;
+        }
+
         State expected = State::Scheduled;
         if (!state_.compare_exchange_strong(expected, State::Draining, std::memory_order_acquire,
                                             std::memory_order_relaxed))
@@ -177,33 +181,15 @@ template <typename T> class TkSerialWorkLane final
             return TK_ERROR_INVALID_STATE;
         }
 
-        return TK_SUCCESS;
-    }
-
-    bool TryPop(T *const outItem) noexcept
-    {
-        assert(outItem != nullptr);
-
         QueueValue value;
-        if (!queue_->TryPop(&value))
+        std::size_t messageCount = 0;
+        while (messageCount < maxMessages && queue_->TryPop(&value))
         {
-            return false;
+            invoke(context, std::move(value.Value()));
+            ++messageCount;
         }
 
-        *outItem = std::move(value.Value());
-        return true;
-    }
-
-    // State
-    // Draining -> Idle
-    TkResult FinishDrain(bool *const outShouldSchedule) noexcept
-    {
-        if (outShouldSchedule == nullptr)
-        {
-            return TK_ERROR_INVALID_ARGUMENT;
-        }
-
-        State expected = State::Draining;
+        expected = State::Draining;
         if (!state_.compare_exchange_strong(expected, State::Idle, std::memory_order_release,
                                             std::memory_order_relaxed))
         {
@@ -228,16 +214,8 @@ template <typename T> class TkSerialWorkLane final
     }
 
   private:
-    friend class TkWorkerScheduler<T>;
-
     explicit TkSerialWorkLane(std::unique_ptr<Queue> queue) noexcept : queue_(std::move(queue)), state_(State::Idle)
     {
-    }
-
-    bool TryPopValue(QueueValue *const outValue) noexcept
-    {
-        assert(outValue != nullptr);
-        return queue_->TryPop(outValue);
     }
 
     std::unique_ptr<Queue> queue_;

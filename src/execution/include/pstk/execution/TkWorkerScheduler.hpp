@@ -18,8 +18,6 @@
 namespace pstk::execution
 {
 
-template <typename T> using TkWorkLaneInvoke = void (*)(void *, T &&) noexcept;
-
 template <typename T> class TkWorkerScheduler;
 
 template <typename T> class TkWorkLaneHandle final
@@ -196,7 +194,13 @@ template <typename T> class TkWorkerScheduler final
             }
         }
 
-        CompletePost();
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            assert(inFlightPosts_ != 0);
+            --inFlightPosts_;
+            condition_.notify_all();
+        }
+
         return result;
     }
 
@@ -288,6 +292,8 @@ template <typename T> class TkWorkerScheduler final
 
     static TkWorkerScheduler<T> *&CurrentDrainScheduler() noexcept
     {
+        // thread local 변수
+        // invoke 콜백이 직접 drain 종료를 호출해 자기 자신을 대기하는 교착 상태 방지
         static thread_local TkWorkerScheduler<T> *currentScheduler = nullptr;
 
         return currentScheduler;
@@ -338,29 +344,17 @@ template <typename T> class TkWorkerScheduler final
         TkWorkerScheduler<T> *const previousScheduler = CurrentDrainScheduler();
         CurrentDrainScheduler() = this;
 
-        const TkResult beginResult = entry->workLane->BeginDrain();
-        if (beginResult == TK_SUCCESS)
+        bool shouldSchedule = false;
+        const TkResult drainResult =
+            entry->workLane->Drain(maxMessagesPerDrain_, entry->context, entry->invoke, &shouldSchedule);
+        if (drainResult == TK_SUCCESS && shouldSchedule)
         {
-            using QueueValue = typename WorkLane::QueueValue;
-            QueueValue value;
-            std::size_t messageCount = 0;
-            while (messageCount < maxMessagesPerDrain_ && entry->workLane->TryPopValue(&value))
+            const TkResult scheduleResult = TryScheduleLane(entry);
+            if (scheduleResult != TK_SUCCESS)
             {
-                entry->invoke(entry->context, std::move(value.Value()));
-                ++messageCount;
-            }
-
-            bool shouldSchedule = false;
-            const TkResult finishResult = entry->workLane->FinishDrain(&shouldSchedule);
-            if (finishResult == TK_SUCCESS && shouldSchedule)
-            {
-                const TkResult scheduleResult = TryScheduleLane(entry);
-                if (scheduleResult != TK_SUCCESS)
-                {
-                    std::lock_guard<std::mutex> lock(mutex_);
-                    assert(scheduleResult == TK_ERROR_INVALID_STATE);
-                    assert(state_ == State::StoppingDiscard || state_ == State::Stopped);
-                }
+                std::lock_guard<std::mutex> lock(mutex_);
+                assert(scheduleResult == TK_ERROR_INVALID_STATE);
+                assert(state_ == State::StoppingDiscard || state_ == State::Stopped);
             }
         }
 
@@ -370,14 +364,6 @@ template <typename T> class TkWorkerScheduler final
             --activeDrains_;
             condition_.notify_all();
         }
-    }
-
-    void CompletePost() noexcept
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        assert(inFlightPosts_ != 0);
-        --inFlightPosts_;
-        condition_.notify_all();
     }
 
     bool IsDrainComplete() const noexcept
