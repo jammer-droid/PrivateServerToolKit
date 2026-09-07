@@ -3,7 +3,9 @@
 #include <gtest/gtest.h>
 
 #include <atomic>
+#include <chrono>
 #include <cstddef>
+#include <future>
 #include <memory>
 #include <thread>
 #include <utility>
@@ -304,7 +306,7 @@ TEST(TkSerialWorkLaneContract, RechecksMessagesPublishedDuringDrainCallback)
     EXPECT_FALSE(shouldSchedule);
 }
 
-TEST(TkSerialWorkLaneContract, ProducerSchedulesAfterDrainObservesUnpublishedSlot)
+TEST(TkSerialWorkLaneContract, DrainCompletionWaitsForPublicationAndOwnsReschedule)
 {
     std::unique_ptr<WorkLane> workLane;
     ASSERT_EQ(WorkLane::Create(2, &workLane), TK_SUCCESS);
@@ -315,53 +317,92 @@ TEST(TkSerialWorkLaneContract, ProducerSchedulesAfterDrainObservesUnpublishedSlo
     PublishGate gate;
     std::atomic<bool> startProducer{false};
     MoveOnlyValue item(2, &gate);
-    std::atomic<int> producerResult{TK_ERROR_UNKNOWN};
-    std::atomic<bool> producerShouldSchedule{false};
+    TkResult producerResult = TK_ERROR_UNKNOWN;
+    bool producerShouldSchedule = true;
     std::thread producer([&]() {
-        if (!WaitFor([&]() { return startProducer.load(std::memory_order_acquire); }))
+        if (WaitFor([&]() { return startProducer.load(std::memory_order_acquire); }))
         {
-            return;
+            producerResult = workLane->TryPublish(std::move(item), &producerShouldSchedule);
         }
-
-        bool producerSignal = false;
-        producerResult.store(workLane->TryPublish(std::move(item), &producerSignal), std::memory_order_release);
-        producerShouldSchedule.store(producerSignal, std::memory_order_release);
     });
 
     struct DrainContext
     {
         PublishGate *gate;
         std::atomic<bool> *startProducer;
+        std::atomic<bool> callbackFinished{false};
         bool moveStarted = false;
     };
     DrainContext context{&gate, &startProducer};
-    shouldSchedule = true;
-    const TkResult drainResult = workLane->Drain(
-        2, &context,
-        [](void *const rawContext, MoveOnlyValue &&value) noexcept {
-            DrainContext *const drainContext = static_cast<DrainContext *>(rawContext);
-            EXPECT_EQ(value.value, 1);
-            drainContext->startProducer->store(true, std::memory_order_release);
-            drainContext->moveStarted =
-                WaitFor([&]() { return drainContext->gate->moveStarted.load(std::memory_order_acquire); });
-        },
-        &shouldSchedule);
+    TkResult drainResult = TK_ERROR_UNKNOWN;
+    bool drainShouldSchedule = false;
+    std::promise<void> drainFinished;
+    std::future<void> drainCompletion = drainFinished.get_future();
+    std::thread worker([&]() {
+        drainResult = workLane->Drain(
+            1, &context,
+            [](void *const rawContext, MoveOnlyValue &&value) noexcept {
+                DrainContext *const drainContext = static_cast<DrainContext *>(rawContext);
+                EXPECT_EQ(value.value, 1);
+                drainContext->startProducer->store(true, std::memory_order_release);
+                drainContext->moveStarted =
+                    WaitFor([&]() { return drainContext->gate->moveStarted.load(std::memory_order_acquire); });
+                drainContext->callbackFinished.store(true, std::memory_order_release);
+            },
+            &drainShouldSchedule);
+        drainFinished.set_value();
+    });
 
+    const bool callbackFinished = WaitFor([&]() { return context.callbackFinished.load(std::memory_order_acquire); });
+    // 게시 중인 producer가 mutex를 놓기 전에는 drain 종료 판단도 완료할 수 없다.
+    const std::future_status completionStatus = drainCompletion.wait_for(std::chrono::milliseconds(20));
     startProducer.store(true, std::memory_order_release);
     gate.allowMove.store(true, std::memory_order_release);
     producer.join();
+    worker.join();
 
+    ASSERT_TRUE(callbackFinished);
     ASSERT_TRUE(context.moveStarted);
+    EXPECT_EQ(completionStatus, std::future_status::timeout);
+    ASSERT_EQ(producerResult, TK_SUCCESS);
+    EXPECT_FALSE(producerShouldSchedule);
     ASSERT_EQ(drainResult, TK_SUCCESS);
-    EXPECT_FALSE(shouldSchedule);
-    EXPECT_EQ(producerResult.load(std::memory_order_acquire), TK_SUCCESS);
-    EXPECT_TRUE(producerShouldSchedule.load(std::memory_order_acquire));
+    EXPECT_TRUE(drainShouldSchedule);
+    EXPECT_FALSE(workLane->IsQuiescent());
 
     RecordedValues values;
     ASSERT_EQ(workLane->Drain(1, &values, RecordValue, &shouldSchedule), TK_SUCCESS);
     ASSERT_EQ(values.count, 1U);
     EXPECT_EQ(values.values[0], 2);
     EXPECT_FALSE(shouldSchedule);
+    EXPECT_TRUE(workLane->IsQuiescent());
+}
+
+TEST(TkSerialWorkLaneContract, ProducerSchedulesAfterDrainBecomesIdle)
+{
+    std::unique_ptr<WorkLane> workLane;
+    ASSERT_EQ(WorkLane::Create(2, &workLane), TK_SUCCESS);
+
+    bool shouldSchedule = false;
+    ASSERT_EQ(workLane->TryPublish(MoveOnlyValue(1), &shouldSchedule), TK_SUCCESS);
+    RecordedValues values;
+    ASSERT_EQ(workLane->Drain(1, &values, RecordValue, &shouldSchedule), TK_SUCCESS);
+    ASSERT_FALSE(shouldSchedule);
+    ASSERT_TRUE(workLane->IsQuiescent());
+
+    ASSERT_EQ(workLane->TryPublish(MoveOnlyValue(2), &shouldSchedule), TK_SUCCESS);
+    EXPECT_TRUE(shouldSchedule);
+    // 실제 ready queue 게시 전에도 예약 책임은 확보되어 있어 중복 예약하지 않는다.
+    ASSERT_EQ(workLane->TryPublish(MoveOnlyValue(3), &shouldSchedule), TK_SUCCESS);
+    EXPECT_FALSE(shouldSchedule);
+
+    ASSERT_EQ(workLane->Drain(2, &values, RecordValue, &shouldSchedule), TK_SUCCESS);
+    ASSERT_EQ(values.count, 3U);
+    EXPECT_EQ(values.values[0], 1);
+    EXPECT_EQ(values.values[1], 2);
+    EXPECT_EQ(values.values[2], 3);
+    EXPECT_FALSE(shouldSchedule);
+    EXPECT_TRUE(workLane->IsQuiescent());
 }
 
 TEST(TkSerialWorkLaneContract, SupportsMultipleProducersWithOneDrainOwner)

@@ -452,7 +452,7 @@ TkResult OnTimeSync(const TkServiceContext& context,
 
 - 기존 header-only Common은 기초 타입·byte view·result·diagnostic 계약으로 유지한다. 실행 도구를 이 계층에 섞거나 generated codec consumer에 runtime binary 의존성을 강제하지 않는다.
 - NetworkRuntime·Host Input Adapter·향후 WorldRuntime이 공유할 queue와 scheduling 도구는 `src/execution/`의 internal STATIC target `pstk_execution`, namespace `pstk::execution`으로 구분한다. 외부 설치·public DLL ABI 대상이 아니며 각 runtime component가 내부 링크한다.
-- Akka의 mailbox/job queue와 실행 예약 구조를 레퍼런스로 삼아 예약 상태를 Work Lane 안에 캡슐화한다. Producer publish와 worker의 release 후 recheck가 서로 보완해 drain 종료 경쟁의 lost wakeup을 닫는다.
+- Akka의 mailbox/job queue와 실행 예약 구조를 레퍼런스로 삼아 예약 상태를 Work Lane 안에 캡슐화한다. Producer의 publish·예약 판단과 worker의 drain 종료·재예약 판단을 같은 lane mutex로 직렬화해 drain 종료 경쟁의 lost wakeup을 닫는다.
 - Nakama의 match/tick 구조는 향후 WorldRuntime이 서비스 입력을 소비하는 방식을 설계할 때 참고한다. 이번 Host에 match/room 정책을 넣는 근거로 삼지 않는다.
 
 공용 실행 도구를 Host Core 내부 구현으로 숨겨 고정하지 않는다. Input Adapter가 ingress lane과 worker scheduling을 조립하고, 서비스별 World executor는 별도로 주입된다.
@@ -491,9 +491,10 @@ using TkWorkDestroy = void (*)(void*) noexcept;
 
 #### `TkSerialWorkLane<T>`와 `TkWorkerScheduler<T>`
 
-- Work Lane은 bounded MPMC queue를 재사용할 수 있고 `Idle`, `Scheduled`, `Draining` CAS 상태만 가진다. MPMC queue를 사용하더라도 CAS 상태가 active drain owner를 하나로 제한한다. 별도 gate·permit object를 외부에 노출하지 않는다.
-- Producer는 message publish 후 `Idle -> Scheduled` CAS에 성공한 경우에만 Work Lane drain WorkItem을 ready queue에 게시한다. 이미 Scheduled/Draining이면 현재 owner가 후속 message를 관찰하므로 추가 예약하지 않는다.
-- Worker는 Scheduled Work Lane을 Draining으로 전이해 `maxMessagesPerDrain` count budget만큼 소비한다. 이후 Idle로 release한 다음 queue를 다시 확인하고 남은 message가 있으면 스스로 재예약한다. Release 전 publish와 release 후 publish 모두 producer 또는 worker 중 하나가 예약을 책임져 orphan message를 만들지 않는다.
+- Work Lane은 bounded MPMC queue와 lane 내부의 mutex, mutex로 보호하는 일반 `Idle`, `Scheduled`, `Draining` 상태를 가진다. `Scheduled -> Draining` 전이가 active drain owner를 하나로 제한한다. 별도 gate·permit object를 외부에 노출하지 않는다.
+- Producer는 lane mutex를 잡고 message publish와 예약 판단을 함께 수행한다. Idle이면 Scheduled로 바꾸고 예약 필요 여부를 반환하며, 이미 Scheduled/Draining이면 추가 예약하지 않는다. Scheduled는 실제 ready queue 게시 전이라도 호출자가 예약을 게시할 책임을 확보한 상태를 포함한다.
+- Worker의 `Drain`은 lane mutex 안에서 Scheduled를 Draining으로 바꾼 뒤 잠금을 풀고 `maxMessagesPerDrain` count budget만큼 소비·invoke한다. 소비한 임시 item의 파괴까지 끝난 뒤 같은 mutex를 다시 잡아 queue를 확인하고, 남은 message가 있으면 Scheduled와 재예약 신호를, 없으면 Idle을 확정한다. Producer가 먼저 게시를 마치면 worker가 재예약을 판단하고, worker가 먼저 Idle을 확정하면 이후 producer가 예약을 맡는다.
+- `IsQuiescent`도 같은 lane mutex로 상태와 queue를 확인한다. Queue의 slot 접근 동기화는 기존 MPMC queue가 담당하며, `invoke`와 실제 ready queue 예약은 lane mutex 밖에서 실행한다. 게시 중 실행되는 `T`의 move는 같은 lane으로 재진입하지 않아야 한다.
 - WorkerScheduler는 WorkerPool 하나와 생성 시 등록한 모든 Work Lane을 소유한다. 실행 중 register/unregister, slot reuse와 restart는 지원하지 않는다.
 - Producer는 scheduler identity와 slot을 가진 opaque value `TkWorkLaneHandle<T>`만 사용한다. Slot 재사용이 없으므로 generation은 두지 않으며 다른 scheduler의 handle은 invalid argument다.
 - 한 WorkerScheduler는 동일한 `T`, 동일한 power-of-two Work Lane capacity와 명시적인 `maxMessagesPerDrain >= 1`을 사용한다. Work Lane별 `TkWorkLaneCreateInfo<T>`는 borrowed context와 non-null `void (*)(void*, T&&) noexcept` invoke를 제공한다.
@@ -590,7 +591,7 @@ GitHub Issue 본문의 readiness, template-first facade와 stable slice 문구�
 | E1 | Common `TkResult` control-flow 값 확장 | 없음 | Completed |
 | E2 | `pstk_execution`의 bounded MPMC queue와 move-only WorkItem | E1 | Completed |
 | E3 | Bounded ready queue 기반 WorkerPool | E2 | Completed |
-| E4 | CAS serial Work Lane과 owning WorkerScheduler | E3 | Completed |
+| E4 | Serial Work Lane과 owning WorkerScheduler | E3 | Completed |
 | H1 | Service Host shared target, public C ABI와 immutable registry | E4 delivery gate | Completed |
 | H2 | ProcessPacket, middleware와 one-way Service Job pipeline | H1 | Completed |
 | H3 | Request/response storage, Encode와 Output Adapter pipeline | H2 | Completed |
@@ -627,7 +628,7 @@ GitHub Issue 본문의 readiness, template-first facade와 stable slice 문구�
 - **Outcome:** `TkSerialWorkLane<T>`, `TkWorkLaneHandle<T>`, `TkWorkLaneCreateInfo<T>`와 owning `TkWorkerScheduler<T>`를 제공한다.
 - **Dependency:** E3.
 - **Seam:** 여러 producer의 publish와 shared WorkerPool의 single-owner Work Lane drain 연결.
-- **Invariant:** 한 Work Lane은 동시에 한 drain owner만 가지며 release-to-Idle 후 recheck가 lost wakeup을 닫는다. Running WorkerScheduler의 registered Work Lane scheduling은 ready capacity 때문에 실패하지 않는다.
+- **Invariant:** 한 Work Lane은 동시에 한 drain owner만 가지며 publish·예약 판단과 drain 종료·재예약 판단을 같은 lane mutex로 보호한다. Running WorkerScheduler의 registered Work Lane scheduling은 ready capacity 때문에 실패하지 않는다.
 - **Acceptance:** publish/drain 종료 경쟁, 동일 Work Lane 직렬성, 서로 다른 Work Lane 병렬성, drain budget fairness, 잘못된 handle, post close, Drain/Discard shutdown과 queued message destruction을 검증한다.
 - **Verification:** latch/barrier로 경합 시점을 통제한 unit tests와 반복 concurrent stress. 특정 NetworkRuntime adapter나 lane hash는 만들지 않는다.
 

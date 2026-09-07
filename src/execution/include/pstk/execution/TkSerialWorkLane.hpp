@@ -3,10 +3,10 @@
 #include <pstk/TkResult.h>
 #include <pstk/execution/TkBoundedMpmcQueue.hpp>
 
-#include <atomic>
 #include <cassert>
 #include <cstddef>
 #include <memory>
+#include <mutex>
 #include <new>
 #include <type_traits>
 #include <utility>
@@ -152,15 +152,19 @@ template <typename T> class TkSerialWorkLane final
             return TK_ERROR_INVALID_ARGUMENT;
         }
 
+        // 게시 완료와 예약 책임 결정을 drain 종료 판단과 같은 임계영역으로 묶는다.
+        std::lock_guard<std::mutex> lock(mutex_);
         QueueValue value(item);
         if (!queue_->TryPush(std::move(value)))
         {
             return TK_ERROR_CAPACITY_EXCEEDED;
         }
 
-        State expected = State::Idle;
-        const bool shouldSchedule = state_.compare_exchange_strong(
-            expected, State::Scheduled, std::memory_order_acq_rel, std::memory_order_relaxed);
+        const bool shouldSchedule = state_ == State::Idle;
+        if (shouldSchedule)
+        {
+            state_ = State::Scheduled;
+        }
 
         *outShouldSchedule = shouldSchedule;
         return TK_SUCCESS;
@@ -174,43 +178,45 @@ template <typename T> class TkSerialWorkLane final
             return TK_ERROR_INVALID_ARGUMENT;
         }
 
-        State expected = State::Scheduled;
-        if (!state_.compare_exchange_strong(expected, State::Draining, std::memory_order_acquire,
-                                            std::memory_order_relaxed))
         {
-            return TK_ERROR_INVALID_STATE;
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (state_ != State::Scheduled)
+            {
+                return TK_ERROR_INVALID_STATE;
+            }
+
+            state_ = State::Draining;
         }
 
-        QueueValue value;
-        std::size_t messageCount = 0;
-        while (messageCount < maxMessages && queue_->TryPop(&value))
+        // MPMC queue의 소비와 사용자 코드 실행은 lane mutex 밖에서 진행한다.
+        // lane mutex 내부에서 state_ 변경을 완료했기 때문에 실행의 직렬화를 보장하기 때문이다.
         {
-            invoke(context, std::move(value.Value()));
-            ++messageCount;
+            QueueValue value;
+            std::size_t messageCount = 0;
+            while (messageCount < maxMessages && queue_->TryPop(&value))
+            {
+                invoke(context, std::move(value.Value()));
+                ++messageCount;
+            }
         }
 
-        expected = State::Draining;
-        if (!state_.compare_exchange_strong(expected, State::Idle, std::memory_order_release,
-                                            std::memory_order_relaxed))
         {
-            return TK_ERROR_INVALID_STATE;
+            std::lock_guard<std::mutex> lock(mutex_);
+            assert(state_ == State::Draining);
+            const bool shouldSchedule = queue_->HasReadyItem();
+            // Scheduled는 반환 후 호출자가 실제 ready 예약을 게시할 책임까지 포함한다.
+            state_ = shouldSchedule ? State::Scheduled : State::Idle;
+
+            *outShouldSchedule = shouldSchedule;
         }
 
-        bool shouldSchedule = false;
-        if (queue_->HasReadyItem())
-        {
-            expected = State::Idle;
-            shouldSchedule = state_.compare_exchange_strong(expected, State::Scheduled, std::memory_order_release,
-                                                            std::memory_order_relaxed);
-        }
-
-        *outShouldSchedule = shouldSchedule;
         return TK_SUCCESS;
     }
 
     bool IsQuiescent() const noexcept
     {
-        return state_.load(std::memory_order_acquire) == State::Idle && !queue_->HasReadyItem();
+        std::lock_guard<std::mutex> lock(mutex_);
+        return state_ == State::Idle && !queue_->HasReadyItem();
     }
 
   private:
@@ -219,6 +225,7 @@ template <typename T> class TkSerialWorkLane final
     }
 
     std::unique_ptr<Queue> queue_;
-    std::atomic<State> state_;
+    mutable std::mutex mutex_;
+    State state_;
 };
 } // namespace pstk::execution
