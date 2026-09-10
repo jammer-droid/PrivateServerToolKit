@@ -8,3 +8,4 @@ CMakeUserPresets.json
 .DS_Store
 .zed
 src/vulkan/build/
+src/vulkan/cmake-build-debug/

@@ -11,6 +11,8 @@
 #include <cstring>
 #include <fstream>
 
+#include "Constants.h"
+
 // Vulkan API -> Vulkan Loader -> Vulkan Driver -> GPU
 int main()
 {
@@ -202,8 +204,7 @@ int main()
     std::cout << "Compute queue acquired."
               << " family = " << computeQueueFamilyIndex.value() << ", queue=0\n";
 
-    constexpr std::uint32_t ElementCount = 16;
-    constexpr VkDeviceSize BufferSize = sizeof(std::uint32_t) * ElementCount;
+    constexpr VkDeviceSize BufferSize = sizeof(std::uint32_t) * kElementCount;
 
     VkBufferCreateInfo bufferCreateInfo{};
     bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -302,13 +303,13 @@ int main()
     std::cout << "Memory Allocated: " << memoryRequirements.size << " bytes\n";
     std::cout << "Buffer memory bound at offset 0.\n";
 
-    std::array<std::uint32_t, ElementCount> inputValue{};
-    for (std::uint32_t index = 0; index < ElementCount; index++)
+    std::array<std::uint32_t, kElementCount> inputValue{};
+    for (std::uint32_t index = 0; index < kElementCount; index++)
     {
         inputValue[index] = index + 1;
     }
 
-    std::array<std::uint32_t, ElementCount> readValue{};
+    std::array<std::uint32_t, kElementCount> readValue{};
     {
         void *mappedData = nullptr;
         const VkResult mapResult = vkMapMemory(device, deviceMemory, 0, BufferSize, 0, &mappedData);
@@ -412,9 +413,9 @@ int main()
     }
 
     VkDescriptorBufferInfo descriptorBufferInfo{};
-    descriptorBufferInfo.buffer = buffer;
-    descriptorBufferInfo.offset = 0;
-    descriptorBufferInfo.range = BufferSize;
+    descriptorBufferInfo.buffer = buffer;    // 사용할 buffer
+    descriptorBufferInfo.offset = 0;         // buffer 시작 기준 바이트 오프셋
+    descriptorBufferInfo.range = BufferSize; // 그 위치부터 사용할 바이트 수
 
     VkWriteDescriptorSet descriptorWrite{};
     descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -584,7 +585,12 @@ int main()
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &descriptorSet, 0,
                             nullptr);
 
-    vkCmdDispatch(commandBuffer, 1, 1, 1);
+    // dispatch는 1회로 고정
+    std::uint32_t groupCountX = (kElementCount + kWorkGroupLocalSize - 1) / kWorkGroupLocalSize;
+    std::uint32_t groupCountY = 1;
+    std::uint32_t groupCountZ = 1;
+
+    vkCmdDispatch(commandBuffer, groupCountX, groupCountY, groupCountZ);
 
     VkMemoryBarrier readbackBarrier{};
     readbackBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
@@ -647,7 +653,7 @@ int main()
 
     std::cout << "Compute work completed.\n";
 
-    std::array<std::uint32_t, ElementCount> gpuValues{};
+    std::array<std::uint32_t, kElementCount> gpuValues{};
     {
         void *mappedResultData = nullptr;
 
@@ -675,7 +681,11 @@ int main()
 
     std::cout << '\n';
 
-    for (std::uint32_t index = 0; index < ElementCount; ++index)
+    std::cout << "<<<result>>>\n";
+    std::cout << "N = " << kElementCount << '\n';
+    std::cout << "Workgroup count = " << groupCountX << '\n';
+
+    for (std::uint32_t index = 0; index < kElementCount; ++index)
     {
         const std::uint32_t expectedValue = (index + 1u) * 2u;
         if (gpuValues[index] != expectedValue)
