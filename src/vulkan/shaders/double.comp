@@ -6,13 +6,21 @@ layout(set = 0, binding = 0, std430) buffer DataBuffer {
     uint values[];
 } dataBuffer;
 
+// push_constant로 전달된 값을 이 형식으로 읽겠다고 선언
+// uniform : push constant 블록 선언에 사용하는 문법
+layout(push_constant, std430) uniform ComputeParameters
+{
+    uint elementCount;
+    uint multiplier;
+} parameters;
+
 void main() {
-    uint bufferLength = dataBuffer.values.length(); //length는 descriptor range와 shader에 선언한 배열의 원소 간격을 기준으로 원소 개수 계산
     uint index = gl_GlobalInvocationID.x;
 
-    if (index >= bufferLength) {
+    if (index >= parameters.elementCount
+            || index >= uint(dataBuffer.values.length())) {
         return;
     }
 
-    dataBuffer.values[index] *= 2u;
+    dataBuffer.values[index] *= parameters.multiplier;
 }

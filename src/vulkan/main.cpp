@@ -16,6 +16,12 @@
 // Vulkan API -> Vulkan Loader -> Vulkan Driver -> GPU
 int main()
 {
+    if (kElementCount > kBufferCapacity)
+    {
+        std::cerr << "Element count exceeds buffer capacity.\n";
+        return EXIT_FAILURE;
+    }
+
     std::uint32_t apiVersion = 0;
 
     const VkResult result = vkEnumerateInstanceVersion(&apiVersion);
@@ -204,7 +210,7 @@ int main()
     std::cout << "Compute queue acquired."
               << " family = " << computeQueueFamilyIndex.value() << ", queue=0\n";
 
-    constexpr VkDeviceSize BufferSize = sizeof(std::uint32_t) * kElementCount;
+    constexpr VkDeviceSize BufferSize = sizeof(std::uint32_t) * kBufferCapacity;
 
     VkBufferCreateInfo bufferCreateInfo{};
     bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -303,13 +309,13 @@ int main()
     std::cout << "Memory Allocated: " << memoryRequirements.size << " bytes\n";
     std::cout << "Buffer memory bound at offset 0.\n";
 
-    std::array<std::uint32_t, kElementCount> inputValue{};
-    for (std::uint32_t index = 0; index < kElementCount; index++)
+    std::array<std::uint32_t, kBufferCapacity> inputValue{};
+    for (std::uint32_t index = 0; index < kBufferCapacity; index++)
     {
         inputValue[index] = index + 1;
     }
 
-    std::array<std::uint32_t, kElementCount> readValue{};
+    std::array<std::uint32_t, kBufferCapacity> readValue{};
     {
         void *mappedData = nullptr;
         const VkResult mapResult = vkMapMemory(device, deviceMemory, 0, BufferSize, 0, &mappedData);
@@ -479,10 +485,28 @@ int main()
     const std::unique_ptr<VkShaderModule_T, decltype(destroyShaderModule)> shaderModuleOwner(shaderModule,
                                                                                              destroyShaderModule);
 
+#pragma pack(push, 1)
+    struct ComputePushConstants
+    {
+        std::uint32_t elementCount;
+        std::uint32_t multiplier;
+    };
+#pragma pack(pop)
+
+    VkPushConstantRange pushConstantRange{};
+    pushConstantRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    pushConstantRange.offset = 0;
+    pushConstantRange.size = sizeof(ComputePushConstants);
+
     VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo{};
     pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+
     pipelineLayoutCreateInfo.setLayoutCount = 1;
     pipelineLayoutCreateInfo.pSetLayouts = &descriptorSetLayout;
+
+    // Compute Shader가 Push Constant의 range 만큼의 바이트 사용
+    pipelineLayoutCreateInfo.pushConstantRangeCount = 1;
+    pipelineLayoutCreateInfo.pPushConstantRanges = &pushConstantRange;
 
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
 
@@ -585,12 +609,20 @@ int main()
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &descriptorSet, 0,
                             nullptr);
 
+    // Push Constants
+    ComputePushConstants pushConstants{.elementCount = kElementCount, .multiplier = kMultiplier};
+    vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants),
+                       &pushConstants);
+
     // dispatch는 1회로 고정
     std::uint32_t groupCountX = (kElementCount + kWorkGroupLocalSize - 1) / kWorkGroupLocalSize;
     std::uint32_t groupCountY = 1;
     std::uint32_t groupCountZ = 1;
 
-    vkCmdDispatch(commandBuffer, groupCountX, groupCountY, groupCountZ);
+    if (groupCountX > 0)
+    {
+        vkCmdDispatch(commandBuffer, groupCountX, groupCountY, groupCountZ);
+    }
 
     VkMemoryBarrier readbackBarrier{};
     readbackBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
@@ -653,7 +685,7 @@ int main()
 
     std::cout << "Compute work completed.\n";
 
-    std::array<std::uint32_t, kElementCount> gpuValues{};
+    std::array<std::uint32_t, kBufferCapacity> gpuValues{};
     {
         void *mappedResultData = nullptr;
 
@@ -685,9 +717,11 @@ int main()
     std::cout << "N = " << kElementCount << '\n';
     std::cout << "Workgroup count = " << groupCountX << '\n';
 
-    for (std::uint32_t index = 0; index < kElementCount; ++index)
+    for (std::uint32_t index = 0; index < kBufferCapacity; ++index)
     {
-        const std::uint32_t expectedValue = (index + 1u) * 2u;
+        const std::uint32_t initialValue = index + 1u;
+        const std::uint32_t expectedValue = index < kElementCount ? initialValue * kMultiplier : initialValue;
+
         if (gpuValues[index] != expectedValue)
         {
             std::cerr << "Result mismatch at index: " << index << " : expected " << expectedValue << ", got "
