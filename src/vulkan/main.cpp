@@ -16,12 +16,6 @@
 // Vulkan API -> Vulkan Loader -> Vulkan Driver -> GPU
 int main()
 {
-    if (kElementCount > kBufferCapacity)
-    {
-        std::cerr << "Element count exceeds buffer capacity.\n";
-        return EXIT_FAILURE;
-    }
-
     std::uint32_t apiVersion = 0;
 
     const VkResult result = vkEnumerateInstanceVersion(&apiVersion);
@@ -341,12 +335,12 @@ int main()
         return EXIT_FAILURE;
     }
 
-    std::cout << "Read Values: ";
-    for (const std::uint32_t value : readValue)
-    {
-        std::cout << value << ' ';
-    }
-    std::cout << "\nMapped memory verification passed.\n";
+    // std::cout << "Read Values: ";
+    // for (const std::uint32_t value : readValue)
+    // {
+    //     std::cout << value << ' ';
+    // }
+    // std::cout << "\nMapped memory verification passed.\n";
 
     VkDescriptorSetLayoutBinding storageBinding{};
     storageBinding.binding = 0;
@@ -553,11 +547,13 @@ int main()
     const std::unique_ptr<VkPipeline_T, decltype(destroyPipeline)> computePipelineOwner(computePipeline,
                                                                                         destroyPipeline);
 
-    std::cout << "Compute Pipeline created.\n";
+    std::cout << "Compute Pipeline created.\n\n";
 
     VkCommandPoolCreateInfo commandPoolCreateInfo{};
     commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     commandPoolCreateInfo.queueFamilyIndex = computeQueueFamilyIndex.value();
+    commandPoolCreateInfo.flags =
+        VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT; // Pool에서 할당한 Command Buffer를 개별적으로 초기화 가능
 
     VkCommandPool commandPool = VK_NULL_HANDLE;
 
@@ -592,55 +588,12 @@ int main()
         return EXIT_FAILURE;
     }
 
-    VkCommandBufferBeginInfo commandBufferBeginInfo{};
-    commandBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    commandBufferBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-    const VkResult beginResult = vkBeginCommandBuffer(commandBuffer, &commandBufferBeginInfo);
-
-    if (beginResult != VK_SUCCESS)
-    {
-        std::cerr << "vkBeginCommandBuffer failed: " << beginResult << '\n';
-        return EXIT_FAILURE;
-    }
-
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline);
-
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &descriptorSet, 0,
-                            nullptr);
-
-    // Push Constants
-    ComputePushConstants pushConstants{.elementCount = kElementCount, .multiplier = kMultiplier};
-    vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants),
-                       &pushConstants);
-
-    // dispatch는 1회로 고정
-    std::uint32_t groupCountX = (kElementCount + kWorkGroupLocalSize - 1) / kWorkGroupLocalSize;
-    std::uint32_t groupCountY = 1;
-    std::uint32_t groupCountZ = 1;
-
-    if (groupCountX > 0)
-    {
-        vkCmdDispatch(commandBuffer, groupCountX, groupCountY, groupCountZ);
-    }
-
-    VkMemoryBarrier readbackBarrier{};
-    readbackBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
-    readbackBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-    readbackBarrier.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
-
-    vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 1,
-                         &readbackBarrier, 0, nullptr, 0, nullptr);
-
-    const VkResult endResult = vkEndCommandBuffer(commandBuffer);
-
-    if (endResult != VK_SUCCESS)
-    {
-        std::cerr << "vkEndCommandBuffer failed: " << endResult << '\n';
-        return EXIT_FAILURE;
-    }
-
-    std::cout << "Compute command buffer recorded.\n";
+    // job
+    const std::array<ComputePushConstants, 3> jobs{{
+        {33u, 3u},
+        {17u, 0u},
+        {1024u, 1u},
+    }};
 
     VkFenceCreateInfo fenceCreateInfo{};
     fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
@@ -658,76 +611,167 @@ int main()
 
     const std::unique_ptr<VkFence_T, decltype(destroyFence)> fenceOwner(computeFence, destroyFence);
 
-    VkSubmitInfo submitInfo{};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &commandBuffer;
-
-    const VkResult submitResult = vkQueueSubmit(computeQueue, 1, &submitInfo, computeFence);
-
-    if (submitResult != VK_SUCCESS)
+    for (std::size_t index = 0; index < jobs.size(); index++)
     {
-        std::cerr << "vkQueueSubmit failed: " << submitResult << '\n';
-        return EXIT_FAILURE;
-    }
-
-    std::cout << "Compute work submitted.\n";
-
-    const VkResult waitReuslt =
-        vkWaitForFences(device, 1, &computeFence, VK_TRUE, std::numeric_limits<std::uint64_t>::max());
-
-    if (waitReuslt != VK_SUCCESS)
-    {
-        std::cerr << "vkWaitForFences failed: " << waitReuslt << '\n';
-
-        std::abort();
-    }
-
-    std::cout << "Compute work completed.\n";
-
-    std::array<std::uint32_t, kBufferCapacity> gpuValues{};
-    {
-        void *mappedResultData = nullptr;
-
-        const VkResult resultMapResult = vkMapMemory(device, deviceMemory, 0, BufferSize, 0, &mappedResultData);
-
-        if (resultMapResult != VK_SUCCESS)
+        if (jobs[index].elementCount > kBufferCapacity)
         {
-            std::cerr << "vkMapMemory for result failed: " << resultMapResult << '\n';
+            std::cerr << "Job " << index << " : elementCount exceeds buffer capacity.\n";
             return EXIT_FAILURE;
         }
 
-        const auto unmapResultMemory = [device, deviceMemory](void *) noexcept { vkUnmapMemory(device, deviceMemory); };
+        std::cout << "jobs[" << index << "] information\n";
+        std::cout << "N = " << jobs[index].elementCount << " Multiplier = " << jobs[index].multiplier << '\n';
 
-        const std::unique_ptr<void, decltype(unmapResultMemory)> resultMappingOwner(mappedResultData,
-                                                                                    unmapResultMemory);
-
-        std::memcpy(gpuValues.data(), mappedResultData, gpuValues.size() * sizeof(std::uint32_t));
-    }
-
-    std::cout << "GPU result: ";
-    for (const std::uint32_t value : gpuValues)
-    {
-        std::cout << value << ' ';
-    }
-
-    std::cout << '\n';
-
-    std::cout << "<<<result>>>\n";
-    std::cout << "N = " << kElementCount << '\n';
-    std::cout << "Workgroup count = " << groupCountX << '\n';
-
-    for (std::uint32_t index = 0; index < kBufferCapacity; ++index)
-    {
-        const std::uint32_t initialValue = index + 1u;
-        const std::uint32_t expectedValue = index < kElementCount ? initialValue * kMultiplier : initialValue;
-
-        if (gpuValues[index] != expectedValue)
         {
-            std::cerr << "Result mismatch at index: " << index << " : expected " << expectedValue << ", got "
-                      << gpuValues[index] << '\n';
+            void *mappedData = nullptr;
+            const VkResult mappedResult = vkMapMemory(device, deviceMemory, 0, BufferSize, 0, &mappedData);
+
+            if (mappedResult != VK_SUCCESS)
+            {
+                std::cerr << "vkMapMemory failed: " << mappedResult << '\n';
+                return EXIT_FAILURE;
+            }
+
+            std::memcpy(mappedData, inputValue.data(), sizeof(std::uint32_t) * inputValue.size());
+
+            vkUnmapMemory(device, deviceMemory);
+        }
+
+        const VkResult resetCommandBufferResult = vkResetCommandBuffer(commandBuffer, 0);
+        if (resetCommandBufferResult != VK_SUCCESS)
+        {
+            std::cerr << "vkResetCommandBuffer failed: " << resetCommandBufferResult << '\n';
             return EXIT_FAILURE;
         }
+
+        VkCommandBufferBeginInfo commandBufferBeginInfo{};
+        commandBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        commandBufferBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+        const VkResult beginResult = vkBeginCommandBuffer(commandBuffer, &commandBufferBeginInfo);
+        if (beginResult != VK_SUCCESS)
+        {
+            std::cerr << "vkBeginCommandBuffer failed: " << beginResult << '\n';
+            return EXIT_FAILURE;
+        }
+
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline);
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &descriptorSet, 0,
+                                nullptr);
+
+        // Push Constants
+        ComputePushConstants pushConstants{.elementCount = jobs[index].elementCount,
+                                           .multiplier = jobs[index].multiplier};
+        vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants),
+                           &pushConstants);
+
+        // dispatch는 1회로 고정
+        std::uint32_t groupCountX = (pushConstants.elementCount + kWorkGroupLocalSize - 1) / kWorkGroupLocalSize;
+        std::uint32_t groupCountY = 1;
+        std::uint32_t groupCountZ = 1;
+
+        if (groupCountX > 0)
+        {
+            vkCmdDispatch(commandBuffer, groupCountX, groupCountY, groupCountZ);
+        }
+
+        VkMemoryBarrier readbackBarrier{};
+        readbackBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+        readbackBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+        readbackBarrier.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+
+        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 1,
+                             &readbackBarrier, 0, nullptr, 0, nullptr);
+
+        const VkResult endResult = vkEndCommandBuffer(commandBuffer);
+        if (endResult != VK_SUCCESS)
+        {
+            std::cerr << "vkEndCommandBuffer failed: " << endResult << '\n';
+            return EXIT_FAILURE;
+        }
+
+        std::cout << "Compute command buffer recorded.\n";
+
+        const VkResult resetFenceResult = vkResetFences(device, 1, &computeFence);
+        if (resetFenceResult != VK_SUCCESS)
+        {
+            std::cerr << "vkResetFences failed: " << resetFenceResult << '\n';
+            return EXIT_FAILURE;
+        }
+
+        VkSubmitInfo submitInfo{};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submitInfo.commandBufferCount = 1;
+        submitInfo.pCommandBuffers = &commandBuffer;
+
+        const VkResult submitResult = vkQueueSubmit(computeQueue, 1, &submitInfo, computeFence);
+
+        if (submitResult != VK_SUCCESS)
+        {
+            std::cerr << "vkQueueSubmit failed: " << submitResult << '\n';
+            return EXIT_FAILURE;
+        }
+
+        std::cout << "Compute work submitted.\n";
+
+        const VkResult waitReuslt =
+            vkWaitForFences(device, 1, &computeFence, VK_TRUE, std::numeric_limits<std::uint64_t>::max());
+
+        if (waitReuslt != VK_SUCCESS)
+        {
+            std::cerr << "vkWaitForFences failed: " << waitReuslt << '\n';
+
+            std::abort();
+        }
+
+        std::cout << "Compute work completed.\n";
+
+        std::array<std::uint32_t, kBufferCapacity> gpuValues{};
+        {
+            void *mappedResultData = nullptr;
+
+            const VkResult resultMapResult = vkMapMemory(device, deviceMemory, 0, BufferSize, 0, &mappedResultData);
+
+            if (resultMapResult != VK_SUCCESS)
+            {
+                std::cerr << "vkMapMemory for result failed: " << resultMapResult << '\n';
+                return EXIT_FAILURE;
+            }
+
+            const auto unmapResultMemory = [device, deviceMemory](void *) noexcept {
+                vkUnmapMemory(device, deviceMemory);
+            };
+
+            const std::unique_ptr<void, decltype(unmapResultMemory)> resultMappingOwner(mappedResultData,
+                                                                                        unmapResultMemory);
+
+            std::memcpy(gpuValues.data(), mappedResultData, gpuValues.size() * sizeof(std::uint32_t));
+        }
+
+        // std::cout << "GPU result: ";
+        // for (const std::uint32_t value : gpuValues)
+        // {
+        //     std::cout << value << ' ';
+        // }
+
+        std::cout << '\n';
+
+        for (std::uint32_t index = 0; index < kBufferCapacity; ++index)
+        {
+            const std::uint32_t initialValue = index + 1u;
+            const std::uint32_t expectedValue =
+                index < pushConstants.elementCount ? initialValue * pushConstants.multiplier : initialValue;
+
+            if (gpuValues[index] != expectedValue)
+            {
+                std::cerr << "Result mismatch at index: " << index << ". expected " << expectedValue << ", got "
+                          << gpuValues[index] << '\n';
+                return EXIT_FAILURE;
+            }
+        }
+
+        std::cout << "jobs[" << index << "] result\n";
+        std::cout << " verification passed\n\n";
     }
 
     std::cout << "GPU Compute verification passed.\n";
