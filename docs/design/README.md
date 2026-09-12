@@ -12,3 +12,4 @@ Phase, milestone과 vertical slice는 독립 계획 문서가 아니라 해당 i
 
 - [Issue #1: 스키마 기반 C++/C# 패킷 코드 생성기](issue-1-packet-codegen-rpc.md)
 - [Issue #3: Generated C# codec .NET build와 C++/C# wire conformance](issue-3-generated-csharp-conformance.md)
+- [Issue #6: Vulkan 2D 렌더러 기반 구축과 단계별 학습](issue-6-vulkan-2d-foundation.md)
