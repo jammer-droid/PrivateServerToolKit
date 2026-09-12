@@ -119,7 +119,7 @@ Instance부터 Graphics Pipeline 기반 2D 렌더러까지 직접 구성하면�
 
 | 시점 | 남은 결정과 제안 방향 |
 |---|---|
-| S1-1 | Graphics 타깃·파일 배치, 실패 처리 방식, SDK·첫 검증 환경. 현재 macOS/MoltenVK·C++17·C Vulkan API를 출발 후보로 삼는다. API 최소 버전은 실제 지원과 함께 확정한다. |
+| S1-1 | `renderer_project/`의 `vulkan_renderer`, C++17·C Vulkan API, `VK_CHECK`와 예외 기반 초기화 실패 전달을 채택했다. macOS에서 instance 지원 버전 1.4.335와 실행을 확인했고 앱 목표는 1.3이다. 1.3 미만 지원 검사와 Extension·Validation 구성이 남아 있다. |
 | S1-2 | 창 라이브러리(GLFW 후보), Graphics/Present 분리 family 지원 정책과 활성화 feature. |
 | S1-3~4 | Present mode, frame slot 수, Dynamic Rendering 또는 Render Pass. 기존 Vulkan 1.3 요청을 참고하되 지원 확인 없이 기능 사용을 확정하지 않는다. |
 | S1-5 | Shader 언어·컴파일러, 좌표 원점·축·단위, blending과 그리기 순서. |
@@ -133,17 +133,25 @@ Instance부터 Graphics Pipeline 기반 2D 렌더러까지 직접 구성하면�
 2. [Khronos Instancing](https://docs.vulkan.org/samples/latest/samples/api/instancing/README.html) — S1-6 실습. 같은 mesh에 개별 instance 입력을 주는 방식을 참고한다.
 3. [Khronos Swapchain Semaphore Reuse](https://docs.vulkan.org/guide/latest/swapchain_semaphore_reuse.html) — S1-4 정확성 reference. submission 완료와 presentation semaphore 재사용 조건을 구분한다.
 
+## S1-1 중간 결정
+
+- 현재 Graphics 실행 코드는 `src/vulkan/renderer_project/`에 둔다. 기존 `compute_project/`와 독립적으로 빌드한다.
+- C API 호출을 유지한다. `VK_CHECK`는 `VK_SUCCESS`만 기대하는 호출의 실패를 `VulkanException`으로 전달하고 `main`의 단일 catch에서 진단·종료한다. 재시도·복구가 필요한 결과는 향후 호출 위치에서 별도 처리한다.
+- `VulkanHandle`은 단독 소유자로 복사와 이동을 모두 금지한다. 이는 현재 의도적인 제한이다. `Get()`은 소유권을 이전하지 않는 borrowed handle이며 owner 수명 내에서 사용하고 외부에서 파괴하지 않는다.
+- deleter 구조체를 현재 사용하지만 템플릿이 람다를 금지하는 것은 아니다. 핸들 래퍼 자체의 이동·복사를 허용할 필요가 생기면 해당 단계에서 계약을 재검토한다.
+- `VulkanContext` 분리는 지금 하지 않는다. 이후 슬라이스에서 자원과 초기화 책임이 늘어날 때 도입 여부·구조를 정한다. S1-1의 선행 조건이나 완료 조건으로 강제하지 않는다.
+
 ## 검증과 진행 기록
 
 프레임워크 초기화·출력은 실제 실행과 validation을 주된 증거로 사용한다. 단순 래퍼별 mock test를 추가하지 않는다. 좌표 변환 등 독립 expected result가 있는 로직은 필요할 때 focused test로 검증한다. 장시간 stress·성능 benchmark는 포함하지 않는다.
 
 | 단계 | 상태 | 구현/실행 증거 | 이해 확인 |
 |---|---|---|---|
-| S1-1 | current | 아직 없음 | 아직 없음 |
+| S1-1 | current | macOS/AppleClang 16, Debug 독립 configure·build·실행 성공. 지원 버전 1.4.335 출력, 종료 코드 0. 오류 주입·Validation은 아직 미검증. | 지원 버전과 앱 목표 API 1.3의 차이 설명 확인. 복사·이동 금지와 Get의 사용 의도 확인. |
 | S1-2 | next | 아직 없음 | 아직 없음 |
 | S1-3 | pending | 아직 없음 | 아직 없음 |
 | S1-4 | pending | 아직 없음 | 아직 없음 |
 | S1-5 | pending | 아직 없음 | 아직 없음 |
 | S1-6 | pending | 아직 없음 | 아직 없음 |
 
-현재 다음 행동은 S1-1의 실행 골격과 Instance 생성·파괴를 안내하는 것이다. 이 문서 작성은 해당 코드 구현을 대신하지 않는다. 후속 진행도·학습 기록은 별도 단계 문서 없이 이 문서의 stable-ID section을 갱신한다.
+현재 다음 행동은 S1-1에서 남은 지원 버전 검사, Extension·Layer 조회와 Validation/debug messenger 구성을 안내하는 것이다. S1-1 전체는 아직 완료되지 않았다. 후속 진행도·학습 기록은 별도 단계 문서 없이 이 문서의 stable-ID section을 갱신한다.
