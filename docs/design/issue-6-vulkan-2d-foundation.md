@@ -186,13 +186,13 @@ renderer_project/
 | 단계 | 상태 | 구현/실행 증거 | 이해 확인 |
 |---|---|---|---|
 | S1-1 | complete | Debug/Release 빌드·실행 및 Debug callback 수신 통과. 요구 버전·필수 확장·필수 Layer 미지원 진단과 종료 코드 1 확인. 상세 증거와 한계는 아래 기록. | 지원/목표 API 버전 구분, 소유권과 역순 파괴, 생성자 예외 시 멤버 정리, pNext callback과 지속 messenger의 역할 구분 확인. |
-| S1-2 | current | GLFW Window 추가 후 Debug/Release configure·build 통과. Agent의 실제 창 조작 검증은 미수행. Surface·GPU·Device는 아직 미구현. | GLFW_NO_API와 Surface를 통한 Vulkan 출력 관계 설명 확인. |
+| S1-2 | current | GLFW Window와 Surface 연결 후 Debug/Release configure·build 통과. 확장 중복 제거·생성자 초기화 통합·Surface 소유권을 코드 검토했다. Agent의 실제 Surface 생성·GUI 조작 검증은 미수행. GPU·Device는 아직 미구현. | GLFW_NO_API와 Surface를 통한 Vulkan 출력 관계 설명 확인. |
 | S1-3 | pending | 아직 없음 | 아직 없음 |
 | S1-4 | pending | 아직 없음 | 아직 없음 |
 | S1-5 | pending | 아직 없음 | 아직 없음 |
 | S1-6 | pending | 아직 없음 | 아직 없음 |
 
-S1-1은 완료했다. 현재 S1-2는 GLFW Window 구현을 마쳤고, 다음 행동은 GLFW 필수 확장 전달과 Surface 생성·소유권 연결이다. Graphics/Present Queue 정책은 GPU 선택 단계에서 확정한다. 후속 진행도·학습 기록은 별도 단계 문서 없이 이 문서의 stable-ID section을 갱신한다.
+S1-1은 완료했다. 현재 S1-2는 GLFW Window 구현을 마쳤고, 다음 행동은 Surface 실행 확인 후 GPU·Graphics/Present Queue 선택이다. Graphics/Present Queue 정책은 GPU 선택 단계에서 확정한다. 후속 진행도·학습 기록은 별도 단계 문서 없이 이 문서의 stable-ID section을 갱신한다.
 
 
 ### S1-1 완료 검증 — 2026-09-13
@@ -221,5 +221,13 @@ cmake --build src/vulkan/renderer_project/build/release
 
 - 창 라이브러리는 GLFW를 사용한다. `app/Window`는 단일 창과 GLFW 초기화·종료를 소유하고 복사·이동을 금지한다. 현재 다중 창은 범위 밖이다.
 - 메인 스레드에서 오류 callback 등록, 초기화, `GLFW_NO_API` 창 생성, 이벤트 대기와 종료를 수행한다. 창 생성 실패 시 GLFW를 종료한 뒤 예외를 전달한다.
-- `main`은 Window → VulkanContext 순서로 생성하고 닫기 요청까지 이벤트를 기다린다. 아직 Surface를 생성하거나 렌더링하지 않는다.
+- `main`은 Window → VulkanContext 순서로 생성하고 닫기 요청까지 이벤트를 기다린다. 후속 구현에서 Surface를 생성해 지역 RAII 래퍼로 소유한다. 아직 렌더링하지 않는다.
 - 클래스 복사·이동 금지 매크로를 `common/ClassTraits.h`로 분리했다. Debug/Release 빌드 통과를 확인했으며 실제 GUI resize·닫기 동작은 agent가 검증하지 않았다.
+
+
+### S1-2 Surface 중간 기록
+
+- `Window::GetRequiredInstanceExtensions`가 반환한 GLFW 요구 확장을 Context에 전달한다. 외부 요구·portability·debug utils 이름은 문자열 비교로 중복 없이 병합한 뒤 지원 여부를 검사한다.
+- 기본 Context 생성자는 확장 목록 생성자로 위임한다. 두 경로 모두 기존 Debug messenger 초기화를 수행한다.
+- `Window::CreateSurface`가 생성한 Surface는 `main`의 지역 RAII 래퍼가 즉시 소유한다. 생성 순서는 Window → Context → Surface, 파괴 순서는 Surface → Context → Window다.
+- Debug/Release configure·build 통과. 이 기록은 실제 GUI 실행·Surface 생성·창 닫기 검증 완료를 뜻하지 않는다. 해당 실행 증거는 다음 검토에서 확인한다.

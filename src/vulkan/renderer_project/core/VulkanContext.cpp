@@ -126,7 +126,20 @@ VkDebugUtilsMessengerCreateInfoEXT MakeDebugMessengerCreateInfo()
     return messengerCreateInfo;
 }
 
-VkInstance CreateInstance()
+void AddUniqueExtension(std::vector<const char *> &extensions, const char *name)
+{
+    for (const char *extension : extensions)
+    {
+        if (std::strcmp(extension, name) == 0)
+        {
+            return;
+        }
+    }
+
+    extensions.push_back(name);
+}
+
+VkInstance CreateInstance(const std::vector<const char *> &requiredInstanceExtensions = {})
 {
     std::uint32_t apiVersion = VulkanContext::GetApiVersion();
     std::cout << "ApiVersion: " << VK_API_VERSION_MAJOR(apiVersion) << '.' << VK_API_VERSION_MINOR(apiVersion) << '.'
@@ -153,8 +166,13 @@ VkInstance CreateInstance()
     std::vector<VkExtensionProperties> extensionProperties = EnumerateInstanceExtensions();
     std::vector<const char *> requiredExtensions;
 
+    for (const char *extName : requiredInstanceExtensions)
+    {
+        AddUniqueExtension(requiredExtensions, extName);
+    }
+
 #ifdef __APPLE__
-    requiredExtensions.push_back(kRequiredExtensionPortabilityEnumeration);
+    AddUniqueExtension(requiredExtensions, kRequiredExtensionPortabilityEnumeration);
 
     // MoltenVK -> Vulkan을 Metal 위에 구현하는 소프트웨어
     //  - PhysicalDevice 조회시 MoltenVK가 Device를 노출함(portability device)
@@ -167,7 +185,7 @@ VkInstance CreateInstance()
 
     if (kEnableValidation)
     {
-        requiredExtensions.push_back(kRequiredExtensionDebugUtils);
+        AddUniqueExtension(requiredExtensions, kRequiredExtensionDebugUtils);
     }
 
     for (const char *requiredExtension : requiredExtensions)
@@ -226,6 +244,18 @@ VkInstance CreateInstance()
     return instance;
 }
 
+PFN_vkDestroyDebugUtilsMessengerEXT LoadDestroyDebugMessengerFunction(VkInstance instance)
+{
+    PFN_vkDestroyDebugUtilsMessengerEXT destroyFunction = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
+        vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT"));
+    if (destroyFunction == nullptr)
+    {
+        throw std::runtime_error("Failed to load vkDestroyDebugUtilsMessengerEXT");
+    }
+
+    return destroyFunction;
+}
+
 VkDebugUtilsMessengerEXT CreateDebugMessenger(VkInstance instance)
 {
     VkDebugUtilsMessengerEXT messenger = VK_NULL_HANDLE;
@@ -266,18 +296,17 @@ void SubmitDebugTestMessage(VkInstance instance)
 
 }; // namespace
 
-VulkanContext::VulkanContext() : instanceHandle_{CreateInstance(), deleter::VkInstanceDeleter{}}
+VulkanContext::VulkanContext() : VulkanContext(std::vector<const char *>{})
+{
+}
+
+VulkanContext::VulkanContext(const std::vector<const char *> &requiredInstanceExtensions)
+    : instanceHandle_{CreateInstance(requiredInstanceExtensions), deleter::VkInstanceDeleter{}}
 {
     if (kEnableValidation)
     {
         // destroy Function 확보 후 객체 생성
-        PFN_vkDestroyDebugUtilsMessengerEXT destroyFunction = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
-            vkGetInstanceProcAddr(instanceHandle_.Get(), "vkDestroyDebugUtilsMessengerEXT"));
-        if (destroyFunction == nullptr)
-        {
-            throw std::runtime_error("Failed to load vkDestroyDebugUtilsMessengerEXT");
-        }
-
+        auto destroyFunction = LoadDestroyDebugMessengerFunction(instanceHandle_.Get());
         VkDebugUtilsMessengerEXT messenger = CreateDebugMessenger(instanceHandle_.Get());
         messengerHandle_.Adopt(messenger,
                                deleter::VkDebugUtilsMessengerDeleter{instanceHandle_.Get(), destroyFunction});

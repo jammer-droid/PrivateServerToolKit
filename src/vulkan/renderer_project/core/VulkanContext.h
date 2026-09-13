@@ -4,11 +4,13 @@
 #include "common/VulkanHandle.h"
 
 #include <cstdint>
+#include <vector>
 
 class VulkanContext
 {
   public:
     VulkanContext();
+    explicit VulkanContext(const std::vector<const char *> &requiredInstanceExtensions);
     ~VulkanContext() = default;
 
     VK_NON_COPYABLE(VulkanContext)

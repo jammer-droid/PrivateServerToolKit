@@ -3,17 +3,22 @@
 #include <iostream>
 
 #include "common/VulkanException.h"
+#include "common/VulkanHandle.h"
 
 #include "core/VulkanContext.h"
 
 #include "app/Window.h"
+
+using SurfaceHandle = VulkanHandle<VkSurfaceKHR, deleter::VkSurfaceDeleter>;
 
 int main()
 {
     try
     {
         Window window;
-        VulkanContext context;
+        VulkanContext context(window.GetRequiredInstanceExtensions());
+        SurfaceHandle surfaceHandle(window.CreateSurface(context.GetInstance()),
+                                    deleter::VkSurfaceDeleter{context.GetInstance()});
 
         while (!window.IsCloseRequested())
         {

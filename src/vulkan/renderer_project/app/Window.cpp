@@ -5,6 +5,9 @@
 
 #include <cstdio>
 #include <stdexcept>
+#include <cstdint>
+
+#include "common/VulkanException.h"
 
 namespace
 {
@@ -64,4 +67,33 @@ void Window::WaitEvents() const
     // 이벤트가 없으면 현재 스레드를 대기하고
     // 이벤트가 도착하면 처리한 뒤 반환
     glfwWaitEvents();
+}
+
+std::vector<const char *> Window::GetRequiredInstanceExtensions() const
+{
+    std::uint32_t count = 0;
+    std::vector<const char *> extensionNames;
+
+    const char **names = glfwGetRequiredInstanceExtensions(&count);
+
+    if (names == nullptr)
+    {
+        throw std::runtime_error("Failed to glfwGetRequiredInstanceExtensions.\n");
+    }
+
+    for (std::uint32_t index = 0; index < count; index++)
+    {
+        extensionNames.push_back(names[index]);
+    }
+
+    return extensionNames;
+}
+
+VkSurfaceKHR Window::CreateSurface(VkInstance instance) const
+{
+    VkSurfaceKHR surface = VK_NULL_HANDLE;
+
+    VK_CHECK(glfwCreateWindowSurface(instance, window_, nullptr, &surface));
+
+    return surface;
 }

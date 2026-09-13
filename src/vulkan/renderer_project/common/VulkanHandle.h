@@ -11,7 +11,7 @@ namespace deleter
 {
 struct VkInstanceDeleter
 {
-    void operator()(VkInstance handle) noexcept
+    void operator()(VkInstance handle) const noexcept
     {
         vkDestroyInstance(handle, nullptr);
     }
@@ -22,11 +22,22 @@ struct VkDebugUtilsMessengerDeleter
     VkInstance instance_;
     PFN_vkDestroyDebugUtilsMessengerEXT destroy_;
 
-    void operator()(VkDebugUtilsMessengerEXT handle) noexcept
+    void operator()(VkDebugUtilsMessengerEXT handle) const noexcept
     {
         destroy_(instance_, handle, nullptr);
     }
 };
+
+struct VkSurfaceDeleter
+{
+    VkInstance instance_;
+
+    void operator()(VkSurfaceKHR handle) const noexcept
+    {
+        vkDestroySurfaceKHR(instance_, handle, nullptr);
+    }
+};
+
 }; // namespace deleter
 
 // VDELETER : 람다식.(C++ 17)
