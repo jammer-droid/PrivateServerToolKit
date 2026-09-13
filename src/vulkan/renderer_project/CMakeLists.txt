@@ -7,6 +7,7 @@ find_package(Vulkan REQUIRED)
 add_executable(vulkan_renderer
     main.cpp
     common/VulkanException.cpp
+    core/VulkanContext.cpp
 )
 
 target_compile_features(

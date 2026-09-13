@@ -1,6 +1,6 @@
 #pragma once
 
-#include <vulkan/vulkan.h>
+#include "common/VulkanHeaders.h"
 
 #include <type_traits>
 #include <utility>
@@ -14,7 +14,6 @@ struct VkInstanceDeleter
         vkDestroyInstance(handle, nullptr);
     }
 };
-
 }; // namespace deleter
 
 // VDELETER : 람다식.(C++ 17)
@@ -30,11 +29,8 @@ template <typename VHANDLE, typename VDELETER> class VulkanHandle
         static_assert(std::is_nothrow_move_constructible_v<VDELETER>);
     }
 
-    VulkanHandle(const VulkanHandle &) = delete;
-    VulkanHandle &operator=(VulkanHandle &) = delete;
-
-    VulkanHandle(const VulkanHandle &&) = delete;
-    VulkanHandle &operator=(VulkanHandle &&) = delete;
+    VK_NON_COPYABLE(VulkanHandle)
+    VK_NON_MOVABLE(VulkanHandle)
 
     ~VulkanHandle() noexcept
     {

@@ -40,6 +40,41 @@ Instance부터 Graphics Pipeline 기반 2D 렌더러까지 직접 구성하면�
 
 다음은 책임의 목표이며 선행 생성할 클래스 목록이 아니다. 실제 파일은 각 단계에서 필요한 만큼 추가한다.
 
+### 디렉터리 구성 — 확정
+
+`src/vulkan/renderer_project/`의 C++ 구성은 `app`, `renderer`, `core`, `common`으로 나눈다. Vulkan 실행 기반 디렉터리 이름은 `core`로 사용한다.
+
+```text
+renderer_project/
+├── CMakeLists.txt
+├── main.cpp
+├── app/
+│   ├── Application.h/.cpp
+│   └── Window.h/.cpp
+├── renderer/
+│   ├── Renderer2D.h/.cpp
+│   └── DrawData2D.h
+├── core/
+│   ├── VulkanContext.h/.cpp
+│   ├── Swapchain.h/.cpp
+│   └── FrameResources.h/.cpp
+├── common/
+│   ├── VulkanHandle.h
+│   └── VulkanError.h/.cpp
+└── shaders/
+```
+
+위 파일명은 책임별 배치 기준이며 기존 파일의 이름을 변경하거나 미구현 파일을 미리 생성하라는 의미는 아니다. `main.cpp`와 빌드 설정은 프로젝트 루트에, Shader 소스는 `shaders/`에 둔다.
+
+- `app`: 창·이벤트·실행 루프와 구성 요소 조립, 전체 종료 순서를 담당한다.
+- `renderer`: 2D 표시 데이터와 Graphics Pipeline·draw 명령 구성을 담당한다. `DrawData2D`는 가능하면 Vulkan 핸들 없이 위치·크기·색상 등으로 표현한다.
+- `core`: Instance·Device·Queue, Swapchain과 프레임 자원 등 Vulkan 실행 기반을 담당한다. `VulkanContext`는 `core/VulkanContext.h/.cpp`에 배치한다.
+- `common`: 여러 구성 요소가 사용하는 오류 전달·핸들 소유권 도구를 둔다. 앱 설정이나 렌더링 정책은 소유하지 않는다.
+- 의존 방향은 `app → renderer → core → common`을 기본으로 하고 `app → core` 직접 사용도 허용한다. 하위 계층이 상위 계층을 참조하지 않으며, 필요한 계층은 `common`을 직접 사용할 수 있다.
+- Swapchain은 출력 이미지와 재생성을, Renderer2D는 표시할 도형과 명령 기록을 담당한다. Context에 모든 자원을 모으지 않고 각 구성 요소가 자기 자원을 소유한다. 부모 자원의 수명과 GPU 완료 대기는 상위 구성에서 보장한다.
+
+### 소유권과 수명
+
 | 책임 | 소유할 내용과 경계 |
 |---|---|
 | 실행 골격/App | 창 이벤트, 실행 루프, 조립과 종료 순서 |
@@ -139,7 +174,7 @@ Instance부터 Graphics Pipeline 기반 2D 렌더러까지 직접 구성하면�
 - C API 호출을 유지한다. `VK_CHECK`는 `VK_SUCCESS`만 기대하는 호출의 실패를 `VulkanException`으로 전달하고 `main`의 단일 catch에서 진단·종료한다. 재시도·복구가 필요한 결과는 향후 호출 위치에서 별도 처리한다.
 - `VulkanHandle`은 단독 소유자로 복사와 이동을 모두 금지한다. 이는 현재 의도적인 제한이다. `Get()`은 소유권을 이전하지 않는 borrowed handle이며 owner 수명 내에서 사용하고 외부에서 파괴하지 않는다.
 - deleter 구조체를 현재 사용하지만 템플릿이 람다를 금지하는 것은 아니다. 핸들 래퍼 자체의 이동·복사를 허용할 필요가 생기면 해당 단계에서 계약을 재검토한다.
-- `VulkanContext` 분리는 지금 하지 않는다. 이후 슬라이스에서 자원과 초기화 책임이 늘어날 때 도입 여부·구조를 정한다. S1-1의 선행 조건이나 완료 조건으로 강제하지 않는다.
+- 후속 구조 논의에서 `VulkanContext`의 책임과 `core/VulkanContext.h/.cpp` 배치를 확정했다. Instance 초기화 정책과 소유권부터 분리하고 이후 Device·Queue로 확장한다. 현재 Instance 생성 함수와 RAII 멤버를 `core/VulkanContext`에 구현했다. Context와 핸들 래퍼 모두 복사·이동 금지를 유지하며, 전체 S1-1 완료를 의미하지 않는다.
 
 ## 검증과 진행 기록
 
@@ -147,7 +182,7 @@ Instance부터 Graphics Pipeline 기반 2D 렌더러까지 직접 구성하면�
 
 | 단계 | 상태 | 구현/실행 증거 | 이해 확인 |
 |---|---|---|---|
-| S1-1 | current | macOS/AppleClang 16, Debug 독립 configure·build·실행 성공. 지원 버전 1.4.335 출력, 종료 코드 0. 오류 주입·Validation은 아직 미검증. | 지원 버전과 앱 목표 API 1.3의 차이 설명 확인. 복사·이동 금지와 Get의 사용 의도 확인. |
+| S1-1 | current | macOS/AppleClang 16, Context 분리 및 매크로 수정 후 Debug 독립 configure·build·실행 성공. 지원 버전 1.4.335 출력, 종료 코드 0. 오류 주입·Validation은 아직 미검증. | 지원 버전과 앱 목표 API 1.3의 차이 설명 확인. 복사·이동 금지와 Get의 사용 의도 확인. 생성자 본문 예외 시 완성된 RAII 멤버 정리 원리 설명 확인. |
 | S1-2 | next | 아직 없음 | 아직 없음 |
 | S1-3 | pending | 아직 없음 | 아직 없음 |
 | S1-4 | pending | 아직 없음 | 아직 없음 |

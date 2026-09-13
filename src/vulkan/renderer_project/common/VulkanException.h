@@ -1,6 +1,7 @@
 #pragma once
 
-#include <vulkan/vulkan_core.h>
+#include "common/VulkanHeaders.h"
+
 #include <stdexcept>
 #include <string>
 
