@@ -4,6 +4,7 @@
 
 #include <type_traits>
 #include <utility>
+#include <cassert>
 
 namespace deleter
 {
@@ -12,6 +13,17 @@ struct VkInstanceDeleter
     void operator()(VkInstance handle) noexcept
     {
         vkDestroyInstance(handle, nullptr);
+    }
+};
+
+struct VkDebugUtilsMessengerDeleter
+{
+    VkInstance instance_;
+    PFN_vkDestroyDebugUtilsMessengerEXT destroy_;
+
+    void operator()(VkDebugUtilsMessengerEXT handle) noexcept
+    {
+        destroy_(instance_, handle, nullptr);
     }
 };
 }; // namespace deleter
@@ -28,6 +40,7 @@ template <typename VHANDLE, typename VDELETER> class VulkanHandle
     {
         static_assert(std::is_nothrow_move_constructible_v<VDELETER>);
     }
+    VulkanHandle() noexcept = default;
 
     VK_NON_COPYABLE(VulkanHandle)
     VK_NON_MOVABLE(VulkanHandle)
@@ -40,12 +53,23 @@ template <typename VHANDLE, typename VDELETER> class VulkanHandle
         }
     }
 
+    void Adopt(VHANDLE handle, VDELETER deleter) noexcept
+    {
+        static_assert(std::is_nothrow_move_assignable_v<VDELETER>);
+
+        assert(handle_ == VHANDLE{});
+        assert(handle != VHANDLE{});
+
+        deleter_ = std::move(deleter);
+        handle_ = handle;
+    }
+
     VHANDLE Get() const noexcept
     {
         return handle_;
     }
 
   private:
-    VHANDLE handle_;
-    VDELETER deleter_;
+    VHANDLE handle_{};
+    VDELETER deleter_{};
 };

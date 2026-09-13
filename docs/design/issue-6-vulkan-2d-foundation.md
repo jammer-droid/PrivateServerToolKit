@@ -154,7 +154,7 @@ renderer_project/
 
 | 시점 | 남은 결정과 제안 방향 |
 |---|---|
-| S1-1 | `renderer_project/`의 `vulkan_renderer`, C++17·C Vulkan API, `VK_CHECK`와 예외 기반 초기화 실패 전달을 채택했다. macOS에서 instance 지원 버전 1.4.335와 실행을 확인했고 앱 목표는 1.3이다. 1.3 미만 지원 검사와 macOS portability extension 조회·활성화를 구현했다. Debug의 Validation Layer 조회·활성화와 Release의 비요청 경로를 구현했다. Debug messenger 구성이 남아 있다. |
+| S1-1 | `renderer_project/`의 `vulkan_renderer`, C++17·C Vulkan API, `VK_CHECK`와 예외 기반 초기화 실패 전달을 채택했다. macOS에서 instance 지원 버전 1.4.335와 실행을 확인했고 앱 목표는 1.3이다. 1.3 미만 지원 검사와 macOS portability extension 조회·활성화를 구현했다. Debug의 Validation Layer 조회·활성화와 Release의 비요청 경로를 구현했다. Debug messenger 생성·RAII 정리와 테스트 메시지 수신까지 구현했다. Instance 생성·파괴 진단용 pNext 연결이 남아 있다. |
 | S1-2 | 창 라이브러리(GLFW 후보), Graphics/Present 분리 family 지원 정책과 활성화 feature. |
 | S1-3~4 | Present mode, frame slot 수, Dynamic Rendering 또는 Render Pass. 기존 Vulkan 1.3 요청을 참고하되 지원 확인 없이 기능 사용을 확정하지 않는다. |
 | S1-5 | Shader 언어·컴파일러, 좌표 원점·축·단위, blending과 그리기 순서. |
@@ -173,6 +173,7 @@ renderer_project/
 - 현재 Graphics 실행 코드는 `src/vulkan/renderer_project/`에 둔다. 기존 `compute_project/`와 독립적으로 빌드한다.
 - C API 호출을 유지한다. `VK_CHECK`는 `VK_SUCCESS`만 기대하는 호출의 실패를 `VulkanException`으로 전달하고 `main`의 단일 catch에서 진단·종료한다. 재시도·복구가 필요한 결과는 향후 호출 위치에서 별도 처리한다.
 - `VulkanHandle`은 단독 소유자로 복사와 이동을 모두 금지한다. 이는 현재 의도적인 제한이다. `Get()`은 소유권을 이전하지 않는 borrowed handle이며 owner 수명 내에서 사용하고 외부에서 파괴하지 않는다.
+- Debug messenger는 Instance 뒤에 선언하여 먼저 정리한다. 생성 전에 destroy 함수 주소를 확보·검사하고 생성 성공 직후 빈 래퍼에 `Adopt`한다. 래퍼는 빈 상태를 값 초기화하고 `Adopt`는 비어 있는 소유자만 허용하며 deleter의 nothrow 이동 대입을 요구한다. 래퍼 자체의 복사·이동 금지는 유지한다.
 - deleter 구조체를 현재 사용하지만 템플릿이 람다를 금지하는 것은 아니다. 핸들 래퍼 자체의 이동·복사를 허용할 필요가 생기면 해당 단계에서 계약을 재검토한다.
 - 후속 구조 논의에서 `VulkanContext`의 책임과 `core/VulkanContext.h/.cpp` 배치를 확정했다. Instance 초기화 정책과 소유권부터 분리하고 이후 Device·Queue로 확장한다. 현재 Instance 생성 함수와 RAII 멤버를 `core/VulkanContext`에 구현했다. Context와 핸들 래퍼 모두 복사·이동 금지를 유지하며, 전체 S1-1 완료를 의미하지 않는다.
 
@@ -182,11 +183,11 @@ renderer_project/
 
 | 단계 | 상태 | 구현/실행 증거 | 이해 확인 |
 |---|---|---|---|
-| S1-1 | current | macOS/AppleClang 16, Context 분리 및 매크로 수정 후 Debug 독립 configure·build·실행 성공. 지원 버전 1.4.335, 확장 19개 조회와 portability extension 활성화 후 Instance 생성·정상 종료(코드 0) 확인. 0개·VK_INCOMPLETE 처리 및 반환 개수 반영은 코드 검토로 확인했고 해당 경계의 실행 주입은 아직 미검증. Layer 추가 후 Debug/Release 빌드·실행 정상 종료 확인. Debug에서 VK_LAYER_KHRONOS_validation 지원 확인·활성화 요청, Release에서는 앱이 요청하지 않음. Debug callback 수신은 아직 미검증. | 지원 버전과 앱 목표 API 1.3의 차이 설명 확인. 복사·이동 금지와 Get의 사용 의도 확인. 생성자 본문 예외 시 완성된 RAII 멤버 정리 원리 설명 확인. |
+| S1-1 | current | macOS/AppleClang 16, Context 분리 및 매크로 수정 후 Debug 독립 configure·build·실행 성공. 지원 버전 1.4.335, 확장 19개 조회와 portability extension 활성화 후 Instance 생성·정상 종료(코드 0) 확인. 0개·VK_INCOMPLETE 처리 및 반환 개수 반영은 코드 검토로 확인했고 해당 경계의 실행 주입은 아직 미검증. Layer 추가 후 Debug/Release 빌드·실행 정상 종료 확인. Debug에서 VK_LAYER_KHRONOS_validation 지원 확인·활성화 요청, Release에서는 앱이 요청하지 않음. Debug messenger 추가 후 Debug/Release 빌드·실행 종료 코드 0 확인. Debug에서 vkSubmitDebugUtilsMessageEXT 테스트 문구 수신, Release에서는 문구 없음. 테스트는 전달 경로 증거이며 실제 규칙 위반 검출 증거는 아니다. 임시 테스트 호출은 현재 Debug 생성 경로에 남아 있다. | 지원 버전과 앱 목표 API 1.3의 차이 설명 확인. 복사·이동 금지와 Get의 사용 의도 확인. 생성자 본문 예외 시 완성된 RAII 멤버 정리 원리 설명 확인. |
 | S1-2 | next | 아직 없음 | 아직 없음 |
 | S1-3 | pending | 아직 없음 | 아직 없음 |
 | S1-4 | pending | 아직 없음 | 아직 없음 |
 | S1-5 | pending | 아직 없음 | 아직 없음 |
 | S1-6 | pending | 아직 없음 | 아직 없음 |
 
-현재 다음 행동은 S1-1에서 남은 VK_EXT_debug_utils 활성화와 debug messenger 생성·콜백·파괴를 안내하는 것이다. S1-1 전체는 아직 완료되지 않았다. 후속 진행도·학습 기록은 별도 단계 문서 없이 이 문서의 stable-ID section을 갱신한다.
+현재 다음 행동은 S1-1에서 남은 Instance 생성·파괴 진단용 pNext 연결을 안내하는 것이다. S1-1 전체는 아직 완료되지 않았다. 후속 진행도·학습 기록은 별도 단계 문서 없이 이 문서의 stable-ID section을 갱신한다.

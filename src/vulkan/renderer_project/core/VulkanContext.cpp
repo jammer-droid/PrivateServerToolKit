@@ -6,13 +6,15 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <cstdio>
 
 namespace
 {
 
 constexpr std::uint32_t kRequiredApiVersion = VK_API_VERSION_1_3;
 // portability device 열거 기능 활성화
-constexpr const char *kRequiredExtensionName = VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME;
+constexpr const char *kRequiredExtensionPortabilityEnumeration = VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME;
+constexpr const char *kRequiredExtensionDebugUtils = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
 constexpr const char *kValidationLayer = "VK_LAYER_KHRONOS_validation";
 constexpr const char *kLayerNames[] = {kValidationLayer};
 
@@ -101,6 +103,14 @@ std::vector<VkLayerProperties> EnumerateInstanceLayers()
     return layers;
 }
 
+VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+                                             VkDebugUtilsMessageTypeFlagsEXT types,
+                                             const VkDebugUtilsMessengerCallbackDataEXT *data, void *userData) noexcept
+{
+    std::fprintf(stderr, "%s\n", data->pMessage);
+    return VK_FALSE;
+}
+
 VkInstance CreateInstance()
 {
     std::uint32_t apiVersion = VulkanContext::GetApiVersion();
@@ -125,40 +135,46 @@ VkInstance CreateInstance()
     instanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     instanceCreateInfo.pApplicationInfo = &appInfo;
 
-#ifdef __APPLE__
     std::vector<VkExtensionProperties> extensionProperties = EnumerateInstanceExtensions();
-    std::vector<std::string> extensions;
-    for (const VkExtensionProperties &property : extensionProperties)
-    {
-        if (std::strcmp(property.extensionName, kRequiredExtensionName) == 0)
-        {
-            extensions.push_back(property.extensionName);
-        }
-    }
+    std::vector<const char *> requiredExtensions;
 
-    if (extensions.empty())
-    {
-        throw std::runtime_error("Required Extension Not Found: " + std::string(kRequiredExtensionName));
-    }
-    std::vector<const char *> names;
-    names.reserve(extensions.size());
-    for (const std::string &name : extensions)
-    {
-        names.push_back(name.c_str());
-    }
+#ifdef __APPLE__
+    requiredExtensions.push_back(kRequiredExtensionPortabilityEnumeration);
 
     // MoltenVK -> Vulkan을 Metal 위에 구현하는 소프트웨어
     //  - PhysicalDevice 조회시 MoltenVK가 Device를 노출함(portability device)
     // 실제 GPU -> Apple GPU HW
     // VkPhysicalDevice -> 앱이 조회하는 GPU 핸들
 
-    // portability device도 VkPhysicalDevice 열거에 포함하는 기능 활성화
-    instanceCreateInfo.enabledExtensionCount = std::uint32_t(names.size());
-    instanceCreateInfo.ppEnabledExtensionNames = names.data();
-
     // portability device도 조회 결과에 포함하게 설정
     instanceCreateInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 #endif
+
+    if (kEnableValidation)
+    {
+        requiredExtensions.push_back(kRequiredExtensionDebugUtils);
+    }
+
+    for (const char *requiredExtension : requiredExtensions)
+    {
+        bool isSupported = false;
+        for (const VkExtensionProperties &property : extensionProperties)
+        {
+            if (std::strcmp(property.extensionName, requiredExtension) == 0)
+            {
+                isSupported = true;
+                break;
+            }
+        }
+
+        if (!isSupported)
+        {
+            throw std::runtime_error("Required Extension Not Found: " + std::string(requiredExtension));
+        }
+    }
+
+    instanceCreateInfo.enabledExtensionCount = static_cast<std::uint32_t>(requiredExtensions.size());
+    instanceCreateInfo.ppEnabledExtensionNames = requiredExtensions.empty() ? nullptr : requiredExtensions.data();
 
     if (kEnableValidation) // Debug Layer
     {
@@ -187,9 +203,74 @@ VkInstance CreateInstance()
 
     return instance;
 }
+
+VkDebugUtilsMessengerEXT CreateDebugMessenger(VkInstance instance)
+{
+    VkDebugUtilsMessengerEXT messenger = VK_NULL_HANDLE;
+
+    VkDebugUtilsMessengerCreateInfoEXT messengerCreateInfo{};
+    messengerCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+    messengerCreateInfo.messageSeverity =
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
+    messengerCreateInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                                      VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                                      VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+    messengerCreateInfo.pfnUserCallback = DebugCallback;
+    messengerCreateInfo.pUserData = nullptr;
+
+    PFN_vkCreateDebugUtilsMessengerEXT createFuntion = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
+        vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT"));
+    if (!createFuntion)
+    {
+        throw std::runtime_error("Get PFN_vkCreateDebugUtilsMessengerEXT failed.\n");
+    }
+
+    VK_CHECK(createFuntion(instance, &messengerCreateInfo, nullptr, &messenger));
+
+    return messenger;
+}
+
+void SubmitDebugTestMessage(VkInstance instance)
+{
+    const PFN_vkSubmitDebugUtilsMessageEXT submitMessage = reinterpret_cast<PFN_vkSubmitDebugUtilsMessageEXT>(
+        vkGetInstanceProcAddr(instance, "vkSubmitDebugUtilsMessageEXT"));
+
+    if (submitMessage == nullptr)
+    {
+        throw std::runtime_error("Failed to load vkSubmitDebugUtilsMessageEXT");
+    }
+
+    VkDebugUtilsMessengerCallbackDataEXT data{};
+    data.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CALLBACK_DATA_EXT;
+    data.pMessageIdName = "RendererStudy.DebugTest";
+    data.messageIdNumber = 1;
+    data.pMessage = "Debug messenger callback connected.";
+
+    submitMessage(instance, VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT,
+                  VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT, &data);
+}
+
 }; // namespace
 
-VulkanContext::VulkanContext() : instanceHandle_(CreateInstance(), deleter::VkInstanceDeleter{}){};
+VulkanContext::VulkanContext() : instanceHandle_{CreateInstance(), deleter::VkInstanceDeleter{}}
+{
+    if (kEnableValidation)
+    {
+        // destroy Function 확보 후 객체 생성
+        PFN_vkDestroyDebugUtilsMessengerEXT destroyFunction = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
+            vkGetInstanceProcAddr(instanceHandle_.Get(), "vkDestroyDebugUtilsMessengerEXT"));
+        if (destroyFunction == nullptr)
+        {
+            throw std::runtime_error("Failed to load vkDestroyDebugUtilsMessengerEXT");
+        }
+
+        VkDebugUtilsMessengerEXT messenger = CreateDebugMessenger(instanceHandle_.Get());
+        messengerHandle_.Adopt(messenger,
+                               deleter::VkDebugUtilsMessengerDeleter{instanceHandle_.Get(), destroyFunction});
+
+        SubmitDebugTestMessage(instanceHandle_.Get());
+    }
+}
 
 std::uint32_t VulkanContext::GetApiVersion()
 {

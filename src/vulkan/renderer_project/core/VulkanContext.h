@@ -23,6 +23,8 @@ class VulkanContext
 
   private:
     using InstanceHandle = VulkanHandle<VkInstance, deleter::VkInstanceDeleter>;
+    using DebugMessengerHandle = VulkanHandle<VkDebugUtilsMessengerEXT, deleter::VkDebugUtilsMessengerDeleter>;
 
     InstanceHandle instanceHandle_;
+    DebugMessengerHandle messengerHandle_;
 };
