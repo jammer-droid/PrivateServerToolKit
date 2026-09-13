@@ -154,7 +154,7 @@ renderer_project/
 
 | 시점 | 남은 결정과 제안 방향 |
 |---|---|
-| S1-1 | `renderer_project/`의 `vulkan_renderer`, C++17·C Vulkan API, `VK_CHECK`와 예외 기반 초기화 실패 전달을 채택했다. macOS에서 instance 지원 버전 1.4.335와 실행을 확인했고 앱 목표는 1.3이다. 1.3 미만 지원 검사와 Extension·Validation 구성이 남아 있다. |
+| S1-1 | `renderer_project/`의 `vulkan_renderer`, C++17·C Vulkan API, `VK_CHECK`와 예외 기반 초기화 실패 전달을 채택했다. macOS에서 instance 지원 버전 1.4.335와 실행을 확인했고 앱 목표는 1.3이다. 1.3 미만 지원 검사와 macOS portability extension 조회·활성화를 구현했다. Layer·Validation 구성이 남아 있다. |
 | S1-2 | 창 라이브러리(GLFW 후보), Graphics/Present 분리 family 지원 정책과 활성화 feature. |
 | S1-3~4 | Present mode, frame slot 수, Dynamic Rendering 또는 Render Pass. 기존 Vulkan 1.3 요청을 참고하되 지원 확인 없이 기능 사용을 확정하지 않는다. |
 | S1-5 | Shader 언어·컴파일러, 좌표 원점·축·단위, blending과 그리기 순서. |
@@ -182,11 +182,11 @@ renderer_project/
 
 | 단계 | 상태 | 구현/실행 증거 | 이해 확인 |
 |---|---|---|---|
-| S1-1 | current | macOS/AppleClang 16, Context 분리 및 매크로 수정 후 Debug 독립 configure·build·실행 성공. 지원 버전 1.4.335 출력, 종료 코드 0. 오류 주입·Validation은 아직 미검증. | 지원 버전과 앱 목표 API 1.3의 차이 설명 확인. 복사·이동 금지와 Get의 사용 의도 확인. 생성자 본문 예외 시 완성된 RAII 멤버 정리 원리 설명 확인. |
+| S1-1 | current | macOS/AppleClang 16, Context 분리 및 매크로 수정 후 Debug 독립 configure·build·실행 성공. 지원 버전 1.4.335, 확장 19개 조회와 portability extension 활성화 후 Instance 생성·정상 종료(코드 0) 확인. 0개·VK_INCOMPLETE 처리 및 반환 개수 반영은 코드 검토로 확인했고 해당 경계의 실행 주입·Validation은 아직 미검증. | 지원 버전과 앱 목표 API 1.3의 차이 설명 확인. 복사·이동 금지와 Get의 사용 의도 확인. 생성자 본문 예외 시 완성된 RAII 멤버 정리 원리 설명 확인. |
 | S1-2 | next | 아직 없음 | 아직 없음 |
 | S1-3 | pending | 아직 없음 | 아직 없음 |
 | S1-4 | pending | 아직 없음 | 아직 없음 |
 | S1-5 | pending | 아직 없음 | 아직 없음 |
 | S1-6 | pending | 아직 없음 | 아직 없음 |
 
-현재 다음 행동은 S1-1에서 남은 지원 버전 검사, Extension·Layer 조회와 Validation/debug messenger 구성을 안내하는 것이다. S1-1 전체는 아직 완료되지 않았다. 후속 진행도·학습 기록은 별도 단계 문서 없이 이 문서의 stable-ID section을 갱신한다.
+현재 다음 행동은 S1-1에서 남은 Layer 조회와 Validation/debug messenger 구성을 안내하는 것이다. S1-1 전체는 아직 완료되지 않았다. 후속 진행도·학습 기록은 별도 단계 문서 없이 이 문서의 stable-ID section을 갱신한다.

@@ -11,17 +11,18 @@ int main()
 {
     try
     {
-        std::uint32_t apiVersion = VulkanContext::GetApiVersion();
-        std::cout << VK_API_VERSION_MAJOR(apiVersion) << '.' << VK_API_VERSION_MINOR(apiVersion) << '.'
-                  << VK_API_VERSION_PATCH(apiVersion) << '\n';
-
         VulkanContext context;
     }
     catch (const VulkanException &error)
     {
         std::cerr << error.what() << '\n';
         return EXIT_FAILURE;
-    };
+    }
+    catch (const std::runtime_error &error)
+    {
+        std::cerr << error.what() << '\n';
+        return EXIT_FAILURE;
+    }
 
     return 0;
 }
