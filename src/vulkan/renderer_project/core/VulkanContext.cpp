@@ -107,7 +107,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBits
                                              VkDebugUtilsMessageTypeFlagsEXT types,
                                              const VkDebugUtilsMessengerCallbackDataEXT *data, void *userData) noexcept
 {
-    std::fprintf(stderr, "%s\n", data->pMessage);
+    std::fprintf(stderr, "[Vulkan] %s\n", data->pMessage);
     return VK_FALSE;
 }
 

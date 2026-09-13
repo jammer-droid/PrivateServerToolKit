@@ -2,7 +2,7 @@
 
 - Issue: <https://github.com/jammer-droid/PrivateServerToolKit/issues/6>
 - Parent: [#5 Vulkan World Lab](https://github.com/jammer-droid/PrivateServerToolKit/issues/5)의 S1
-- 상태: 구현 완료 1/6. S1-1 complete, S1-2 next, S1-3~S1-6 pending.
+- 상태: 구현 완료 1/6. S1-1 complete, S1-2 current, S1-3~S1-6 pending.
 - 진행 모드: `study-guide` Study session + `lean-implementation` Guide. 사용자가 구현하며 agent는 안내·검토한다. 구현 수정은 별도 요청 범위에서만 한다.
 
 ## 목표와 경계
@@ -186,13 +186,13 @@ renderer_project/
 | 단계 | 상태 | 구현/실행 증거 | 이해 확인 |
 |---|---|---|---|
 | S1-1 | complete | Debug/Release 빌드·실행 및 Debug callback 수신 통과. 요구 버전·필수 확장·필수 Layer 미지원 진단과 종료 코드 1 확인. 상세 증거와 한계는 아래 기록. | 지원/목표 API 버전 구분, 소유권과 역순 파괴, 생성자 예외 시 멤버 정리, pNext callback과 지속 messenger의 역할 구분 확인. |
-| S1-2 | next | 아직 없음 | 아직 없음 |
+| S1-2 | current | GLFW Window 추가 후 Debug/Release configure·build 통과. Agent의 실제 창 조작 검증은 미수행. Surface·GPU·Device는 아직 미구현. | GLFW_NO_API와 Surface를 통한 Vulkan 출력 관계 설명 확인. |
 | S1-3 | pending | 아직 없음 | 아직 없음 |
 | S1-4 | pending | 아직 없음 | 아직 없음 |
 | S1-5 | pending | 아직 없음 | 아직 없음 |
 | S1-6 | pending | 아직 없음 | 아직 없음 |
 
-S1-1은 완료했다. 다음 행동은 S1-2의 창 라이브러리와 Graphics/Present Queue 정책을 정하고 창·Surface 기반을 안내하는 것이다. 후속 진행도·학습 기록은 별도 단계 문서 없이 이 문서의 stable-ID section을 갱신한다.
+S1-1은 완료했다. 현재 S1-2는 GLFW Window 구현을 마쳤고, 다음 행동은 GLFW 필수 확장 전달과 Surface 생성·소유권 연결이다. Graphics/Present Queue 정책은 GPU 선택 단계에서 확정한다. 후속 진행도·학습 기록은 별도 단계 문서 없이 이 문서의 stable-ID section을 갱신한다.
 
 
 ### S1-1 완료 검증 — 2026-09-13
@@ -215,3 +215,11 @@ cmake -S src/vulkan/renderer_project -B src/vulkan/renderer_project/build/releas
 cmake --build src/vulkan/renderer_project/build/release
 ./src/vulkan/renderer_project/build/release/vulkan_renderer
 ```
+
+
+### S1-2 Window 중간 기록
+
+- 창 라이브러리는 GLFW를 사용한다. `app/Window`는 단일 창과 GLFW 초기화·종료를 소유하고 복사·이동을 금지한다. 현재 다중 창은 범위 밖이다.
+- 메인 스레드에서 오류 callback 등록, 초기화, `GLFW_NO_API` 창 생성, 이벤트 대기와 종료를 수행한다. 창 생성 실패 시 GLFW를 종료한 뒤 예외를 전달한다.
+- `main`은 Window → VulkanContext 순서로 생성하고 닫기 요청까지 이벤트를 기다린다. 아직 Surface를 생성하거나 렌더링하지 않는다.
+- 클래스 복사·이동 금지 매크로를 `common/ClassTraits.h`로 분리했다. Debug/Release 빌드 통과를 확인했으며 실제 GUI resize·닫기 동작은 agent가 검증하지 않았다.

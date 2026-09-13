@@ -1,17 +1,24 @@
 #include <vulkan/vulkan.h>
 
 #include <iostream>
-#include <cstdint>
 
 #include "common/VulkanException.h"
 
 #include "core/VulkanContext.h"
 
+#include "app/Window.h"
+
 int main()
 {
     try
     {
+        Window window;
         VulkanContext context;
+
+        while (!window.IsCloseRequested())
+        {
+            window.WaitEvents();
+        }
     }
     catch (const VulkanException &error)
     {

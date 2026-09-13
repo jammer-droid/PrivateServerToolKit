@@ -1,5 +1,6 @@
 #pragma once
 
+#include "common/ClassTraits.h"
 #include "common/VulkanHeaders.h"
 
 #include <type_traits>

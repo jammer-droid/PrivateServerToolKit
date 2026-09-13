@@ -1,5 +1,6 @@
 #pragma once
 
+#include "common/ClassTraits.h"
 #include "common/VulkanHandle.h"
 
 #include <cstdint>
