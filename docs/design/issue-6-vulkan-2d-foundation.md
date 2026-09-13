@@ -2,7 +2,7 @@
 
 - Issue: <https://github.com/jammer-droid/PrivateServerToolKit/issues/6>
 - Parent: [#5 Vulkan World Lab](https://github.com/jammer-droid/PrivateServerToolKit/issues/5)의 S1
-- 상태: 학습 계획 수립, 구현 완료 0/6. S1-1 current, S1-2 next, S1-3~S1-6 pending.
+- 상태: 구현 완료 1/6. S1-1 complete, S1-2 next, S1-3~S1-6 pending.
 - 진행 모드: `study-guide` Study session + `lean-implementation` Guide. 사용자가 구현하며 agent는 안내·검토한다. 구현 수정은 별도 요청 범위에서만 한다.
 
 ## 목표와 경계
@@ -90,14 +90,14 @@ renderer_project/
 - 프레임 슬롯 번호와 Swapchain image index는 서로 다르다. Present 완료를 submission Fence만으로 추정하지 않는다. Present 대기용 semaphore 재사용은 이미지별 관리 등 공식적으로 보장되는 방식으로 설계한다.
 - 화면 크기는 framebuffer pixel 크기로 다룬다. 0 크기에는 렌더링을 중지하고 복원 이벤트를 처리한다. Out-of-date와 suboptimal 결과의 제어 흐름을 명시한다.
 - Renderer2D는 표시 데이터를 읽으며 월드 상태, AOI나 충돌 판정을 소유하지 않는다.
-- 기존 Compute 실습은 보존한다. 새 실행 경로의 타깃 이름·파일 배치는 S1-1 안내에서 정하고 기존 실습을 덮어쓰지 않는다.
+- 기존 Compute 실습은 보존한다. Graphics 실행 경로는 `src/vulkan/renderer_project/`, 타깃은 `vulkan_renderer`로 분리했다.
 
 ## 단계별 계약
 
 ### S1-1 — 실행 골격과 Instance
 
-- **선행:** 없음. 현재 단계이며 첫 실험은 Instance 생성·정상 파괴다.
-- **결과/seam:** `src/vulkan/CMakeLists.txt`와 새 Graphics 실행 진입점. 버전·extension·layer 조회, Instance와 debug messenger 생성·정리.
+- **선행:** 없음. 2026-09-13 완료. 첫 실험은 Instance 생성·정상 파괴였다.
+- **결과/seam:** `src/vulkan/renderer_project/CMakeLists.txt`, `main.cpp`, `core/VulkanContext.h/.cpp`. 버전·extension·layer 조회, Instance와 debug messenger 생성·정리.
 - **학습:** Loader와 Instance의 역할, 지원 버전과 요청 버전, 필수/선택 extension, validation과 오류 반환, RAII 수명.
 - **불변식:** 실제 지원을 확인한다. 성공과 실패 경로 모두 소유 자원을 정리한다. Device나 Compute Pipeline은 만들지 않는다.
 - **완료 증거:** 독립 빌드·실행 명령, 선택 버전·설정 로그, 정상 종료, 요청한 필수 기능이 없을 때 설명 가능한 실패 경로. Debug validation 설정을 확인하고 오류를 해결한다.
@@ -154,7 +154,7 @@ renderer_project/
 
 | 시점 | 남은 결정과 제안 방향 |
 |---|---|
-| S1-1 | `renderer_project/`의 `vulkan_renderer`, C++17·C Vulkan API, `VK_CHECK`와 예외 기반 초기화 실패 전달을 채택했다. macOS에서 instance 지원 버전 1.4.335와 실행을 확인했고 앱 목표는 1.3이다. 1.3 미만 지원 검사와 macOS portability extension 조회·활성화를 구현했다. Debug의 Validation Layer 조회·활성화와 Release의 비요청 경로를 구현했다. Debug messenger 생성·RAII 정리와 테스트 메시지 수신까지 구현했다. Instance 생성·파괴 진단용 pNext 연결이 남아 있다. |
+| S1-1 | `renderer_project/`의 `vulkan_renderer`, C++17·C Vulkan API, `VK_CHECK`와 예외 기반 초기화 실패 전달을 채택했다. macOS에서 instance 지원 버전 1.4.335와 실행을 확인했고 앱 목표는 1.3이다. 1.3 미만 지원 검사와 macOS portability extension 조회·활성화를 구현했다. Debug의 Validation Layer 조회·활성화와 Release의 비요청 경로를 구현했다. Debug messenger 생성·RAII 정리와 테스트 메시지 수신까지 구현했다. Instance 생성·파괴 진단용 pNext 연결까지 구현했다. |
 | S1-2 | 창 라이브러리(GLFW 후보), Graphics/Present 분리 family 지원 정책과 활성화 feature. |
 | S1-3~4 | Present mode, frame slot 수, Dynamic Rendering 또는 Render Pass. 기존 Vulkan 1.3 요청을 참고하되 지원 확인 없이 기능 사용을 확정하지 않는다. |
 | S1-5 | Shader 언어·컴파일러, 좌표 원점·축·단위, blending과 그리기 순서. |
@@ -168,14 +168,16 @@ renderer_project/
 2. [Khronos Instancing](https://docs.vulkan.org/samples/latest/samples/api/instancing/README.html) — S1-6 실습. 같은 mesh에 개별 instance 입력을 주는 방식을 참고한다.
 3. [Khronos Swapchain Semaphore Reuse](https://docs.vulkan.org/guide/latest/swapchain_semaphore_reuse.html) — S1-4 정확성 reference. submission 완료와 presentation semaphore 재사용 조건을 구분한다.
 
-## S1-1 중간 결정
+## S1-1 확정 결정
 
 - 현재 Graphics 실행 코드는 `src/vulkan/renderer_project/`에 둔다. 기존 `compute_project/`와 독립적으로 빌드한다.
 - C API 호출을 유지한다. `VK_CHECK`는 `VK_SUCCESS`만 기대하는 호출의 실패를 `VulkanException`으로 전달하고 `main`의 단일 catch에서 진단·종료한다. 재시도·복구가 필요한 결과는 향후 호출 위치에서 별도 처리한다.
 - `VulkanHandle`은 단독 소유자로 복사와 이동을 모두 금지한다. 이는 현재 의도적인 제한이다. `Get()`은 소유권을 이전하지 않는 borrowed handle이며 owner 수명 내에서 사용하고 외부에서 파괴하지 않는다.
 - Debug messenger는 Instance 뒤에 선언하여 먼저 정리한다. 생성 전에 destroy 함수 주소를 확보·검사하고 생성 성공 직후 빈 래퍼에 `Adopt`한다. 래퍼는 빈 상태를 값 초기화하고 `Adopt`는 비어 있는 소유자만 허용하며 deleter의 nothrow 이동 대입을 요구한다. 래퍼 자체의 복사·이동 금지는 유지한다.
 - deleter 구조체를 현재 사용하지만 템플릿이 람다를 금지하는 것은 아니다. 핸들 래퍼 자체의 이동·복사를 허용할 필요가 생기면 해당 단계에서 계약을 재검토한다.
-- 후속 구조 논의에서 `VulkanContext`의 책임과 `core/VulkanContext.h/.cpp` 배치를 확정했다. Instance 초기화 정책과 소유권부터 분리하고 이후 Device·Queue로 확장한다. 현재 Instance 생성 함수와 RAII 멤버를 `core/VulkanContext`에 구현했다. Context와 핸들 래퍼 모두 복사·이동 금지를 유지하며, 전체 S1-1 완료를 의미하지 않는다.
+- 후속 구조 논의에서 `VulkanContext`의 책임과 `core/VulkanContext.h/.cpp` 배치를 확정했다. Instance 초기화 정책과 소유권부터 분리하고 이후 Device·Queue로 확장한다. 현재 Instance 생성 함수와 RAII 멤버를 `core/VulkanContext`에 구현했다. Context와 핸들 래퍼 모두 복사·이동 금지를 유지한다.
+
+- Debug 설정 생성 함수 `MakeDebugMessengerCreateInfo`를 공유하며 Debug의 Instance 생성 pNext와 지속 messenger 생성에 동일한 callback·필터를 사용한다. Release의 pNext는 null이다. 연결하는 지역 설정은 vkCreateInstance 호출까지 유효하고 callback은 일반 함수, pUserData는 null로 유지한다.
 
 ## 검증과 진행 기록
 
@@ -183,11 +185,33 @@ renderer_project/
 
 | 단계 | 상태 | 구현/실행 증거 | 이해 확인 |
 |---|---|---|---|
-| S1-1 | current | macOS/AppleClang 16, Context 분리 및 매크로 수정 후 Debug 독립 configure·build·실행 성공. 지원 버전 1.4.335, 확장 19개 조회와 portability extension 활성화 후 Instance 생성·정상 종료(코드 0) 확인. 0개·VK_INCOMPLETE 처리 및 반환 개수 반영은 코드 검토로 확인했고 해당 경계의 실행 주입은 아직 미검증. Layer 추가 후 Debug/Release 빌드·실행 정상 종료 확인. Debug에서 VK_LAYER_KHRONOS_validation 지원 확인·활성화 요청, Release에서는 앱이 요청하지 않음. Debug messenger 추가 후 Debug/Release 빌드·실행 종료 코드 0 확인. Debug에서 vkSubmitDebugUtilsMessageEXT 테스트 문구 수신, Release에서는 문구 없음. 테스트는 전달 경로 증거이며 실제 규칙 위반 검출 증거는 아니다. 임시 테스트 호출은 현재 Debug 생성 경로에 남아 있다. | 지원 버전과 앱 목표 API 1.3의 차이 설명 확인. 복사·이동 금지와 Get의 사용 의도 확인. 생성자 본문 예외 시 완성된 RAII 멤버 정리 원리 설명 확인. |
+| S1-1 | complete | Debug/Release 빌드·실행 및 Debug callback 수신 통과. 요구 버전·필수 확장·필수 Layer 미지원 진단과 종료 코드 1 확인. 상세 증거와 한계는 아래 기록. | 지원/목표 API 버전 구분, 소유권과 역순 파괴, 생성자 예외 시 멤버 정리, pNext callback과 지속 messenger의 역할 구분 확인. |
 | S1-2 | next | 아직 없음 | 아직 없음 |
 | S1-3 | pending | 아직 없음 | 아직 없음 |
 | S1-4 | pending | 아직 없음 | 아직 없음 |
 | S1-5 | pending | 아직 없음 | 아직 없음 |
 | S1-6 | pending | 아직 없음 | 아직 없음 |
 
-현재 다음 행동은 S1-1에서 남은 Instance 생성·파괴 진단용 pNext 연결을 안내하는 것이다. S1-1 전체는 아직 완료되지 않았다. 후속 진행도·학습 기록은 별도 단계 문서 없이 이 문서의 stable-ID section을 갱신한다.
+S1-1은 완료했다. 다음 행동은 S1-2의 창 라이브러리와 Graphics/Present Queue 정책을 정하고 창·Surface 기반을 안내하는 것이다. 후속 진행도·학습 기록은 별도 단계 문서 없이 이 문서의 stable-ID section을 갱신한다.
+
+
+### S1-1 완료 검증 — 2026-09-13
+
+- macOS/AppleClang 16, instance 지원 버전 1.4.335, 앱 목표 1.3.0. Debug/Release configure·build·실행 모두 종료 코드 0.
+- 확장 19개 조회와 macOS portability 활성화, Debug의 Validation Layer 활성화를 확인했다. Debug에서 `Debug messenger callback connected.` 수신, Release stderr는 비어 있었다.
+- 원본을 변경하지 않은 임시 프로젝트 복사본에서 요구 버전을 1.99.0으로 높이거나 존재하지 않는 확장·Layer를 요청했다. 세 경우 모두 해당 실패 진단과 종료 코드 1을 확인했다. 임시 변경은 저장소에 포함하지 않는다.
+- 빈 목록, `VK_INCOMPLETE` 재조회와 최종 개수 반영은 코드 검토로 확인했다. 이 열거 경계 자체의 실행 주입은 하지 않았다.
+- pNext 설정 수명, destroy 함수 선확보, 생성 직후 Adopt, messenger → Instance 정리 순서를 검토했다. Instance 생성·파괴 중 실제 진단 이벤트를 별도로 유발하지 않았고, 모든 부분 초기화 실패를 주입한 것은 아니다. 다른 플랫폼은 실행 검증하지 않았다.
+- 사용자 결정에 따라 `SubmitDebugTestMessage` 함수와 Debug 생성 경로의 호출을 유지한다. 이 Warning은 의도한 전달 경로 확인용 메시지이며 실제 API 규칙 위반이나 GPU 작업 결과가 아니다. 제거를 S1-1 완료 조건으로 두지 않는다.
+
+독립 재현 명령(저장소 루트에서 실행):
+
+```sh
+cmake -S src/vulkan/renderer_project -B src/vulkan/renderer_project/build/debug -DCMAKE_BUILD_TYPE=Debug
+cmake --build src/vulkan/renderer_project/build/debug
+./src/vulkan/renderer_project/build/debug/vulkan_renderer
+
+cmake -S src/vulkan/renderer_project -B src/vulkan/renderer_project/build/release -DCMAKE_BUILD_TYPE=Release
+cmake --build src/vulkan/renderer_project/build/release
+./src/vulkan/renderer_project/build/release/vulkan_renderer
+```

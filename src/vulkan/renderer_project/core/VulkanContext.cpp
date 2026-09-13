@@ -111,6 +111,21 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBits
     return VK_FALSE;
 }
 
+VkDebugUtilsMessengerCreateInfoEXT MakeDebugMessengerCreateInfo()
+{
+    VkDebugUtilsMessengerCreateInfoEXT messengerCreateInfo{};
+    messengerCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+    messengerCreateInfo.messageSeverity =
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
+    messengerCreateInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                                      VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                                      VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+    messengerCreateInfo.pfnUserCallback = DebugCallback;
+    messengerCreateInfo.pUserData = nullptr;
+
+    return messengerCreateInfo;
+}
+
 VkInstance CreateInstance()
 {
     std::uint32_t apiVersion = VulkanContext::GetApiVersion();
@@ -198,6 +213,13 @@ VkInstance CreateInstance()
         instanceCreateInfo.ppEnabledLayerNames = kLayerNames;
     }
 
+    VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
+    if (kEnableValidation) // Instance 생성/파괴 디버깅을 위한 pNext 연결 설정
+    {
+        debugCreateInfo = MakeDebugMessengerCreateInfo();
+        instanceCreateInfo.pNext = &debugCreateInfo;
+    }
+
     VkInstance instance = VK_NULL_HANDLE;
     VK_CHECK(vkCreateInstance(&instanceCreateInfo, nullptr, &instance));
 
@@ -208,15 +230,7 @@ VkDebugUtilsMessengerEXT CreateDebugMessenger(VkInstance instance)
 {
     VkDebugUtilsMessengerEXT messenger = VK_NULL_HANDLE;
 
-    VkDebugUtilsMessengerCreateInfoEXT messengerCreateInfo{};
-    messengerCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-    messengerCreateInfo.messageSeverity =
-        VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
-    messengerCreateInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-                                      VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-                                      VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-    messengerCreateInfo.pfnUserCallback = DebugCallback;
-    messengerCreateInfo.pUserData = nullptr;
+    const VkDebugUtilsMessengerCreateInfoEXT messengerCreateInfo = MakeDebugMessengerCreateInfo();
 
     PFN_vkCreateDebugUtilsMessengerEXT createFuntion = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
         vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT"));
