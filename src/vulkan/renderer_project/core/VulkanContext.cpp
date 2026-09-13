@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 #include <cstdio>
+#include <optional>
 
 namespace
 {
@@ -363,6 +364,86 @@ void SubmitDebugTestMessage(VkInstance instance)
                   VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT, &data);
 }
 
+struct QueueFamilySelection
+{
+    std::uint32_t graphicsFamilyIndex;
+    std::uint32_t presentFamilyIndex;
+};
+
+struct QueueFamilySupport
+{
+    std::uint32_t queueCount;
+    bool graphics;
+    bool present;
+};
+
+// queueCount > 0
+// support graphics & present
+std::optional<QueueFamilySelection> ChooseQueueFamilies(const std::vector<QueueFamilySupport> &families)
+{
+    std::optional<std::uint32_t> graphicsFamily;
+    std::optional<std::uint32_t> presentFamily;
+
+    for (std::uint32_t index = 0; index < families.size(); ++index)
+    {
+        const QueueFamilySupport &family = families[index];
+        if (family.queueCount == 0)
+        {
+            continue;
+        }
+        if (family.graphics && family.present) // 둘 다 지원하는 QueueFamily 우선 선택
+        {
+            return QueueFamilySelection{index, index};
+        }
+        if (family.graphics && !graphicsFamily.has_value())
+        {
+            graphicsFamily = index;
+        }
+        if (family.present && !presentFamily.has_value())
+        {
+            presentFamily = index;
+        }
+    }
+
+    if (!graphicsFamily.has_value() || !presentFamily.has_value())
+    {
+        return std::nullopt;
+    }
+    return QueueFamilySelection{graphicsFamily.value(), presentFamily.value()};
+}
+
+std::optional<QueueFamilySelection> FindQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface)
+{
+    std::uint32_t count = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &count, nullptr);
+    if (count == 0)
+    {
+        return std::nullopt;
+    }
+
+    std::vector<VkQueueFamilyProperties> properties(count);
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &count, properties.data());
+    properties.resize(count);
+
+    std::vector<QueueFamilySupport> families;
+    families.reserve(count);
+    for (std::uint32_t index = 0; index < count; ++index)
+    {
+        VkBool32 present = VK_FALSE;
+        if (properties[index].queueCount != 0)
+        {
+            // check support present
+            VK_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(device, index, surface, &present));
+        }
+
+        // check support graphics
+        bool supportGraphics = (properties[index].queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0;
+        bool supportPresent = (present == VK_TRUE);
+        families.push_back(QueueFamilySupport{properties[index].queueCount, supportGraphics, supportPresent});
+    }
+    return ChooseQueueFamilies(families);
+}
+
 }; // namespace
 
 VulkanContext::VulkanContext() : VulkanContext(std::vector<const char *>{})
@@ -393,87 +474,76 @@ std::uint32_t VulkanContext::GetApiVersion()
     return apiVersion;
 }
 
-void VulkanContext::InspectPhysicalDevice(VkSurfaceKHR surface) const
+PhysicalDeviceSelection VulkanContext::SelectPhysicalDevice(VkSurfaceKHR surface) const
 {
-    std::vector<VkPhysicalDevice> physicalDevices = EnumeratePhysicalDevices(instanceHandle_.Get());
+    const std::vector<VkPhysicalDevice> physicalDevices = EnumeratePhysicalDevices(instanceHandle_.Get());
 
-    std::cout << "Physical Device count: " << physicalDevices.size() << '\n';
-    for (const VkPhysicalDevice &device : physicalDevices)
+    for (const VkPhysicalDevice device : physicalDevices)
     {
-        VkPhysicalDeviceProperties property;
-        vkGetPhysicalDeviceProperties(device, &property);
+        VkPhysicalDeviceProperties properties{};
+        vkGetPhysicalDeviceProperties(device, &properties);
+        std::cout << "Candidate GPU: " << properties.deviceName << " | API: " << FormatApiVersion(properties.apiVersion)
+                  << '\n';
 
-        std::cout << "GPU: " << property.deviceName << "\nDevice API: " << FormatApiVersion(property.apiVersion)
-                  << "\nDevice Type: " << property.deviceType << '\n';
-        if (property.apiVersion < kRequiredApiVersion)
+        if (properties.apiVersion < kRequiredApiVersion)
         {
             std::cout << "Skipped: requires Vulkan " << FormatApiVersion(kRequiredApiVersion) << '\n';
             continue;
         }
 
-        std::uint32_t familyCount = 0;
-        std::vector<VkQueueFamilyProperties> queueFamilyProperties;
-
-        vkGetPhysicalDeviceQueueFamilyProperties(device, &familyCount, nullptr);
-
-        queueFamilyProperties.resize(familyCount);
-
-        vkGetPhysicalDeviceQueueFamilyProperties(device, &familyCount, queueFamilyProperties.data());
-
-        queueFamilyProperties.resize(familyCount); // 실제 반환 개수에 반영
-        uint32_t queueFamilyIndex = 0;
-        for (const VkQueueFamilyProperties &queueFamilyProperty : queueFamilyProperties)
+        const std::vector<VkExtensionProperties> extensions = EnumerateDeviceExtensions(device);
+        bool supportsSwapchain = false;
+        bool requiresPortabilitySubset = false;
+        for (const VkExtensionProperties &extension : extensions)
         {
-            const bool supportGraphics = (queueFamilyProperty.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0;
-            std::uint32_t queueCount = queueFamilyProperty.queueCount;
-
-            VkBool32 supportsPresent = VK_FALSE;
-            VK_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(device, queueFamilyIndex, surface, &supportsPresent));
-
-            std::cout << "Family: " << queueFamilyIndex << " | queues = " << queueCount
-                      << " | graphics = " << std::boolalpha << supportGraphics
-                      << " | present = " << (supportsPresent == VK_TRUE) << '\n';
-
-            queueFamilyIndex++;
-        }
-
-        std::vector<VkExtensionProperties> deviceExtensionProperties = EnumerateDeviceExtensions(device);
-        std::cout << "Device Extension Count: " << deviceExtensionProperties.size() << '\n';
-
-        bool supportSwapchain = false;         // swapchain을 지원하는지 확인
-        bool supportPortabilitySubset = false; // device가 portability subset을 노출하는지
-        // portability subset을 노출하면 해당 디바이스를 선택해
-        // portability가 가진 제약을 고려해서 사용하도록 설정
-        for (const VkExtensionProperties &property : deviceExtensionProperties)
-        {
-            std::cout << property.extensionName << ' ' << property.specVersion << '\n';
-
-            if (std::strcmp(property.extensionName, kRequiredExtensionSwapchain) == 0)
+            if (std::strcmp(extension.extensionName, kRequiredExtensionSwapchain) == 0)
             {
-                supportSwapchain = true;
+                supportsSwapchain = true;
             }
-
-            if (std::strcmp(property.extensionName, kRequiredExtensionPorabilitySubset) == 0)
+            // portability subset을 device에서 지원하는지 확인
+            // 지원하는 경우 portability subset을 활성화해 portability의 제약 조건 하에 실행하도록 설정 필요
+            if (std::strcmp(extension.extensionName, kRequiredExtensionPorabilitySubset) == 0)
             {
-                supportPortabilitySubset = true;
+                requiresPortabilitySubset = true;
             }
         }
+        if (!supportsSwapchain)
+        {
+            std::cout << "Skipped: missing " << kRequiredExtensionSwapchain << '\n';
+            continue;
+        }
 
-        VkPhysicalDeviceVulkan13Features features13{}; // Vulkan 1.3에 추가된 feature
+        VkPhysicalDeviceVulkan13Features features13{};
         features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
 
-        VkPhysicalDeviceFeatures2 features2{}; // Vulkan 1.0의 기본 feature
+        VkPhysicalDeviceFeatures2 features2{};
         features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
         features2.pNext = &features13;
 
         vkGetPhysicalDeviceFeatures2(device, &features2);
 
-        std::cout << std::boolalpha << "swapchain: " << supportSwapchain
-                  << "\nportabilitySubset: " << supportPortabilitySubset
-                  << "\ndynamicRendering: " << (features13.dynamicRendering == VK_TRUE)
-                  << "\nsynchronization2: " << (features13.synchronization2 == VK_TRUE) << '\n';
+        if (features13.dynamicRendering != VK_TRUE)
+        {
+            std::cout << "Skipped: dynamicRendering is not supported\n";
+            continue;
+        }
+        if (features13.synchronization2 != VK_TRUE)
+        {
+            std::cout << "Skipped: synchronization2 is not supported\n";
+            continue;
+        }
 
-        std::cout << '\n';
+        // device에서 지원하는 Queue Family를 순회하여 graphics, present를 만족하는 queue 반환
+        const std::optional<QueueFamilySelection> queues = FindQueueFamilies(device, surface);
+        if (!queues.has_value())
+        {
+            std::cout << "Skipped: missing usable Graphics or Present queue family\n";
+            continue;
+        }
+
+        return PhysicalDeviceSelection{device, queues->graphicsFamilyIndex, queues->presentFamilyIndex,
+                                       requiresPortabilitySubset};
     }
-    std::cout << '\n';
+
+    throw std::runtime_error("No suitable physical device found");
 }

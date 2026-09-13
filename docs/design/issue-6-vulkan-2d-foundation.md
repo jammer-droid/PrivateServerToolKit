@@ -155,8 +155,8 @@ renderer_project/
 | 시점 | 남은 결정과 제안 방향 |
 |---|---|
 | S1-1 | `renderer_project/`의 `vulkan_renderer`, C++17·C Vulkan API, `VK_CHECK`와 예외 기반 초기화 실패 전달을 채택했다. macOS에서 instance 지원 버전 1.4.335와 실행을 확인했고 앱 목표는 1.3이다. 1.3 미만 지원 검사와 macOS portability extension 조회·활성화를 구현했다. Debug의 Validation Layer 조회·활성화와 Release의 비요청 경로를 구현했다. Debug messenger 생성·RAII 정리와 테스트 메시지 수신까지 구현했다. Instance 생성·파괴 진단용 pNext 연결까지 구현했다. |
-| S1-2 | 창 라이브러리(GLFW 후보), Graphics/Present 분리 family 지원 정책과 활성화 feature. |
-| S1-3~4 | Present mode, frame slot 수, Dynamic Rendering 또는 Render Pass. 기존 Vulkan 1.3 요청을 참고하되 지원 확인 없이 기능 사용을 확정하지 않는다. |
+| S1-2 | GLFW 채택. API 1.3·swapchain·dynamicRendering·synchronization2 및 Graphics/Present 지원을 요구한다. GPU별 공동 family 우선, 없으면 분리 family를 선택한다. 열거 순서상 첫 적합 GPU를 반환하며 Device 생성·feature 활성화는 다음 작업이다. |
+| S1-3~4 | Present mode와 frame slot 수는 단계 진입 시 정한다. Graphics 경로는 Dynamic Rendering·Synchronization2를 사용하며 S1-2에서 지원을 확인하고 Device 생성 시 필요한 feature만 활성화한다. |
 | S1-5 | Shader 언어·컴파일러, 좌표 원점·축·단위, blending과 그리기 순서. |
 | S1-6 | 원·선·궤적 표현, instance 데이터와 capacity 정책. |
 
@@ -246,3 +246,12 @@ cmake --build src/vulkan/renderer_project/build/release
 - API 1.3 미만 후보는 이유를 출력하고 다음 후보로 진행한다. Vulkan 1.3 후보에 Features2 → Vulkan13Features 조회 체인을 연결해 dynamicRendering·synchronization2 지원을 출력한다. 조회 결과는 기능 활성화가 아니다.
 - Device Extension 열거의 빈 목록·VK_INCOMPLETE·실제 반환 개수 처리와 후보 제외 분기를 코드 검토했다. Debug/Release configure·build 통과. 이번 기능 출력의 실제 GUI 실행과 실패 분기 주입은 수행하지 않았다.
 - 다음 단계는 필요한 feature·extension과 Graphics/Present Queue 조건에 따른 최종 후보 선택이다. Logical Device 생성과 feature 활성화는 아직 수행하지 않는다.
+
+
+### S1-2 GPU·Queue 선택 구현
+
+- `SelectPhysicalDevice(surface)`는 API 1.3, swapchain, dynamicRendering, synchronization2, 유효 Graphics/Present Family를 모두 만족하는 첫 GPU를 반환한다. API 조회 실패는 예외로 전달하며 조건 미충족 후보는 이유를 출력하고 건너뛴다. 전부 탈락하면 명시적으로 실패한다.
+- GPU 내부에서는 공동 Graphics/Present Family를 우선하고 없으면 각 역할의 첫 유효 Family를 선택한다. queueCount 0은 제외한다. 분리 family의 실제 Device 생성·동기화 지원은 후속 작업에서 구현한다.
+- 사용자 작성 `PhysicalDeviceSelection` 구조체를 유지하고 physicalDevice·두 family index·requiresPortabilitySubset을 반환한다. 핸들과 index는 Instance 수명에 종속된 조회 결과이며 소유권을 이전하지 않는다.
+- 기존 `InspectPhysicalDevice`의 전체 목록 출력은 후보별 제외 이유와 main의 최종 선택 GPU·family·portability 출력으로 교체했다. 논리 Device와 Queue는 아직 생성하지 않는다. Surface format·Present mode 등 구체 출력 조건은 S1-3에서 검증한다.
+- Debug/Release 빌드 통과. 실제 선택 helper를 임시 검사 프로그램에서 호출해 빈 목록, 역할 누락, queueCount 0, 뒤쪽 공동 family 우선, 분리 family, 첫 공동 family 선택 등 8개 사례를 확인했다. 실제 GPU 선택·GUI 실행은 이번 변경 후 검증하지 않았다.

@@ -6,6 +6,14 @@
 #include <cstdint>
 #include <vector>
 
+struct PhysicalDeviceSelection
+{
+    VkPhysicalDevice physicalDevice{VK_NULL_HANDLE};
+    std::uint32_t graphicsFamilyIndex{0};
+    std::uint32_t presentFamilyIndex{0};
+    bool requiresPortabilitySubset = false;
+};
+
 class VulkanContext
 {
   public:
@@ -24,7 +32,7 @@ class VulkanContext
   public:
     static std::uint32_t GetApiVersion();
 
-    void InspectPhysicalDevice(VkSurfaceKHR surface) const;
+    PhysicalDeviceSelection SelectPhysicalDevice(VkSurfaceKHR surface) const;
 
   private:
     using InstanceHandle = VulkanHandle<VkInstance, deleter::VkInstanceDeleter>;

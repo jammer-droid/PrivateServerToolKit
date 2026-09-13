@@ -20,7 +20,13 @@ int main()
         SurfaceHandle surfaceHandle(window.CreateSurface(context.GetInstance()),
                                     deleter::VkSurfaceDeleter{context.GetInstance()});
 
-        context.InspectPhysicalDevice(surfaceHandle.Get());
+        const PhysicalDeviceSelection selection = context.SelectPhysicalDevice(surfaceHandle.Get());
+        VkPhysicalDeviceProperties selectedProperties{};
+        vkGetPhysicalDeviceProperties(selection.physicalDevice, &selectedProperties);
+        std::cout << "Selected GPU: " << selectedProperties.deviceName
+                  << "\nGraphics family: " << selection.graphicsFamilyIndex
+                  << "\nPresent family: " << selection.presentFamilyIndex
+                  << "\nRequires portability subset: " << std::boolalpha << selection.requiresPortabilitySubset << '\n';
 
         while (!window.IsCloseRequested())
         {
