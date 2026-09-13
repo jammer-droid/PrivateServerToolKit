@@ -24,6 +24,8 @@ class VulkanContext
   public:
     static std::uint32_t GetApiVersion();
 
+    void InspectPhysicalDevice(VkSurfaceKHR surface) const;
+
   private:
     using InstanceHandle = VulkanHandle<VkInstance, deleter::VkInstanceDeleter>;
     using DebugMessengerHandle = VulkanHandle<VkDebugUtilsMessengerEXT, deleter::VkDebugUtilsMessengerDeleter>;

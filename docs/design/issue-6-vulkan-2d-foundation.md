@@ -186,13 +186,13 @@ renderer_project/
 | 단계 | 상태 | 구현/실행 증거 | 이해 확인 |
 |---|---|---|---|
 | S1-1 | complete | Debug/Release 빌드·실행 및 Debug callback 수신 통과. 요구 버전·필수 확장·필수 Layer 미지원 진단과 종료 코드 1 확인. 상세 증거와 한계는 아래 기록. | 지원/목표 API 버전 구분, 소유권과 역순 파괴, 생성자 예외 시 멤버 정리, pNext callback과 지속 messenger의 역할 구분 확인. |
-| S1-2 | current | GLFW Window와 Surface 연결 후 Debug/Release configure·build 통과. 확장 중복 제거·생성자 초기화 통합·Surface 소유권을 코드 검토했다. Agent의 실제 Surface 생성·GUI 조작 검증은 미수행. GPU·Device는 아직 미구현. | GLFW_NO_API와 Surface를 통한 Vulkan 출력 관계 설명 확인. |
+| S1-2 | current | GLFW Window와 Surface 연결 후 Debug/Release configure·build 통과. 확장 중복 제거·생성자 초기화 통합·Surface 소유권을 코드 검토했다. Agent의 실제 Surface 생성·GUI 조작 검증은 미수행. GPU·Queue Family 조회를 구현했고 사용자 제공 로그에서 Surface Present 조회 성공을 확인했다. Device 생성은 아직 미구현. | GLFW_NO_API와 Surface를 통한 Vulkan 출력 관계 설명 확인. |
 | S1-3 | pending | 아직 없음 | 아직 없음 |
 | S1-4 | pending | 아직 없음 | 아직 없음 |
 | S1-5 | pending | 아직 없음 | 아직 없음 |
 | S1-6 | pending | 아직 없음 | 아직 없음 |
 
-S1-1은 완료했다. 현재 S1-2는 GLFW Window 구현을 마쳤고, 다음 행동은 Surface 실행 확인 후 GPU·Graphics/Present Queue 선택이다. Graphics/Present Queue 정책은 GPU 선택 단계에서 확정한다. 후속 진행도·학습 기록은 별도 단계 문서 없이 이 문서의 stable-ID section을 갱신한다.
+S1-1은 완료했다. 현재 S1-2는 GLFW Window 구현을 마쳤고, 다음 행동은 Device Extension·feature 확인 후 GPU·Graphics/Present Queue 선택이다. Graphics/Present Queue 정책은 GPU 선택 단계에서 확정한다. 후속 진행도·학습 기록은 별도 단계 문서 없이 이 문서의 stable-ID section을 갱신한다.
 
 
 ### S1-1 완료 검증 — 2026-09-13
@@ -231,3 +231,10 @@ cmake --build src/vulkan/renderer_project/build/release
 - 기본 Context 생성자는 확장 목록 생성자로 위임한다. 두 경로 모두 기존 Debug messenger 초기화를 수행한다.
 - `Window::CreateSurface`가 생성한 Surface는 `main`의 지역 RAII 래퍼가 즉시 소유한다. 생성 순서는 Window → Context → Surface, 파괴 순서는 Surface → Context → Window다.
 - Debug/Release configure·build 통과. 이 기록은 실제 GUI 실행·Surface 생성·창 닫기 검증 완료를 뜻하지 않는다. 해당 실행 증거는 다음 검토에서 확인한다.
+
+
+### S1-2 GPU 조회 중간 기록
+
+- Physical Device 열거의 0개 처리, VK_INCOMPLETE 재시도, 오류 검사 후 반환 개수 반영을 구현했다. Queue Family 속성과 Surface별 Present 지원을 조회한다. 최종 수정 후 Debug 빌드 통과. 실패 분기의 실행 주입은 하지 않았다.
+- 사용자 제공 실행 로그: Apple M4 Pro 후보 2개, API 1.3.323 및 1.3.335, device type 1. 첫 후보는 family 4개, 두 번째는 1개이며 모두 queueCount 1, Graphics/Present true였다. 같은 이름의 후보가 둘인 원인은 아직 조사하지 않았다. 이를 물리 GPU 2개 또는 성능 차이의 증거로 해석하지 않는다.
+- 다음 단계에서 Device Extension·feature 조건과 Queue 선택 정책을 정한다. 현재는 후보 조회 결과만 있으며 Logical Device/Queue를 생성한 상태가 아니다.

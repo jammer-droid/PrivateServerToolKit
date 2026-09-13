@@ -20,6 +20,8 @@ int main()
         SurfaceHandle surfaceHandle(window.CreateSurface(context.GetInstance()),
                                     deleter::VkSurfaceDeleter{context.GetInstance()});
 
+        context.InspectPhysicalDevice(surfaceHandle.Get());
+
         while (!window.IsCloseRequested())
         {
             window.WaitEvents();

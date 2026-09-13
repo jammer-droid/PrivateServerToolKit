@@ -103,6 +103,41 @@ std::vector<VkLayerProperties> EnumerateInstanceLayers()
     return layers;
 }
 
+std::vector<VkPhysicalDevice> EnumeratePhysicalDevices(VkInstance instance)
+{
+    std::uint32_t count = 0;
+    std::vector<VkPhysicalDevice> devices;
+
+    while (true)
+    {
+        VK_CHECK(vkEnumeratePhysicalDevices(instance, &count, nullptr));
+        if (count == 0)
+        {
+            throw std::runtime_error("No Vulkan Physical Devices found.\n");
+        }
+
+        devices.resize(count);
+
+        VkResult result = vkEnumeratePhysicalDevices(instance, &count, devices.data());
+        if (result == VK_INCOMPLETE)
+        {
+            devices.clear();
+            continue;
+        }
+        VK_CHECK(result);
+
+        if (count == 0)
+        {
+            throw std::runtime_error("No Vulkan Physical Devices found.\n");
+        }
+
+        devices.resize(count);
+        break;
+    }
+
+    return devices;
+}
+
 VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
                                              VkDebugUtilsMessageTypeFlagsEXT types,
                                              const VkDebugUtilsMessengerCallbackDataEXT *data, void *userData) noexcept
@@ -322,4 +357,46 @@ std::uint32_t VulkanContext::GetApiVersion()
     VK_CHECK(vkEnumerateInstanceVersion(&apiVersion));
 
     return apiVersion;
+}
+
+void VulkanContext::InspectPhysicalDevice(VkSurfaceKHR surface) const
+{
+    std::vector<VkPhysicalDevice> physicalDevices = EnumeratePhysicalDevices(instanceHandle_.Get());
+
+    std::cout << "Physical Device count: " << physicalDevices.size() << '\n';
+    for (const VkPhysicalDevice &device : physicalDevices)
+    {
+        VkPhysicalDeviceProperties property;
+        vkGetPhysicalDeviceProperties(device, &property);
+
+        std::cout << "GPU: " << property.deviceName << "\nDevice API: " << FormatApiVersion(property.apiVersion)
+                  << "\nDevice Type: " << property.deviceType << '\n';
+
+        std::uint32_t familyCount = 0;
+        std::vector<VkQueueFamilyProperties> queueFamilyProperties;
+
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &familyCount, nullptr);
+
+        queueFamilyProperties.resize(familyCount);
+
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &familyCount, queueFamilyProperties.data());
+
+        queueFamilyProperties.resize(familyCount); // 실제 반환 개수에 반영
+        uint32_t queueFamilyIndex = 0;
+        for (const VkQueueFamilyProperties &queueFamilyProperty : queueFamilyProperties)
+        {
+            const bool supportGraphics = (queueFamilyProperty.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0;
+            std::uint32_t queueCount = queueFamilyProperty.queueCount;
+
+            VkBool32 supportsPresent = VK_FALSE;
+            VK_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(device, queueFamilyIndex, surface, &supportsPresent));
+
+            std::cout << "Family: " << queueFamilyIndex << " | queues = " << queueCount
+                      << " | graphics = " << std::boolalpha << supportGraphics
+                      << " | present = " << (supportsPresent == VK_TRUE) << '\n';
+
+            queueFamilyIndex++;
+        }
+    }
+    std::cout << '\n';
 }
