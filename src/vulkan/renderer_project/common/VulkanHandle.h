@@ -38,6 +38,14 @@ struct VkSurfaceDeleter
     }
 };
 
+struct VkDeviceDeleter
+{
+    void operator()(VkDevice handle) const noexcept
+    {
+        vkDestroyDevice(handle, nullptr);
+    }
+};
+
 }; // namespace deleter
 
 // VDELETER : 람다식.(C++ 17)

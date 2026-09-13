@@ -2,7 +2,7 @@
 
 - Issue: <https://github.com/jammer-droid/PrivateServerToolKit/issues/6>
 - Parent: [#5 Vulkan World Lab](https://github.com/jammer-droid/PrivateServerToolKit/issues/5)의 S1
-- 상태: 구현 완료 1/6. S1-1 complete, S1-2 current, S1-3~S1-6 pending.
+- 상태: 구현 완료 2/6. S1-1~S1-2 complete, S1-3 next, S1-4~S1-6 pending.
 - 진행 모드: `study-guide` Study session + `lean-implementation` Guide. 사용자가 구현하며 agent는 안내·검토한다. 구현 수정은 별도 요청 범위에서만 한다.
 
 ## 목표와 경계
@@ -105,10 +105,11 @@ renderer_project/
 
 ### S1-2 — 창·Surface와 Device/Queue
 
+- **상태:** complete. 코드 검토·빌드와 사용자 실행 확인을 바탕으로 완료.
 - **선행:** S1-1.
 - **결과/seam:** 창 관리와 Vulkan 초기화 경계. 창 시스템이 요구하는 instance extension을 반영하고 Surface를 만든 뒤 GPU·Graphics/Present Queue와 Device를 구성한다.
 - **학습:** Physical/Logical Device 차이, queue family와 queue, Surface별 Present capability, device extension/feature.
-- **불변식:** Graphics와 Present가 같은 family라는 가정을 하지 않는다. 첫 지원 정책은 구현 전에 정하고 분리 family 미지원 시 명확히 거부하거나 올바르게 지원한다. Device 선택을 MoltenVK driver ID에 고정하지 않는다.
+- **불변식:** Graphics와 Present가 같은 family라는 가정을 하지 않는다. 같은 family를 우선하고 없으면 각 역할의 family를 선택한다. Device 생성 시 서로 다른 family마다 Queue 하나를 요청한다. Device 선택을 MoltenVK driver ID에 고정하지 않는다.
 - **완료 증거:** 선택 GPU·queue family·지원 기능 로그, 창 열기/닫기, 안전한 정리와 validation 확인. Swapchain 출력은 아직 요구하지 않는다.
 - **이해 확인:** Graphics 지원만으로 화면 출력 가능성을 판단할 수 없는 이유를 설명한다.
 
@@ -155,7 +156,7 @@ renderer_project/
 | 시점 | 남은 결정과 제안 방향 |
 |---|---|
 | S1-1 | `renderer_project/`의 `vulkan_renderer`, C++17·C Vulkan API, `VK_CHECK`와 예외 기반 초기화 실패 전달을 채택했다. macOS에서 instance 지원 버전 1.4.335와 실행을 확인했고 앱 목표는 1.3이다. 1.3 미만 지원 검사와 macOS portability extension 조회·활성화를 구현했다. Debug의 Validation Layer 조회·활성화와 Release의 비요청 경로를 구현했다. Debug messenger 생성·RAII 정리와 테스트 메시지 수신까지 구현했다. Instance 생성·파괴 진단용 pNext 연결까지 구현했다. |
-| S1-2 | GLFW 채택. API 1.3·swapchain·dynamicRendering·synchronization2 및 Graphics/Present 지원을 요구한다. GPU별 공동 family 우선, 없으면 분리 family를 선택한다. 열거 순서상 첫 적합 GPU를 반환하며 Device 생성·feature 활성화는 다음 작업이다. |
+| S1-2 | GLFW 채택. API 1.3·swapchain·dynamicRendering·synchronization2 및 Graphics/Present 지원을 요구한다. GPU별 공동 family 우선, 없으면 분리 family를 선택한다. 열거 순서상 첫 적합 GPU를 반환한다. Device 생성 시 family 요청 중복을 제거하고 swapchain·조건부 portability_subset, dynamicRendering·synchronization2를 활성화한다. |
 | S1-3~4 | Present mode와 frame slot 수는 단계 진입 시 정한다. Graphics 경로는 Dynamic Rendering·Synchronization2를 사용하며 S1-2에서 지원을 확인하고 Device 생성 시 필요한 feature만 활성화한다. |
 | S1-5 | Shader 언어·컴파일러, 좌표 원점·축·단위, blending과 그리기 순서. |
 | S1-6 | 원·선·궤적 표현, instance 데이터와 capacity 정책. |
@@ -186,13 +187,13 @@ renderer_project/
 | 단계 | 상태 | 구현/실행 증거 | 이해 확인 |
 |---|---|---|---|
 | S1-1 | complete | Debug/Release 빌드·실행 및 Debug callback 수신 통과. 요구 버전·필수 확장·필수 Layer 미지원 진단과 종료 코드 1 확인. 상세 증거와 한계는 아래 기록. | 지원/목표 API 버전 구분, 소유권과 역순 파괴, 생성자 예외 시 멤버 정리, pNext callback과 지속 messenger의 역할 구분 확인. |
-| S1-2 | current | GLFW Window와 Surface 연결 후 Debug/Release configure·build 통과. 확장 중복 제거·생성자 초기화 통합·Surface 소유권을 코드 검토했다. Agent의 실제 Surface 생성·GUI 조작 검증은 미수행. GPU·Queue Family 조회를 구현했고 사용자 제공 로그에서 Surface Present 조회 성공을 확인했다. Device 생성은 아직 미구현. | GLFW_NO_API와 Surface를 통한 Vulkan 출력 관계 설명 확인. |
-| S1-3 | pending | 아직 없음 | 아직 없음 |
+| S1-2 | complete | Agent의 Debug/Release 빌드 통과, Queue 선택 8개 합성 사례 통과. 사용자 GPU/Surface 조회 로그 및 Device 구현 후 실행 확인. 상세 범위와 한계는 완료 기록 참조. | GLFW_NO_API·Surface·Instance 확장 관계, family index와 queue index, feature 조회/활성화 구분, Queue의 Device 종속 수명 확인. |
+| S1-3 | next | 아직 없음 | 아직 없음 |
 | S1-4 | pending | 아직 없음 | 아직 없음 |
 | S1-5 | pending | 아직 없음 | 아직 없음 |
 | S1-6 | pending | 아직 없음 | 아직 없음 |
 
-S1-1은 완료했다. 현재 S1-2는 GLFW Window 구현을 마쳤고, 다음 행동은 Device Extension·feature 확인 후 GPU·Graphics/Present Queue 선택이다. Graphics/Present Queue 정책은 GPU 선택 단계에서 확정한다. 후속 진행도·학습 기록은 별도 단계 문서 없이 이 문서의 stable-ID section을 갱신한다.
+S1-1~S1-2는 완료했다. 다음 행동은 S1-3의 Surface capability 조회와 Swapchain·Image View 구성을 안내하는 것이다. 후속 진행도·학습 기록은 별도 단계 문서 없이 이 문서의 stable-ID section을 갱신한다.
 
 
 ### S1-1 완료 검증 — 2026-09-13
@@ -216,6 +217,8 @@ cmake --build src/vulkan/renderer_project/build/release
 ./src/vulkan/renderer_project/build/release/vulkan_renderer
 ```
 
+
+다음 중간 기록은 각 작업 당시의 상태이며 최종 상태는 문서 하단의 S1-2 완료 기록을 따른다.
 
 ### S1-2 Window 중간 기록
 
@@ -255,3 +258,16 @@ cmake --build src/vulkan/renderer_project/build/release
 - 사용자 작성 `PhysicalDeviceSelection` 구조체를 유지하고 physicalDevice·두 family index·requiresPortabilitySubset을 반환한다. 핸들과 index는 Instance 수명에 종속된 조회 결과이며 소유권을 이전하지 않는다.
 - 기존 `InspectPhysicalDevice`의 전체 목록 출력은 후보별 제외 이유와 main의 최종 선택 GPU·family·portability 출력으로 교체했다. 논리 Device와 Queue는 아직 생성하지 않는다. Surface format·Present mode 등 구체 출력 조건은 S1-3에서 검증한다.
 - Debug/Release 빌드 통과. 실제 선택 helper를 임시 검사 프로그램에서 호출해 빈 목록, 역할 누락, queueCount 0, 뒤쪽 공동 family 우선, 분리 family, 첫 공동 family 선택 등 8개 사례를 확인했다. 실제 GPU 선택·GUI 실행은 이번 변경 후 검증하지 않았다.
+
+
+### S1-2 완료 기록
+
+- `app/Window`가 단일 GLFW 창·이벤트·종료를 관리하고, 필수 Instance Extension을 Context에 전달한다. Surface는 main의 RAII 소유자가 관리한다.
+- GPU 선택은 API 1.3 이상, swapchain, dynamicRendering, synchronization2, 사용 가능한 Graphics/Present Family를 요구한다. 같은 family 우선, 없으면 분리 선택하며 열거 순서상 첫 적합 후보를 사용한다.
+- `InitializeDevice(selection)`은 같은 Context에서 얻은 유효한 선택 결과로 한 번만 호출하는 계약이다. 중복 초기화를 거부하고, 서로 다른 family마다 queueCount 1·priority 1.0으로 요청한다. 같은 family는 요청 하나만 만든다.
+- Device Extension은 swapchain과 선택 GPU가 노출하는 경우의 portability_subset을 요청한다. 새 Vulkan13Features 구조체에서 dynamicRendering·synchronization2만 활성화한다. 조회에 사용한 전체 feature 결과를 그대로 활성화하지 않는다.
+- vkCreateDevice 성공 직후 RAII 래퍼가 소유하며, 각 선택 family의 Queue 0을 조회한다. Queue 핸들은 Device가 소유하므로 별도 파괴하지 않는다. Context 멤버는 Device → messenger → Instance 순서로 정리된다.
+- Agent 검증: Device 구현의 Debug/Release configure·build 통과, 생성 설정·포인터 수명·성공 직후 소유권 인수·역순 파괴 코드 검토. Queue 선택 helper의 공동/분리 family·역할 누락·빈 목록 등 8개 합성 사례 통과.
+- 사용자 검증: 앞서 제공한 Apple M4 Pro 후보의 Graphics/Present 조회 로그와 Device 구현 후 실행 확인 응답을 증거로 기록한다. Agent가 직접 GUI를 조작하거나 Device 실행 로그를 수집한 것은 아니다. 사용자 실행의 빌드 구성별 상세 로그는 별도 제공되지 않았다.
+- 한계: 분리 Graphics/Present Family의 실제 하드웨어 실행, 다른 OS, 모든 Device 초기화 실패 분기의 주입은 미수행. 현재는 GPU 작업을 제출하지 않으므로 제출 후 완료 대기·동기화 검증은 S1-4 범위다. 향후 GPU 사용 중 자원을 파괴하지 않도록 종료 흐름을 확장한다.
+- 다음 단계 S1-3에서 Surface format·Present mode·extent·image count·usage 조건을 확인하고 Swapchain과 Image View를 생성한다. S1-2 완료가 실제 화면 렌더링이나 모든 출력 조건 검증 완료를 의미하지 않는다.

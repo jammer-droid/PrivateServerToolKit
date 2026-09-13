@@ -8,6 +8,7 @@
 #include <vector>
 #include <cstdio>
 #include <optional>
+#include <array>
 
 namespace
 {
@@ -546,4 +547,55 @@ PhysicalDeviceSelection VulkanContext::SelectPhysicalDevice(VkSurfaceKHR surface
     }
 
     throw std::runtime_error("No suitable physical device found");
+}
+
+void VulkanContext::InitializeDevice(const PhysicalDeviceSelection &selection)
+{
+    if (deviceHandle_.Get() != VK_NULL_HANDLE)
+    {
+        throw std::runtime_error("VkDevice already initialized.\n");
+    }
+
+    // Device Feature 목록
+    VkPhysicalDeviceVulkan13Features enabledFeatures{};
+    enabledFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+    enabledFeatures.dynamicRendering = VK_TRUE;
+    enabledFeatures.synchronization2 = VK_TRUE;
+
+    VkDeviceCreateInfo deviceCreateInfo{};
+    deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    deviceCreateInfo.pNext = &enabledFeatures;
+
+    std::uint32_t queueCreateInfoCount = (selection.graphicsFamilyIndex == selection.presentFamilyIndex) ? 1u : 2u;
+    const float queuePriority = 1.0f; // 0.0 ~ 1.0, 1.0이 우선순위가 가장 높음
+
+    std::array<VkDeviceQueueCreateInfo, 2> queueInfos{};
+    std::array<std::uint32_t, 2> queueFamilyIndices{selection.graphicsFamilyIndex, selection.presentFamilyIndex};
+    for (std::uint32_t index = 0; index < queueCreateInfoCount; index++)
+    {
+        VkDeviceQueueCreateInfo &info = queueInfos[index];
+        info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        info.pQueuePriorities = &queuePriority;
+        info.queueFamilyIndex = queueFamilyIndices[index];
+        info.queueCount = 1;
+    }
+    deviceCreateInfo.queueCreateInfoCount = queueCreateInfoCount;
+    deviceCreateInfo.pQueueCreateInfos = queueInfos.data();
+
+    // Device Extension 활성화 목록
+    std::vector<const char *> deviceExtensions{kRequiredExtensionSwapchain};
+    if (selection.requiresPortabilitySubset)
+    {
+        deviceExtensions.push_back(kRequiredExtensionPorabilitySubset);
+    }
+    deviceCreateInfo.enabledExtensionCount = static_cast<std::uint32_t>(deviceExtensions.size());
+    deviceCreateInfo.ppEnabledExtensionNames = deviceExtensions.data();
+
+    VkDevice device = VK_NULL_HANDLE;
+
+    VK_CHECK(vkCreateDevice(selection.physicalDevice, &deviceCreateInfo, nullptr, &device));
+
+    deviceHandle_.Adopt(device, deleter::VkDeviceDeleter{});
+    vkGetDeviceQueue(deviceHandle_.Get(), selection.graphicsFamilyIndex, 0, &graphicsQueue_);
+    vkGetDeviceQueue(deviceHandle_.Get(), selection.presentFamilyIndex, 0, &presentQueue_);
 }

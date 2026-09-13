@@ -28,6 +28,8 @@ int main()
                   << "\nPresent family: " << selection.presentFamilyIndex
                   << "\nRequires portability subset: " << std::boolalpha << selection.requiresPortabilitySubset << '\n';
 
+        context.InitializeDevice(selection);
+
         while (!window.IsCloseRequested())
         {
             window.WaitEvents();
