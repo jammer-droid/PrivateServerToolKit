@@ -11,8 +11,16 @@ namespace
 {
 
 constexpr std::uint32_t kRequiredApiVersion = VK_API_VERSION_1_3;
-constexpr const char *kRequiredExtensionName =
-    VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME; // MoltenVK 같은 이식용 구현 조회
+// portability device 열거 기능 활성화
+constexpr const char *kRequiredExtensionName = VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME;
+constexpr const char *kValidationLayer = "VK_LAYER_KHRONOS_validation";
+constexpr const char *kLayerNames[] = {kValidationLayer};
+
+#ifdef NDEBUG
+constexpr bool kEnableValidation = false;
+#else
+constexpr bool kEnableValidation = true;
+#endif
 
 std::string FormatApiVersion(std::uint32_t version)
 {
@@ -45,15 +53,52 @@ std::vector<VkExtensionProperties> EnumerateInstanceExtensions()
 
         VK_CHECK(result);
         extensionProperties.resize(extensionCount);
-        std::cout << "Extension Count: " << extensionCount << '\n';
-        for (const VkExtensionProperties &property : extensionProperties)
-        {
-            std::cout << property.extensionName << ", " << property.specVersion << '\n';
-        }
         break;
     }
 
+    std::cout << "Extension Count: " << extensionCount << '\n';
+    for (const VkExtensionProperties &property : extensionProperties)
+    {
+        std::cout << property.extensionName << ", " << property.specVersion << '\n';
+    }
+    std::cout << '\n';
     return extensionProperties;
+}
+
+std::vector<VkLayerProperties> EnumerateInstanceLayers()
+{
+    std::uint32_t layerCount = 0;
+    std::vector<VkLayerProperties> layers;
+
+    while (true)
+    {
+        VK_CHECK(vkEnumerateInstanceLayerProperties(&layerCount, nullptr));
+        if (layerCount == 0)
+        {
+            break;
+        }
+
+        layers.resize(layerCount);
+        VkResult result = vkEnumerateInstanceLayerProperties(&layerCount, layers.data());
+        if (result == VK_INCOMPLETE)
+        {
+            layers.clear();
+            continue;
+        }
+
+        VK_CHECK(result);
+        layers.resize(layerCount);
+        break;
+    }
+
+    std::cout << "Layer Count: " << layerCount << '\n';
+    for (const VkLayerProperties &layer : layers)
+    {
+        std::cout << layer.layerName << ' ' << layer.description << '\n';
+    }
+    std::cout << '\n';
+
+    return layers;
 }
 
 VkInstance CreateInstance()
@@ -114,6 +159,28 @@ VkInstance CreateInstance()
     // portability device도 조회 결과에 포함하게 설정
     instanceCreateInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 #endif
+
+    if (kEnableValidation) // Debug Layer
+    {
+        std::vector<VkLayerProperties> layers = EnumerateInstanceLayers();
+
+        bool flag = false;
+        for (const VkLayerProperties &layer : layers)
+        {
+            if (std::strcmp(layer.layerName, kValidationLayer) == 0)
+            {
+                flag = true;
+            }
+        }
+
+        if (!flag)
+        {
+            throw std::runtime_error("Validation Layer Not Founded.\n");
+        }
+
+        instanceCreateInfo.enabledLayerCount = 1;
+        instanceCreateInfo.ppEnabledLayerNames = kLayerNames;
+    }
 
     VkInstance instance = VK_NULL_HANDLE;
     VK_CHECK(vkCreateInstance(&instanceCreateInfo, nullptr, &instance));
