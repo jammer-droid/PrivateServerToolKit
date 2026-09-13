@@ -15,6 +15,9 @@ constexpr std::uint32_t kRequiredApiVersion = VK_API_VERSION_1_3;
 // portability device 열거 기능 활성화
 constexpr const char *kRequiredExtensionPortabilityEnumeration = VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME;
 constexpr const char *kRequiredExtensionDebugUtils = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
+constexpr const char *kRequiredExtensionSwapchain = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
+constexpr const char *kRequiredExtensionPorabilitySubset = "VK_KHR_portability_subset";
+
 constexpr const char *kValidationLayer = "VK_LAYER_KHRONOS_validation";
 constexpr const char *kLayerNames[] = {kValidationLayer};
 
@@ -30,6 +33,7 @@ std::string FormatApiVersion(std::uint32_t version)
            std::to_string(VK_API_VERSION_PATCH(version));
 }
 
+// for Instance Extensions
 std::vector<VkExtensionProperties> EnumerateInstanceExtensions()
 {
     std::uint32_t extensionCount = 0;
@@ -136,6 +140,36 @@ std::vector<VkPhysicalDevice> EnumeratePhysicalDevices(VkInstance instance)
     }
 
     return devices;
+}
+
+// for Physical Device Extensions
+std::vector<VkExtensionProperties> EnumerateDeviceExtensions(VkPhysicalDevice physicalDevice)
+{
+    std::uint32_t extensionCount = 0;
+    std::vector<VkExtensionProperties> extensions;
+
+    while (true)
+    {
+        VK_CHECK(vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extensionCount, nullptr));
+        if (extensionCount == 0)
+        {
+            break;
+        }
+
+        extensions.resize(extensionCount);
+        VkResult result =
+            vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &extensionCount, extensions.data());
+        if (result == VK_INCOMPLETE)
+        {
+            extensions.clear();
+            continue;
+        }
+        VK_CHECK(result);
+        extensions.resize(extensionCount);
+        break;
+    }
+
+    return extensions;
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
@@ -371,6 +405,11 @@ void VulkanContext::InspectPhysicalDevice(VkSurfaceKHR surface) const
 
         std::cout << "GPU: " << property.deviceName << "\nDevice API: " << FormatApiVersion(property.apiVersion)
                   << "\nDevice Type: " << property.deviceType << '\n';
+        if (property.apiVersion < kRequiredApiVersion)
+        {
+            std::cout << "Skipped: requires Vulkan " << FormatApiVersion(kRequiredApiVersion) << '\n';
+            continue;
+        }
 
         std::uint32_t familyCount = 0;
         std::vector<VkQueueFamilyProperties> queueFamilyProperties;
@@ -397,6 +436,44 @@ void VulkanContext::InspectPhysicalDevice(VkSurfaceKHR surface) const
 
             queueFamilyIndex++;
         }
+
+        std::vector<VkExtensionProperties> deviceExtensionProperties = EnumerateDeviceExtensions(device);
+        std::cout << "Device Extension Count: " << deviceExtensionProperties.size() << '\n';
+
+        bool supportSwapchain = false;         // swapchain을 지원하는지 확인
+        bool supportPortabilitySubset = false; // device가 portability subset을 노출하는지
+        // portability subset을 노출하면 해당 디바이스를 선택해
+        // portability가 가진 제약을 고려해서 사용하도록 설정
+        for (const VkExtensionProperties &property : deviceExtensionProperties)
+        {
+            std::cout << property.extensionName << ' ' << property.specVersion << '\n';
+
+            if (std::strcmp(property.extensionName, kRequiredExtensionSwapchain) == 0)
+            {
+                supportSwapchain = true;
+            }
+
+            if (std::strcmp(property.extensionName, kRequiredExtensionPorabilitySubset) == 0)
+            {
+                supportPortabilitySubset = true;
+            }
+        }
+
+        VkPhysicalDeviceVulkan13Features features13{}; // Vulkan 1.3에 추가된 feature
+        features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+
+        VkPhysicalDeviceFeatures2 features2{}; // Vulkan 1.0의 기본 feature
+        features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+        features2.pNext = &features13;
+
+        vkGetPhysicalDeviceFeatures2(device, &features2);
+
+        std::cout << std::boolalpha << "swapchain: " << supportSwapchain
+                  << "\nportabilitySubset: " << supportPortabilitySubset
+                  << "\ndynamicRendering: " << (features13.dynamicRendering == VK_TRUE)
+                  << "\nsynchronization2: " << (features13.synchronization2 == VK_TRUE) << '\n';
+
+        std::cout << '\n';
     }
     std::cout << '\n';
 }

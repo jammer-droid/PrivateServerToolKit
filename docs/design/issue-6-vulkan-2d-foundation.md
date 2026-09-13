@@ -238,3 +238,11 @@ cmake --build src/vulkan/renderer_project/build/release
 - Physical Device 열거의 0개 처리, VK_INCOMPLETE 재시도, 오류 검사 후 반환 개수 반영을 구현했다. Queue Family 속성과 Surface별 Present 지원을 조회한다. 최종 수정 후 Debug 빌드 통과. 실패 분기의 실행 주입은 하지 않았다.
 - 사용자 제공 실행 로그: Apple M4 Pro 후보 2개, API 1.3.323 및 1.3.335, device type 1. 첫 후보는 family 4개, 두 번째는 1개이며 모두 queueCount 1, Graphics/Present true였다. 같은 이름의 후보가 둘인 원인은 아직 조사하지 않았다. 이를 물리 GPU 2개 또는 성능 차이의 증거로 해석하지 않는다.
 - 다음 단계에서 Device Extension·feature 조건과 Queue 선택 정책을 정한다. 현재는 후보 조회 결과만 있으며 Logical Device/Queue를 생성한 상태가 아니다.
+
+
+### S1-2 Device 기능 조회 중간 기록
+
+- GPU별 Device Extension을 조회하여 swapchain 및 portability_subset 노출 여부를 확인한다. portability_subset은 OS 분기 없이 조회하며, 노출하는 GPU를 선택할 때 활성화해야 하는 조건으로 이해한다.
+- API 1.3 미만 후보는 이유를 출력하고 다음 후보로 진행한다. Vulkan 1.3 후보에 Features2 → Vulkan13Features 조회 체인을 연결해 dynamicRendering·synchronization2 지원을 출력한다. 조회 결과는 기능 활성화가 아니다.
+- Device Extension 열거의 빈 목록·VK_INCOMPLETE·실제 반환 개수 처리와 후보 제외 분기를 코드 검토했다. Debug/Release configure·build 통과. 이번 기능 출력의 실제 GUI 실행과 실패 분기 주입은 수행하지 않았다.
+- 다음 단계는 필요한 feature·extension과 Graphics/Present Queue 조건에 따른 최종 후보 선택이다. Logical Device 생성과 feature 활성화는 아직 수행하지 않는다.
