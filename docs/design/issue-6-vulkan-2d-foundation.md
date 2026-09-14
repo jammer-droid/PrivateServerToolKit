@@ -2,7 +2,7 @@
 
 - Issue: <https://github.com/jammer-droid/PrivateServerToolKit/issues/6>
 - Parent: [#5 Vulkan World Lab](https://github.com/jammer-droid/PrivateServerToolKit/issues/5)의 S1
-- 상태: 구현 완료 3/6. S1-1~S1-3 complete, S1-4 next, S1-5~S1-6 pending.
+- 상태: 구현 완료 3/6. S1-1~S1-3 complete, S1-4 current, S1-5~S1-6 pending.
 - 진행 모드: `study-guide` Study session + `lean-implementation` Guide. 사용자가 구현하며 agent는 안내·검토한다. 구현 수정은 별도 요청 범위에서만 한다.
 
 ## 목표와 경계
@@ -190,7 +190,7 @@ renderer_project/
 | S1-1 | complete | Debug/Release 빌드·실행 및 Debug callback 수신 통과. 요구 버전·필수 확장·필수 Layer 미지원 진단과 종료 코드 1 확인. 상세 증거와 한계는 아래 기록. | 지원/목표 API 버전 구분, 소유권과 역순 파괴, 생성자 예외 시 멤버 정리, pNext callback과 지속 messenger의 역할 구분 확인. |
 | S1-2 | complete | Agent의 Debug/Release 빌드 통과, Queue 선택 8개 합성 사례 통과. 사용자 GPU/Surface 조회 로그 및 Device 구현 후 실행 확인. 상세 범위와 한계는 완료 기록 참조. | GLFW_NO_API·Surface·Instance 확장 관계, family index와 queue index, feature 조회/활성화 구분, Queue의 Device 종속 수명 확인. |
 | S1-3 | complete | 설정 선택 경계 검사, Debug/Release 빌드, 세 번째 View 생성 실패 시 정리와 정상 정리 순서 검사 통과. 사용자 빌드·실행 확인. | 요청 최소/실제 이미지 개수, borrowed Image와 owned View, 생성자 실패 시 멤버 RAII 정리 이해 확인. |
-| S1-4 | next | 아직 없음 | 아직 없음 |
+| S1-4 | current | FrameResources의 Graphics Command Pool·Primary Buffer·signaled Fence 구현. Debug/Release 빌드 및 최종 Adopt 순서 수정 후 Debug 빌드 통과. 실제 실행은 agent 미검증. | 제출 전 unsignaled Fence를 무한 대기하면 진행할 수 없음을 설명 확인. |
 | S1-5 | pending | 아직 없음 | 아직 없음 |
 | S1-6 | pending | 아직 없음 | 아직 없음 |
 
@@ -301,3 +301,11 @@ cmake --build src/vulkan/renderer_project/build/release
 - 사용자 검증: 최종 코드의 빌드·실행 확인 응답을 받았다. Agent는 이번 최종 GUI 실행을 직접 수행하지 않았다. 실제 이미지 수·View 생성 결과의 상세 실행 로그는 별도 첨부되지 않았다.
 - 초기 설정 실패 시 종료, format 우선순위 없음, 극단적 이미지 개수 overflow 대응 생략은 기존 합의를 유지한다. resize 재생성과 최소화 후 복원 대기는 S1-4에서 구현한다.
 - 아직 이미지를 Acquire하거나 GPU 명령을 제출·Present하지 않는다. GPU 사용 완료 전 자원 정리 금지와 프레임 동기화는 S1-4에서 연결한다.
+
+
+### S1-4 프레임 자원 중간 기록
+
+- 현재 프레임 자원은 한 묶음으로 시작한다. `FrameResources`는 Graphics Family의 RESET_COMMAND_BUFFER Pool과 Primary Command Buffer 하나, signaled Fence를 구성한다. Pool·Fence는 RAII 소유, Command Buffer는 Pool에서 함께 해제한다.
+- Fence 생성 직후 Adopt하고 상태를 조회하여 예외 발생 시 정리 공백을 없앴다. FrameResources는 main에서 Swapchain 이후에 생성되어 Context보다 먼저 정리된다.
+- Agent는 Debug/Release 빌드를 확인했고 최종 수정 후 Debug 빌드도 확인했다. GPU 명령 제출과 실제 GUI 실행은 이번 작업에서 검증하지 않았다.
+- 다음은 Acquire/Submit/Present를 연결할 binary semaphore의 생성·소유권 구성이다. 획득용은 프레임별, present 대기용은 Swapchain image별로 관리하며 반복 Acquire만 단독으로 수행하지 않는다.

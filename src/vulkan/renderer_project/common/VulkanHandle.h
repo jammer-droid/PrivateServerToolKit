@@ -66,6 +66,26 @@ struct VkImageViewDeleter
     }
 };
 
+struct VkCommandPoolDeleter
+{
+    VkDevice device;
+
+    void operator()(VkCommandPool handle) const noexcept
+    {
+        vkDestroyCommandPool(device, handle, nullptr);
+    }
+};
+
+struct VkFenceDeleter
+{
+    VkDevice device;
+
+    void operator()(VkFence handle) const noexcept
+    {
+        vkDestroyFence(device, handle, nullptr);
+    }
+};
+
 }; // namespace deleter
 
 // VDELETER : 람다식.(C++ 17)

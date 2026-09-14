@@ -32,6 +32,9 @@ class Swapchain
                        PhysicalDeviceSelection selection, VkSurfaceCapabilitiesKHR surfaceCapabilities);
     ~Swapchain() = default;
 
+    VK_NON_COPYABLE(Swapchain)
+    VK_NON_MOVABLE(Swapchain)
+
     inline VkSwapchainKHR GetSwapchain() const noexcept
     {
         return swapchainHandle_.Get();

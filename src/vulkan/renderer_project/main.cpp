@@ -7,6 +7,7 @@
 
 #include "core/VulkanContext.h"
 #include "core/Swapchain.h"
+#include "core/FrameResources.h"
 
 #include "app/Window.h"
 
@@ -49,6 +50,8 @@ int main()
         }
         Swapchain swapchain(context.GetDevice(), surfaceHandle.Get(), swapchainSetting, selection,
                             swapchainSupport.capabilities);
+
+        FrameResources frame(context.GetDevice(), selection.graphicsFamilyIndex);
 
         while (!window.IsCloseRequested())
         {
