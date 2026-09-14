@@ -10,6 +10,7 @@ add_executable(vulkan_renderer
     common/VulkanException.cpp
 
     core/VulkanContext.cpp
+    core/Swapchain.cpp
 
     app/Window.cpp
 )

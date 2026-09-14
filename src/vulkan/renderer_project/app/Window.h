@@ -22,6 +22,7 @@ class Window
     std::vector<const char *> GetRequiredInstanceExtensions() const;
 
     VkSurfaceKHR CreateSurface(VkInstance instance) const;
+    VkExtent2D GetFramebufferSize() const;
 
   private:
     GLFWwindow *window_{nullptr};

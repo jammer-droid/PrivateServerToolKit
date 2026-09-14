@@ -2,7 +2,7 @@
 
 - Issue: <https://github.com/jammer-droid/PrivateServerToolKit/issues/6>
 - Parent: [#5 Vulkan World Lab](https://github.com/jammer-droid/PrivateServerToolKit/issues/5)의 S1
-- 상태: 구현 완료 2/6. S1-1~S1-2 complete, S1-3 next, S1-4~S1-6 pending.
+- 상태: 구현 완료 2/6. S1-1~S1-2 complete, S1-3 current, S1-4~S1-6 pending.
 - 진행 모드: `study-guide` Study session + `lean-implementation` Guide. 사용자가 구현하며 agent는 안내·검토한다. 구현 수정은 별도 요청 범위에서만 한다.
 
 ## 목표와 경계
@@ -188,7 +188,7 @@ renderer_project/
 |---|---|---|---|
 | S1-1 | complete | Debug/Release 빌드·실행 및 Debug callback 수신 통과. 요구 버전·필수 확장·필수 Layer 미지원 진단과 종료 코드 1 확인. 상세 증거와 한계는 아래 기록. | 지원/목표 API 버전 구분, 소유권과 역순 파괴, 생성자 예외 시 멤버 정리, pNext callback과 지속 messenger의 역할 구분 확인. |
 | S1-2 | complete | Agent의 Debug/Release 빌드 통과, Queue 선택 8개 합성 사례 통과. 사용자 GPU/Surface 조회 로그 및 Device 구현 후 실행 확인. 상세 범위와 한계는 완료 기록 참조. | GLFW_NO_API·Surface·Instance 확장 관계, family index와 queue index, feature 조회/활성화 구분, Queue의 Device 종속 수명 확인. |
-| S1-3 | next | 아직 없음 | 아직 없음 |
+| S1-3 | current | Surface capabilities·formats·present modes와 framebuffer 크기 조회 구현. Debug/Release 빌드 확인 및 최종 capabilities 오류 검사 수정 후 Debug 빌드 확인. 사용자 enum 출력 확인. Swapchain 객체는 아직 미생성. | maxImageCount 0은 상한 미지정임을 설명 확인. |
 | S1-4 | pending | 아직 없음 | 아직 없음 |
 | S1-5 | pending | 아직 없음 | 아직 없음 |
 | S1-6 | pending | 아직 없음 | 아직 없음 |
@@ -271,3 +271,11 @@ cmake --build src/vulkan/renderer_project/build/release
 - 사용자 검증: 앞서 제공한 Apple M4 Pro 후보의 Graphics/Present 조회 로그와 Device 구현 후 실행 확인 응답을 증거로 기록한다. Agent가 직접 GUI를 조작하거나 Device 실행 로그를 수집한 것은 아니다. 사용자 실행의 빌드 구성별 상세 로그는 별도 제공되지 않았다.
 - 한계: 분리 Graphics/Present Family의 실제 하드웨어 실행, 다른 OS, 모든 Device 초기화 실패 분기의 주입은 미수행. 현재는 GPU 작업을 제출하지 않으므로 제출 후 완료 대기·동기화 검증은 S1-4 범위다. 향후 GPU 사용 중 자원을 파괴하지 않도록 종료 흐름을 확장한다.
 - 다음 단계 S1-3에서 Surface format·Present mode·extent·image count·usage 조건을 확인하고 Swapchain과 Image View를 생성한다. S1-2 완료가 실제 화면 렌더링이나 모든 출력 조건 검증 완료를 의미하지 않는다.
+
+
+### S1-3 Surface 지원 조회 중간 기록
+
+- `core/Swapchain.h/.cpp`의 `QuerySwapchainSupport`에서 capabilities·format/color space 쌍·present modes를 조회한다. 모든 VkResult를 검사하고 목록 조회는 빈 결과·VK_INCOMPLETE·실제 반환 개수를 처리한다.
+- Window에서 GLFW framebuffer pixel 크기를 조회한다. main에서 지원 범위와 실제 framebuffer 크기를 출력하고 SDK의 `vk_enum_string_helper.h`로 format·color space·present mode 이름을 표시한다.
+- Debug/Release 빌드를 확인했고 최종 capabilities 오류 검사 수정 후 Debug 빌드를 확인했다. 사용자 출력에서 HDR format 쌍과 FIFO/Immediate를 확인했으나 이를 선택한 것은 아니다. Agent의 실제 GUI 실행 검증은 미수행.
+- 다음 작은 작업은 지원 목록에서 SDR format 쌍·present mode·extent·요청 이미지 개수를 선택하는 것이다. Swapchain과 Image View의 생성·정리는 이후 진행한다.
