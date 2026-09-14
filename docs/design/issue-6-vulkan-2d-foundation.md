@@ -279,3 +279,13 @@ cmake --build src/vulkan/renderer_project/build/release
 - Window에서 GLFW framebuffer pixel 크기를 조회한다. main에서 지원 범위와 실제 framebuffer 크기를 출력하고 SDK의 `vk_enum_string_helper.h`로 format·color space·present mode 이름을 표시한다.
 - Debug/Release 빌드를 확인했고 최종 capabilities 오류 검사 수정 후 Debug 빌드를 확인했다. 사용자 출력에서 HDR format 쌍과 FIFO/Immediate를 확인했으나 이를 선택한 것은 아니다. Agent의 실제 GUI 실행 검증은 미수행.
 - 다음 작은 작업은 지원 목록에서 SDR format 쌍·present mode·extent·요청 이미지 개수를 선택하는 것이다. Swapchain과 Image View의 생성·정리는 이후 진행한다.
+
+
+### S1-3 설정 선택 중간 기록
+
+- `ConfigureSwapchainSettings`는 지원 목록 순서상 BGRA8/RGBA8 SRGB 중 하나와 SRGB_NONLINEAR color space가 같은 항목에서 일치하는 첫 조합을 선택한다. 사용자 결정으로 두 format 간 우선순위는 두지 않는다. Present mode는 FIFO, image usage는 COLOR_ATTACHMENT다.
+- 고정 currentExtent는 그대로 사용하고 자유 extent는 framebuffer를 min/max에 clamp한다. framebuffer·고정 extent 및 최종 clamp 결과의 0 크기를 검사한다. 실패 시 output은 갱신하지 않는다.
+- 요청 최소 이미지 수는 minImageCount + 1이며 maxImageCount가 0이 아닐 때만 제한한다. 사용자 결정으로 극단적 uint32 이미지 개수 overflow 대응은 현재 실습 범위에서 생략한다.
+- 사용자 결정으로 초기 설정이 만들어지지 않으면 main에서 예외로 종료한다. 복원 대기는 이번 시작 경로에 추가하지 않고 resize/최소화 재생성 정책은 S1-4에서 재검토한다. null output은 현재 false를 반환한다.
+- 실제 설정 함수의 합성 입력 검사에서 format/color space 쌍, extent clamp, 0 결과 거부·output 보존, 상한 미지정/유한 이미지 수 처리를 확인했다. 최종 Debug 빌드 통과. 현재 장비의 선택 설정 출력은 이번 변경 후 agent가 실행 검증하지 않았다.
+- 다음 작업은 Swapchain 생성·RAII 소유와 실제 이미지 목록 조회이며 이후 Image View 생성·정리를 추가한다.

@@ -71,6 +71,13 @@ int main()
             std::cout << string_VkPresentModeKHR(presentMode) << '\n';
         }
 
+        SwapchainSettings swapchainSetting{};
+        bool configResult = ConfigureSwapchainSettings(swapchainSupport, framebufferSize, &swapchainSetting);
+        if (!configResult)
+        {
+            throw std::runtime_error("Configure SwapchainSettings failed\n");
+        }
+
         while (!window.IsCloseRequested())
         {
             window.WaitEvents();
