@@ -2,7 +2,7 @@
 
 - Issue: <https://github.com/jammer-droid/PrivateServerToolKit/issues/6>
 - Parent: [#5 Vulkan World Lab](https://github.com/jammer-droid/PrivateServerToolKit/issues/5)의 S1
-- 상태: 구현 완료 2/6. S1-1~S1-2 complete, S1-3 current, S1-4~S1-6 pending.
+- 상태: 구현 완료 3/6. S1-1~S1-3 complete, S1-4 next, S1-5~S1-6 pending.
 - 진행 모드: `study-guide` Study session + `lean-implementation` Guide. 사용자가 구현하며 agent는 안내·검토한다. 구현 수정은 별도 요청 범위에서만 한다.
 
 ## 목표와 경계
@@ -115,6 +115,7 @@ renderer_project/
 
 ### S1-3 — Swapchain과 Image View
 
+- **상태:** complete. 코드·합성 실패 경로 검증과 사용자 실행 확인으로 완료.
 - **선행:** S1-2.
 - **결과/seam:** 출력 자원 묶음. Surface capability에 맞는 format, extent, image count, present mode 선택과 Swapchain/Image View 생성·정리.
 - **학습:** 이미지와 view, 창 크기와 framebuffer 크기, 앱 소유 자원과 borrowed image.
@@ -188,12 +189,12 @@ renderer_project/
 |---|---|---|---|
 | S1-1 | complete | Debug/Release 빌드·실행 및 Debug callback 수신 통과. 요구 버전·필수 확장·필수 Layer 미지원 진단과 종료 코드 1 확인. 상세 증거와 한계는 아래 기록. | 지원/목표 API 버전 구분, 소유권과 역순 파괴, 생성자 예외 시 멤버 정리, pNext callback과 지속 messenger의 역할 구분 확인. |
 | S1-2 | complete | Agent의 Debug/Release 빌드 통과, Queue 선택 8개 합성 사례 통과. 사용자 GPU/Surface 조회 로그 및 Device 구현 후 실행 확인. 상세 범위와 한계는 완료 기록 참조. | GLFW_NO_API·Surface·Instance 확장 관계, family index와 queue index, feature 조회/활성화 구분, Queue의 Device 종속 수명 확인. |
-| S1-3 | current | Surface capabilities·formats·present modes와 framebuffer 크기 조회 구현. Debug/Release 빌드 확인 및 최종 capabilities 오류 검사 수정 후 Debug 빌드 확인. 사용자 enum 출력 확인. Swapchain 객체는 아직 미생성. | maxImageCount 0은 상한 미지정임을 설명 확인. |
-| S1-4 | pending | 아직 없음 | 아직 없음 |
+| S1-3 | complete | 설정 선택 경계 검사, Debug/Release 빌드, 세 번째 View 생성 실패 시 정리와 정상 정리 순서 검사 통과. 사용자 빌드·실행 확인. | 요청 최소/실제 이미지 개수, borrowed Image와 owned View, 생성자 실패 시 멤버 RAII 정리 이해 확인. |
+| S1-4 | next | 아직 없음 | 아직 없음 |
 | S1-5 | pending | 아직 없음 | 아직 없음 |
 | S1-6 | pending | 아직 없음 | 아직 없음 |
 
-S1-1~S1-2는 완료했다. 다음 행동은 S1-3의 Surface capability 조회와 Swapchain·Image View 구성을 안내하는 것이다. 후속 진행도·학습 기록은 별도 단계 문서 없이 이 문서의 stable-ID section을 갱신한다.
+S1-1~S1-3는 완료했다. 다음 행동은 S1-4의 프레임 명령 자원과 동기화 기반을 구성하는 것이다. 후속 진행도·학습 기록은 별도 단계 문서 없이 이 문서의 stable-ID section을 갱신한다.
 
 
 ### S1-1 완료 검증 — 2026-09-13
@@ -289,3 +290,14 @@ cmake --build src/vulkan/renderer_project/build/release
 - 사용자 결정으로 초기 설정이 만들어지지 않으면 main에서 예외로 종료한다. 복원 대기는 이번 시작 경로에 추가하지 않고 resize/최소화 재생성 정책은 S1-4에서 재검토한다. null output은 현재 false를 반환한다.
 - 실제 설정 함수의 합성 입력 검사에서 format/color space 쌍, extent clamp, 0 결과 거부·output 보존, 상한 미지정/유한 이미지 수 처리를 확인했다. 최종 Debug 빌드 통과. 현재 장비의 선택 설정 출력은 이번 변경 후 agent가 실행 검증하지 않았다.
 - 다음 작업은 Swapchain 생성·RAII 소유와 실제 이미지 목록 조회이며 이후 Image View 생성·정리를 추가한다.
+
+
+### S1-3 완료 기록
+
+- Swapchain은 선택한 설정·Surface capability·Queue Family 관계로 생성하고 즉시 RAII 소유권을 인수한다. 실제 image 목록은 vkGetSwapchainImagesKHR로 조회하며 개별 Image를 파괴하지 않는다.
+- 이미지마다 2D color Image View를 생성한다. format은 Swapchain과 같고 identity swizzle, mip 0 하나·array layer 0 하나를 사용한다.
+- 이동 금지 ImageViewHandle은 deque에 빈 소유자를 먼저 emplace하고 vkCreateImageView 성공 직후 Adopt한다. View 컨테이너를 Swapchain 소유자보다 뒤에 선언하여 먼저 파괴한다.
+- Agent 검증: Debug/Release 빌드 통과. Vulkan 호출을 대체한 임시 검사에서 세 번째 View 생성 실패 시 앞서 만든 두 View가 Swapchain보다 먼저 정확히 정리되는 것을 확인했고, 정상 생성 시 View 세 개가 Swapchain보다 먼저 정리되는 것도 확인했다. 이는 실제 GPU의 메모리 부족 상황 검증이 아니다.
+- 사용자 검증: 최종 코드의 빌드·실행 확인 응답을 받았다. Agent는 이번 최종 GUI 실행을 직접 수행하지 않았다. 실제 이미지 수·View 생성 결과의 상세 실행 로그는 별도 첨부되지 않았다.
+- 초기 설정 실패 시 종료, format 우선순위 없음, 극단적 이미지 개수 overflow 대응 생략은 기존 합의를 유지한다. resize 재생성과 최소화 후 복원 대기는 S1-4에서 구현한다.
+- 아직 이미지를 Acquire하거나 GPU 명령을 제출·Present하지 않는다. GPU 사용 완료 전 자원 정리 금지와 프레임 동기화는 S1-4에서 연결한다.

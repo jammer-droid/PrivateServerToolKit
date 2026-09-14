@@ -264,7 +264,7 @@ Swapchain::Swapchain(VkDevice device, VkSurfaceKHR surface, SwapchainSettings se
     swapchainCreateInfo.imageExtent = setting.extent;
     swapchainCreateInfo.presentMode = setting.presentMode;
     swapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    swapchainCreateInfo.imageArrayLayers = 1;
+    swapchainCreateInfo.imageArrayLayers = 1; // swapchain 이미지의 layer를 1로 설정
     swapchainCreateInfo.preTransform = surfaceCapabilities.currentTransform;
     swapchainCreateInfo.clipped = VK_TRUE;
     swapchainCreateInfo.oldSwapchain = VK_NULL_HANDLE;
@@ -329,5 +329,44 @@ Swapchain::Swapchain(VkDevice device, VkSurfaceKHR surface, SwapchainSettings se
 
         images_.resize(imageCount);
         break;
+    }
+
+    std::cout << "Swapchain image count: " << imageCount << '\n';
+
+    for (const VkImage &image : images_)
+    {
+        VkImageViewCreateInfo imageViewCreateInfo{};
+        imageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        imageViewCreateInfo.image = image;
+        imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        imageViewCreateInfo.format = setting.surfaceFormat.format;
+
+        // swizzle: 이미지의 색상 채널을 어떤 채널로 해석할지 지정하는 설정
+        imageViewCreateInfo.components = {VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY,
+                                          VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY};
+
+        /*
+         * ex) arrayLayers = 3
+         * VkImage 하나
+         *      - layer 0: 256 * 256
+         *      - layer 1: 256 * 256
+         *      - layer 2: 256 * 256
+         * - 하나의 VkImage 자원이 여러 layer를 포함할 수 있음
+         * - VkImageView는 그 안의 일부 layer를 선택할 수 있음
+         * - 같은 layer 안에 mip 단계가 존재할 수 있음(단, Swapchain에서 만들어진 이미지는 mip 개수 1로 고정)
+         */
+
+        // imageView가 원본 이미지의 어느 부분을 바라볼지 결정
+        imageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT; // 색상 영역
+        imageViewCreateInfo.subresourceRange.baseArrayLayer = 0;                     // 배열 layer 0번부터 시작
+        imageViewCreateInfo.subresourceRange.layerCount = 1;                         // layer 하나만 사용
+        imageViewCreateInfo.subresourceRange.baseMipLevel = 0; // 각 layer의 mip 0번부터 시작
+        imageViewCreateInfo.subresourceRange.levelCount = 1;   // 각 layer의 mip 단계 하나만 사용
+
+        imageViews_.emplace_back();
+        VkImageView view = VK_NULL_HANDLE;
+        VK_CHECK(vkCreateImageView(device, &imageViewCreateInfo, nullptr, &view));
+
+        imageViews_.back().Adopt(view, deleter::VkImageViewDeleter{device});
     }
 }

@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <vector>
+#include <deque>
 
 // 선택한 GPU가 선택한 Surface에 출력할 수 있는 이미지 구성 조건
 struct SwapchainSupport
@@ -31,6 +32,26 @@ class Swapchain
                        PhysicalDeviceSelection selection, VkSurfaceCapabilitiesKHR surfaceCapabilities);
     ~Swapchain() = default;
 
+    inline VkSwapchainKHR GetSwapchain() const noexcept
+    {
+        return swapchainHandle_.Get();
+    }
+
+    inline std::uint32_t GetImageCount() const noexcept
+    {
+        return static_cast<std::uint32_t>(images_.size());
+    }
+
+    inline VkImageView GetImageView(std::uint32_t index) const
+    {
+        return imageViews_.at(index).Get();
+    }
+
+    inline const SwapchainSettings &GetSettings() const noexcept
+    {
+        return setting_;
+    }
+
   public:
     static SwapchainSupport QuerySwapchainSupport(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface);
     static void PrintSwapchainSupport(const SwapchainSupport &swapchainSupport, VkExtent2D framebufferSize);
@@ -39,8 +60,11 @@ class Swapchain
 
   private:
     using SwapchainHandle = VulkanHandle<VkSwapchainKHR, deleter::VkSwapchainDeleter>;
+    using ImageViewHandle = VulkanHandle<VkImageView, deleter::VkImageViewDeleter>;
 
     SwapchainSettings setting_;
     SwapchainHandle swapchainHandle_;
     std::vector<VkImage> images_; // image는 VkSwapchain 소속
+    // vector 재할당 과정에서 ImageViewHandle의 이동/복사가 발생할 수 있어 deque 사용
+    std::deque<ImageViewHandle> imageViews_;
 };

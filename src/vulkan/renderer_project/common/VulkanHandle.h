@@ -56,6 +56,16 @@ struct VkSwapchainDeleter
     }
 };
 
+struct VkImageViewDeleter
+{
+    VkDevice device;
+
+    void operator()(VkImageView handle) const noexcept
+    {
+        vkDestroyImageView(device, handle, nullptr);
+    }
+};
+
 }; // namespace deleter
 
 // VDELETER : 람다식.(C++ 17)
