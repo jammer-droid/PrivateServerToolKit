@@ -50,10 +50,6 @@ class VulkanContext
     void InitializeDevice(const PhysicalDeviceSelection &selection);
 
   private:
-    using InstanceHandle = VulkanHandle<VkInstance, deleter::VkInstanceDeleter>;
-    using DebugMessengerHandle = VulkanHandle<VkDebugUtilsMessengerEXT, deleter::VkDebugUtilsMessengerDeleter>;
-    using DeviceHandle = VulkanHandle<VkDevice, deleter::VkDeviceDeleter>;
-
     InstanceHandle instanceHandle_;
     DebugMessengerHandle messengerHandle_;
 

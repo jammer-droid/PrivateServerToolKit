@@ -309,3 +309,12 @@ cmake --build src/vulkan/renderer_project/build/release
 - Fence 생성 직후 Adopt하고 상태를 조회하여 예외 발생 시 정리 공백을 없앴다. FrameResources는 main에서 Swapchain 이후에 생성되어 Context보다 먼저 정리된다.
 - Agent는 Debug/Release 빌드를 확인했고 최종 수정 후 Debug 빌드도 확인했다. GPU 명령 제출과 실제 GUI 실행은 이번 작업에서 검증하지 않았다.
 - 다음은 Acquire/Submit/Present를 연결할 binary semaphore의 생성·소유권 구성이다. 획득용은 프레임별, present 대기용은 Swapchain image별로 관리하며 반복 Acquire만 단독으로 수행하지 않는다.
+
+
+### S1-4 Semaphore 준비 중간 기록
+
+- binary semaphore용 RAII deleter와 공통 핸들 별칭을 추가했다. FrameResources마다 imageAvailable 하나, Swapchain의 실제 이미지마다 renderFinished 하나를 소유한다.
+- 이미지별 semaphore는 빈 deque 원소를 먼저 생성하고 vkCreateSemaphore 성공 직후 Adopt한다. 현재 main의 FrameResources 인스턴스는 하나이며 두 슬롯 운용은 실제 프레임 루프 연결 시 추가한다.
+- 사용자는 frame fence가 프레임 슬롯 재사용을 보호하고 imageAvailable 대기가 획득 이미지 접근 및 그 이미지의 renderFinished 재사용을 연결한다는 구분을 확인했다. Present 완료를 Graphics Fence만으로 판단하지 않는다.
+- 오타 수정 후 Debug/Release 빌드 통과. 이번 변경의 실제 GUI 실행은 agent가 검증하지 않았다. 아직 Acquire·Submit·Present는 호출하지 않는다.
+- 다음은 획득 이미지에 대한 layout 전환·Dynamic Rendering clear 명령 기록이며, 이후 두 프레임 슬롯의 Acquire–Submit–Present 루프를 연결한다.

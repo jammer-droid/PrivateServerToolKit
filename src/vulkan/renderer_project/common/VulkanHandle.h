@@ -86,6 +86,16 @@ struct VkFenceDeleter
     }
 };
 
+struct VkSemaphoreDeleter
+{
+    VkDevice device;
+
+    void operator()(VkSemaphore handle) const noexcept
+    {
+        vkDestroySemaphore(device, handle, nullptr);
+    }
+};
+
 }; // namespace deleter
 
 // VDELETER : 람다식.(C++ 17)
@@ -133,3 +143,12 @@ template <typename VHANDLE, typename VDELETER> class VulkanHandle
     VHANDLE handle_{};
     VDELETER deleter_{};
 };
+
+using InstanceHandle = VulkanHandle<VkInstance, deleter::VkInstanceDeleter>;
+using DebugMessengerHandle = VulkanHandle<VkDebugUtilsMessengerEXT, deleter::VkDebugUtilsMessengerDeleter>;
+using DeviceHandle = VulkanHandle<VkDevice, deleter::VkDeviceDeleter>;
+using SwapchainHandle = VulkanHandle<VkSwapchainKHR, deleter::VkSwapchainDeleter>;
+using ImageViewHandle = VulkanHandle<VkImageView, deleter::VkImageViewDeleter>;
+using CommandPoolHandle = VulkanHandle<VkCommandPool, deleter::VkCommandPoolDeleter>;
+using FenceHandle = VulkanHandle<VkFence, deleter::VkFenceDeleter>;
+using SemaphoreHandle = VulkanHandle<VkSemaphore, deleter::VkSemaphoreDeleter>;

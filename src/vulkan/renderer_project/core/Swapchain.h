@@ -39,20 +39,21 @@ class Swapchain
     {
         return swapchainHandle_.Get();
     }
-
     inline std::uint32_t GetImageCount() const noexcept
     {
         return static_cast<std::uint32_t>(images_.size());
     }
-
     inline VkImageView GetImageView(std::uint32_t index) const
     {
         return imageViews_.at(index).Get();
     }
-
     inline const SwapchainSettings &GetSettings() const noexcept
     {
         return setting_;
+    }
+    inline VkSemaphore GetRenderFinished(std::uint32_t imageIndex) const
+    {
+        return renderFinishedHandles_.at(imageIndex).Get();
     }
 
   public:
@@ -62,12 +63,12 @@ class Swapchain
                                            SwapchainSettings *outSetting);
 
   private:
-    using SwapchainHandle = VulkanHandle<VkSwapchainKHR, deleter::VkSwapchainDeleter>;
-    using ImageViewHandle = VulkanHandle<VkImageView, deleter::VkImageViewDeleter>;
-
     SwapchainSettings setting_;
     SwapchainHandle swapchainHandle_;
     std::vector<VkImage> images_; // image는 VkSwapchain 소속
     // vector 재할당 과정에서 ImageViewHandle의 이동/복사가 발생할 수 있어 deque 사용
     std::deque<ImageViewHandle> imageViews_;
+    // imageCount 개수와 동일하게 생성
+    // Graphics 제출 Fence가 signaled가 되어도, Present에서 사용하는 semaphore 사용 완료를 보장하지 않음
+    std::deque<SemaphoreHandle> renderFinishedHandles_;
 };

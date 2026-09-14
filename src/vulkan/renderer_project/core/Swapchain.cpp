@@ -369,4 +369,15 @@ Swapchain::Swapchain(VkDevice device, VkSurfaceKHR surface, SwapchainSettings se
 
         imageViews_.back().Adopt(view, deleter::VkImageViewDeleter{device});
     }
+
+    VkSemaphoreCreateInfo semaCreateInfo{};
+    semaCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    for (std::uint32_t i = 0; i < imageCount; i++)
+    {
+        renderFinishedHandles_.emplace_back();
+        VkSemaphore semaphore = VK_NULL_HANDLE;
+        VK_CHECK(vkCreateSemaphore(device, &semaCreateInfo, nullptr, &semaphore));
+
+        renderFinishedHandles_.back().Adopt(semaphore, deleter::VkSemaphoreDeleter{device});
+    }
 }

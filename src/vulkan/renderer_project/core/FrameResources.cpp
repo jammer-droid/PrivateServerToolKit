@@ -36,4 +36,12 @@ FrameResources::FrameResources(VkDevice device, std::uint32_t queueFamilyIndex)
 
     fenceHandle_.Adopt(fence, deleter::VkFenceDeleter{device});
     VK_CHECK(vkGetFenceStatus(device, fenceHandle_.Get()));
+
+    VkSemaphoreCreateInfo semaCreateInfo{};
+    semaCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+    VkSemaphore semaphore = VK_NULL_HANDLE;
+
+    VK_CHECK(vkCreateSemaphore(device, &semaCreateInfo, nullptr, &semaphore));
+    imageAvailableSemaphoreHandle_.Adopt(semaphore, deleter::VkSemaphoreDeleter{device});
 }

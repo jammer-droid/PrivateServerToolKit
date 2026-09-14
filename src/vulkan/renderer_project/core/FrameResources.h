@@ -20,14 +20,15 @@ class FrameResources
     {
         return fenceHandle_.Get();
     }
+    inline VkSemaphore GetImageAvailable() const noexcept
+    {
+        return imageAvailableSemaphoreHandle_.Get();
+    }
 
   private:
-    // CommandPool, Fence RAII handle
-    using CommandPoolHandle = VulkanHandle<VkCommandPool, deleter::VkCommandPoolDeleter>;
-    using FenceHandle = VulkanHandle<VkFence, deleter::VkFenceDeleter>;
-
     CommandPoolHandle commandPoolHandle_;
     VkCommandBuffer commandBuffer_{VK_NULL_HANDLE}; // CommandBuffer는 CommandPool 소속으로 Pool의 라이프사이클에 종속됨
 
     FenceHandle fenceHandle_;
+    SemaphoreHandle imageAvailableSemaphoreHandle_;
 };
