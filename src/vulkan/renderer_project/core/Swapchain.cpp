@@ -353,7 +353,7 @@ Swapchain::Swapchain(VkDevice device, VkSurfaceKHR surface, SwapchainSettings se
          *      - layer 2: 256 * 256
          * - 하나의 VkImage 자원이 여러 layer를 포함할 수 있음
          * - VkImageView는 그 안의 일부 layer를 선택할 수 있음
-         * - 같은 layer 안에 mip 단계가 존재할 수 있음(단, Swapchain에서 만들어진 이미지는 mip 개수 1로 고정)
+         * - layer 별로 내부에 mip 단계가 존재할 수 있음(단, Swapchain에서 만들어진 이미지는 mip 개수 1로 고정)
          */
 
         // imageView가 원본 이미지의 어느 부분을 바라볼지 결정
