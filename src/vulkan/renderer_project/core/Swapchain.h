@@ -1,6 +1,8 @@
 #pragma once
 
 #include "common/VulkanHeaders.h"
+#include "common/VulkanHandle.h"
+#include "core/VulkanContext.h"
 
 #include <cstdint>
 #include <vector>
@@ -22,6 +24,23 @@ struct SwapchainSettings
     std::uint32_t minRequiredImageCount{};
 };
 
-SwapchainSupport QuerySwapchainSupport(VkPhysicalDevice device, VkSurfaceKHR surface);
+class Swapchain
+{
+  public:
+    explicit Swapchain(VkDevice device, VkSurfaceKHR surface, SwapchainSettings setting,
+                       PhysicalDeviceSelection selection, VkSurfaceCapabilitiesKHR surfaceCapabilities);
+    ~Swapchain() = default;
 
-bool ConfigureSwapchainSettings(const SwapchainSupport &support, VkExtent2D framebuffer, SwapchainSettings *outSetting);
+  public:
+    static SwapchainSupport QuerySwapchainSupport(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface);
+    static void PrintSwapchainSupport(const SwapchainSupport &swapchainSupport, VkExtent2D framebufferSize);
+    static bool ConfigureSwapchainSettings(const SwapchainSupport &support, VkExtent2D framebuffer,
+                                           SwapchainSettings *outSetting);
+
+  private:
+    using SwapchainHandle = VulkanHandle<VkSwapchainKHR, deleter::VkSwapchainDeleter>;
+
+    SwapchainSettings setting_;
+    SwapchainHandle swapchainHandle_;
+    std::vector<VkImage> images_; // image는 VkSwapchain 소속
+};

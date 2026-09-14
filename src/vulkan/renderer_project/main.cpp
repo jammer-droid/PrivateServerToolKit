@@ -10,18 +10,10 @@
 
 #include "app/Window.h"
 
-#include <vulkan/vk_enum_string_helper.h>
-
 using SurfaceHandle = VulkanHandle<VkSurfaceKHR, deleter::VkSurfaceDeleter>;
 
 namespace
 {
-
-void PrintExtent2D(VkExtent2D extent)
-{
-    std::cout << "Width " << extent.width << " x "
-              << "Height " << extent.height;
-}
 
 }; // namespace
 
@@ -44,39 +36,19 @@ int main()
 
         context.InitializeDevice(selection); // Initialize Logical Device
 
-        SwapchainSupport swapchainSupport = QuerySwapchainSupport(selection.physicalDevice, surfaceHandle.Get());
         VkExtent2D framebufferSize = window.GetFramebufferSize();
-
-        std::cout << "Image Count: " << swapchainSupport.capabilities.minImageCount << " ~ "
-                  << swapchainSupport.capabilities.maxImageCount << '\n';
-        std::cout << "Current VkExtent2D: ";
-        PrintExtent2D(swapchainSupport.capabilities.currentExtent);
-        std::cout << "\n ExtentRange min: ";
-        PrintExtent2D(swapchainSupport.capabilities.minImageExtent);
-        std::cout << "\n ExtentRange max: ";
-        PrintExtent2D(swapchainSupport.capabilities.maxImageExtent);
-        std::cout << "\n Framebuffer: ";
-        PrintExtent2D(framebufferSize);
-        std::cout << "\nColorAttachmentUsage: " << std::boolalpha
-                  << ((swapchainSupport.capabilities.supportedUsageFlags & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) != 0)
-                  << '\n';
-        std::cout << "Formats\n";
-        for (const VkSurfaceFormatKHR &format : swapchainSupport.surfaceFormats)
-        {
-            std::cout << string_VkFormat(format.format) << " | " << string_VkColorSpaceKHR(format.colorSpace) << '\n';
-        }
-        std::cout << "PresentModes\n";
-        for (const VkPresentModeKHR &presentMode : swapchainSupport.presentModes)
-        {
-            std::cout << string_VkPresentModeKHR(presentMode) << '\n';
-        }
+        SwapchainSupport swapchainSupport =
+            Swapchain::QuerySwapchainSupport(selection.physicalDevice, surfaceHandle.Get());
+        Swapchain::PrintSwapchainSupport(swapchainSupport, framebufferSize);
 
         SwapchainSettings swapchainSetting{};
-        bool configResult = ConfigureSwapchainSettings(swapchainSupport, framebufferSize, &swapchainSetting);
+        bool configResult = Swapchain::ConfigureSwapchainSettings(swapchainSupport, framebufferSize, &swapchainSetting);
         if (!configResult)
         {
             throw std::runtime_error("Configure SwapchainSettings failed\n");
         }
+        Swapchain swapchain(context.GetDevice(), surfaceHandle.Get(), swapchainSetting, selection,
+                            swapchainSupport.capabilities);
 
         while (!window.IsCloseRequested())
         {
