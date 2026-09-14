@@ -74,6 +74,7 @@ std::vector<const char *> Window::GetRequiredInstanceExtensions() const
     std::uint32_t count = 0;
     std::vector<const char *> extensionNames;
 
+    // Vulkan에서 GLFW 사용을 위해 필요한 instance extensions 목록 질의
     const char **names = glfwGetRequiredInstanceExtensions(&count);
 
     if (names == nullptr)

@@ -213,8 +213,7 @@ void AddUniqueExtension(std::vector<const char *> &extensions, const char *name)
 VkInstance CreateInstance(const std::vector<const char *> &requiredInstanceExtensions = {})
 {
     std::uint32_t apiVersion = VulkanContext::GetApiVersion();
-    std::cout << "ApiVersion: " << VK_API_VERSION_MAJOR(apiVersion) << '.' << VK_API_VERSION_MINOR(apiVersion) << '.'
-              << VK_API_VERSION_PATCH(apiVersion) << '\n';
+    std::cout << "ApiVersion: " << FormatApiVersion(apiVersion) << '\n';
 
     if (apiVersion < kRequiredApiVersion)
     {
@@ -242,7 +241,7 @@ VkInstance CreateInstance(const std::vector<const char *> &requiredInstanceExten
         AddUniqueExtension(requiredExtensions, extName);
     }
 
-#ifdef __APPLE__
+#ifdef __APPLE__ // portability extension
     AddUniqueExtension(requiredExtensions, kRequiredExtensionPortabilityEnumeration);
 
     // MoltenVK -> Vulkan을 Metal 위에 구현하는 소프트웨어
@@ -254,7 +253,7 @@ VkInstance CreateInstance(const std::vector<const char *> &requiredInstanceExten
     instanceCreateInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 #endif
 
-    if (kEnableValidation)
+    if (kEnableValidation) // debug extension
     {
         AddUniqueExtension(requiredExtensions, kRequiredExtensionDebugUtils);
     }
@@ -431,15 +430,18 @@ std::optional<QueueFamilySelection> FindQueueFamilies(VkPhysicalDevice device, V
     for (std::uint32_t index = 0; index < count; ++index)
     {
         VkBool32 present = VK_FALSE;
+        bool supportGraphics = false;
+        bool supportPresent = false;
         if (properties[index].queueCount != 0)
         {
             // check support present
             VK_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(device, index, surface, &present));
+            supportPresent = (present == VK_TRUE);
+
+            // check support graphics
+            supportGraphics = (properties[index].queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0;
         }
 
-        // check support graphics
-        bool supportGraphics = (properties[index].queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0;
-        bool supportPresent = (present == VK_TRUE);
         families.push_back(QueueFamilySupport{properties[index].queueCount, supportGraphics, supportPresent});
     }
     return ChooseQueueFamilies(families);
