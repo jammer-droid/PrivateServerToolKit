@@ -130,10 +130,114 @@ int main()
 
         FrameResources frame(context.GetDevice(), selection.graphicsFamilyIndex);
 
-        while (!window.IsCloseRequested())
+        try
         {
-            window.WaitEvents();
+            while (!window.IsCloseRequested())
+            {
+                window.PollEvents();
+                framebufferSize = window.GetFramebufferSize();
+                if (framebufferSize.width == 0 || framebufferSize.height == 0)
+                {
+                    std::cout << "framebuffer size is zero\n";
+                    break;
+                }
+
+                const std::uint32_t currentFrameIndex = frame.GetFrameIndex();
+                VkDevice device = context.GetDevice();
+                VkSwapchainKHR sc = swapchain.GetSwapchain();
+
+                VkFence fence = frame.GetFence(currentFrameIndex);
+                VK_CHECK(vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX));
+
+                std::uint32_t imageIndex = 0;
+                VkSemaphore imageAvailable = frame.GetImageAvailable(currentFrameIndex);
+                // Acquire에서 반환된 이미지가 GPU가 접근해도 되는 시점에 imageAvailable이 signal 됨
+                // submit에서는 해당 세마포어를 wait하고 signaled가 되면 이미지를 사용함
+                VkResult acquireResult =
+                    vkAcquireNextImageKHR(device, sc, 100'000'000, imageAvailable, VK_NULL_HANDLE, &imageIndex);
+
+                if (acquireResult == VK_TIMEOUT || acquireResult == VK_NOT_READY)
+                {
+                    continue;
+                }
+                if (acquireResult == VK_ERROR_OUT_OF_DATE_KHR)
+                {
+                    break;
+                }
+
+                // 스왑체인 재생성이 필요한 상태를 만나면 우선 종료하도록 설정
+                // SUBOPTIMAL은 이미지 획득에는 성공했지만, 스왑체인 설정이 현재 Surface와 맞지 않는다는 의미
+                bool finish = (acquireResult == VK_SUBOPTIMAL_KHR);
+                if (!finish)
+                {
+                    VK_CHECK(acquireResult);
+                }
+
+                VkCommandBuffer commandBuffer = frame.GetCommandBuffer(currentFrameIndex);
+
+                VK_CHECK(vkResetCommandBuffer(commandBuffer, 0));
+                RecordClearCommands(commandBuffer, swapchain, imageIndex);
+
+                // for wait
+                VkSemaphoreSubmitInfo imageAvailableSemaInfo{}; // binary semaphore라 value는 0 사용
+                imageAvailableSemaInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+                imageAvailableSemaInfo.semaphore = imageAvailable;
+                imageAvailableSemaInfo.stageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+                VkCommandBufferSubmitInfo commandBufferSubmitInfo{};
+                commandBufferSubmitInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+                commandBufferSubmitInfo.commandBuffer = commandBuffer;
+
+                // for signaled
+                VkSemaphore renderFinishedSemaphore = swapchain.GetRenderFinished(imageIndex);
+                VkSemaphoreSubmitInfo renderFinishedSemaInfo{}; // binary semaphore라 value는 0 사용
+                renderFinishedSemaInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+                renderFinishedSemaInfo.semaphore = renderFinishedSemaphore;
+                renderFinishedSemaInfo.stageMask = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+
+                VkSubmitInfo2 submitInfo{};
+                submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
+                submitInfo.commandBufferInfoCount = 1;
+                submitInfo.pCommandBufferInfos = &commandBufferSubmitInfo;
+                submitInfo.waitSemaphoreInfoCount = 1;
+                submitInfo.pWaitSemaphoreInfos = &imageAvailableSemaInfo;
+                submitInfo.signalSemaphoreInfoCount = 1;
+                submitInfo.pSignalSemaphoreInfos = &renderFinishedSemaInfo;
+
+                VK_CHECK(vkResetFences(device, 1, &fence));
+                VK_CHECK(vkQueueSubmit2(context.GetGraphicsQueue(), 1, &submitInfo, fence));
+
+                VkPresentInfoKHR presentInfo{};
+                presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+                presentInfo.waitSemaphoreCount = 1;
+                presentInfo.pWaitSemaphores = &renderFinishedSemaphore;
+                presentInfo.swapchainCount = 1;
+                presentInfo.pSwapchains = &sc;
+                presentInfo.pImageIndices = &imageIndex;
+
+                VkResult presentResult = vkQueuePresentKHR(context.GetPresentQueue(), &presentInfo);
+
+                if (presentResult == VK_ERROR_OUT_OF_DATE_KHR || presentResult == VK_SUBOPTIMAL_KHR)
+                {
+                    break;
+                }
+                VK_CHECK(presentResult);
+
+                if (finish)
+                {
+                    break;
+                }
+
+                frame.AdvanceFrameIndex();
+            }
         }
+        catch (...)
+        {
+            (void)vkDeviceWaitIdle(context.GetDevice());
+            throw;
+        }
+
+        VK_CHECK(vkDeviceWaitIdle(context.GetDevice()));
     }
     catch (const VulkanException &error)
     {

@@ -69,6 +69,11 @@ void Window::WaitEvents() const
     glfwWaitEvents();
 }
 
+void Window::PollEvents() const
+{
+    glfwPollEvents();
+}
+
 std::vector<const char *> Window::GetRequiredInstanceExtensions() const
 {
     std::uint32_t count = 0;

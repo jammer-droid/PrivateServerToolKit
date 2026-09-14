@@ -3,6 +3,8 @@
 #include "common/VulkanHeaders.h"
 #include "common/VulkanHandle.h"
 
+#include <deque>
+
 class FrameResources
 {
   public:
@@ -12,23 +14,37 @@ class FrameResources
     VK_NON_COPYABLE(FrameResources)
     VK_NON_MOVABLE(FrameResources)
 
-    inline VkCommandBuffer GetCommandBuffer() const noexcept
+    inline VkCommandBuffer GetCommandBuffer(std::uint32_t index) const noexcept
     {
-        return commandBuffer_;
+        return commandBuffers_[index];
     }
-    inline VkFence GetFence() const noexcept
+    inline VkFence GetFence(std::uint32_t index) const noexcept
     {
-        return fenceHandle_.Get();
+        return fenceHandles_.at(index).Get();
     }
-    inline VkSemaphore GetImageAvailable() const noexcept
+    inline VkSemaphore GetImageAvailable(std::uint32_t index) const noexcept
     {
-        return imageAvailableSemaphoreHandle_.Get();
+        return imageAvailableSemaphoreHandles_.at(index).Get();
     }
+    inline void AdvanceFrameIndex() noexcept
+    {
+        frameIndex++;
+    }
+
+    std::uint32_t GetFrameIndex() const noexcept;
 
   private:
-    CommandPoolHandle commandPoolHandle_;
-    VkCommandBuffer commandBuffer_{VK_NULL_HANDLE}; // CommandBuffer는 CommandPool 소속으로 Pool의 라이프사이클에 종속됨
+    static const std::uint32_t kFramesInFlight = 2;
 
-    FenceHandle fenceHandle_;
-    SemaphoreHandle imageAvailableSemaphoreHandle_;
+    CommandPoolHandle commandPoolHandle_;
+    // CommandBuffer는 CommandPool 소속으로 Pool의 라이프사이클에 종속됨
+    // Primary Buffer로 Graphics Queue에 명령을 준비하기 위한 용도
+    VkCommandBuffer commandBuffers_[kFramesInFlight]{
+        VK_NULL_HANDLE,
+    };
+
+    std::deque<FenceHandle> fenceHandles_;
+    std::deque<SemaphoreHandle> imageAvailableSemaphoreHandles_;
+
+    std::uint32_t frameIndex = 0;
 };

@@ -18,6 +18,7 @@ class Window
 
     bool IsCloseRequested() const;
     void WaitEvents() const;
+    void PollEvents() const;
     // GLFW로 Surface를 만들기 위해 필요한 extension name 목록 조회
     std::vector<const char *> GetRequiredInstanceExtensions() const;
 

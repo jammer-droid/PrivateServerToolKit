@@ -326,3 +326,12 @@ cmake --build src/vulkan/renderer_project/build/release
 - 사용자는 View의 접근 범위, 배리어의 동기화·레이아웃 전환 범위, renderArea의 픽셀 영역을 구분해 설명했다.
 - Agent 검증: 최종 수정 후 임시 CMake 디렉터리에서 Debug 빌드 및 git diff --check 통과. 함수는 아직 호출하지 않으므로 GPU 실행·validation 검증은 미수행이다.
 - S1-4는 계속 진행 중이다. 다음은 두 프레임 슬롯의 Acquire–Submit–Present 연결이며, 이후 resize·최소화·복원과 종료 처리를 검증한다.
+
+### S1-4 Acquire–Submit–Present 중간 기록
+
+- FrameResources 하나가 두 프레임 슬롯을 관리한다. Command Pool은 공유하고 Command Buffer·Fence·imageAvailable은 슬롯별로 분리한다. 해당 슬롯의 Fence를 기다린 뒤 그 Command Buffer만 reset하며, renderFinished는 획득한 Swapchain image index로 선택한다.
+- PollEvents 후 framebuffer 크기를 조회한다. Acquire는 100ms timeout을 사용하며 TIMEOUT·NOT_READY는 같은 슬롯에서 재시도한다. OUT_OF_DATE 또는 0 크기에서는 루프를 종료한다. Acquire의 SUBOPTIMAL은 성공으로 받아 Submit·Present까지 진행한 후 종료한다.
+- Dynamic Rendering clear 명령을 vkQueueSubmit2로 제출하고 vkQueuePresentKHR로 출력한다. imageAvailable 대기는 COLOR_ATTACHMENT_OUTPUT, renderFinished 신호는 ALL_COMMANDS를 사용한다. Fence reset은 명령 기록 후 제출 직전에 수행한다.
+- 정상 종료와 루프 예외 경로 모두 FrameResources·Swapchain 소멸 전에 vkDeviceWaitIdle을 호출한다. 확장 없는 Vulkan에서 Present 자원 파괴의 엄밀한 완료 보장 문제는 남아 있으며, 재생성·종료 단계에서 다룬다.
+- Agent 검증: 최종 수정 후 임시 CMake 디렉터리의 Debug 빌드 및 git diff --check 통과. 최종 코드의 배경색 출력과 validation 오류 해소는 아직 실행 증거가 없다.
+- 다음은 실행 결과 확인과 크기 변경 이벤트 기반 Swapchain 재생성·최소화 후 복원이다. S1-4는 current 상태를 유지한다.

@@ -2,6 +2,11 @@
 
 #include "common/VulkanException.h"
 
+namespace
+{
+
+};
+
 FrameResources::FrameResources(VkDevice device, std::uint32_t queueFamilyIndex)
 {
     VkCommandPoolCreateInfo commandPoolCreateInfo{};
@@ -22,26 +27,36 @@ FrameResources::FrameResources(VkDevice device, std::uint32_t queueFamilyIndex)
     commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     commandBufferAllocateInfo.commandPool = commandPoolHandle_.Get();
     commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    commandBufferAllocateInfo.commandBufferCount = 1;
+    commandBufferAllocateInfo.commandBufferCount = kFramesInFlight;
 
-    VK_CHECK(vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, &commandBuffer_));
+    VK_CHECK(vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, commandBuffers_));
 
     VkFenceCreateInfo fenceCreateInfo{};
     fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-    VkFence fence = VK_NULL_HANDLE;
+    for (std::uint32_t i = 0; i < kFramesInFlight; i++)
+    {
+        VkFence fence = VK_NULL_HANDLE;
+        fenceHandles_.emplace_back();
 
-    VK_CHECK(vkCreateFence(device, &fenceCreateInfo, nullptr, &fence));
+        VK_CHECK(vkCreateFence(device, &fenceCreateInfo, nullptr, &fence));
 
-    fenceHandle_.Adopt(fence, deleter::VkFenceDeleter{device});
-    VK_CHECK(vkGetFenceStatus(device, fenceHandle_.Get()));
+        fenceHandles_.back().Adopt(fence, deleter::VkFenceDeleter{device});
+        VK_CHECK(vkGetFenceStatus(device, fenceHandles_.back().Get()));
 
-    VkSemaphoreCreateInfo semaCreateInfo{};
-    semaCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        VkSemaphoreCreateInfo semaCreateInfo{};
+        semaCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-    VkSemaphore semaphore = VK_NULL_HANDLE;
+        VkSemaphore semaphore = VK_NULL_HANDLE;
 
-    VK_CHECK(vkCreateSemaphore(device, &semaCreateInfo, nullptr, &semaphore));
-    imageAvailableSemaphoreHandle_.Adopt(semaphore, deleter::VkSemaphoreDeleter{device});
+        imageAvailableSemaphoreHandles_.emplace_back();
+        VK_CHECK(vkCreateSemaphore(device, &semaCreateInfo, nullptr, &semaphore));
+        imageAvailableSemaphoreHandles_.back().Adopt(semaphore, deleter::VkSemaphoreDeleter{device});
+    }
+}
+
+std::uint32_t FrameResources::GetFrameIndex() const noexcept
+{
+    return frameIndex % kFramesInFlight;
 }
