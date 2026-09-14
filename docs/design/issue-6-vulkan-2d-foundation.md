@@ -318,3 +318,11 @@ cmake --build src/vulkan/renderer_project/build/release
 - 사용자는 frame fence가 프레임 슬롯 재사용을 보호하고 imageAvailable 대기가 획득 이미지 접근 및 그 이미지의 renderFinished 재사용을 연결한다는 구분을 확인했다. Present 완료를 Graphics Fence만으로 판단하지 않는다.
 - 오타 수정 후 Debug/Release 빌드 통과. 이번 변경의 실제 GUI 실행은 agent가 검증하지 않았다. 아직 Acquire·Submit·Present는 호출하지 않는다.
 - 다음은 획득 이미지에 대한 layout 전환·Dynamic Rendering clear 명령 기록이며, 이후 두 프레임 슬롯의 Acquire–Submit–Present 루프를 연결한다.
+
+### S1-4 Clear 명령 기록 중간 기록
+
+- `Swapchain::GetImage`는 실제 이미지 목록의 borrowed handle을 반환한다. `RecordClearCommands`는 UNDEFINED → COLOR_ATTACHMENT_OPTIMAL 배리어, Dynamic Rendering의 CLEAR/STORE, PRESENT_SRC_KHR 전환을 기록한다.
+- 배리어의 subresourceRange는 View와 같은 color aspect·mip 0 하나·array layer 0 하나다. attachment의 imageLayout은 전환 결과와 일치하며 renderingInfo는 layerCount 1과 Swapchain extent 전체를 사용한다.
+- 사용자는 View의 접근 범위, 배리어의 동기화·레이아웃 전환 범위, renderArea의 픽셀 영역을 구분해 설명했다.
+- Agent 검증: 최종 수정 후 임시 CMake 디렉터리에서 Debug 빌드 및 git diff --check 통과. 함수는 아직 호출하지 않으므로 GPU 실행·validation 검증은 미수행이다.
+- S1-4는 계속 진행 중이다. 다음은 두 프레임 슬롯의 Acquire–Submit–Present 연결이며, 이후 resize·최소화·복원과 종료 처리를 검증한다.

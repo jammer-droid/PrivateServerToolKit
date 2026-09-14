@@ -43,6 +43,10 @@ class Swapchain
     {
         return static_cast<std::uint32_t>(images_.size());
     }
+    inline VkImage GetImage(std::uint32_t index) const
+    {
+        return images_.at(index);
+    }
     inline VkImageView GetImageView(std::uint32_t index) const
     {
         return imageViews_.at(index).Get();
