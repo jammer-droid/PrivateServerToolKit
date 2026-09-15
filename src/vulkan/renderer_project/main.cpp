@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <memory>
+#include <filesystem>
 
 #include "common/VulkanException.h"
 #include "common/VulkanHandle.h"
@@ -9,6 +10,7 @@
 #include "core/VulkanContext.h"
 #include "core/Swapchain.h"
 #include "core/FrameResources.h"
+#include "core/ShaderModule.h"
 
 #include "app/Window.h"
 
@@ -131,6 +133,10 @@ int main()
             context.GetDevice(), surfaceHandle.Get(), swapchainSetting, selection, swapchainSupport.capabilities);
 
         FrameResources frame(context.GetDevice(), selection.graphicsFamilyIndex);
+
+        const std::filesystem::path shaderDir{RENDERER_SHADER_DIR};
+        ShaderModule vertexShader(context.GetDevice(), shaderDir / "triangle.vert.spv");
+        ShaderModule fragmentShader(context.GetDevice(), shaderDir / "triangle.frag.spv");
 
         try
         {

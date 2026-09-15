@@ -96,6 +96,16 @@ struct VkSemaphoreDeleter
     }
 };
 
+struct VkShaderModuleDeleter
+{
+    VkDevice device;
+
+    void operator()(VkShaderModule handle) const noexcept
+    {
+        vkDestroyShaderModule(device, handle, nullptr);
+    }
+};
+
 }; // namespace deleter
 
 // VDELETER : 람다식.(C++ 17)
@@ -152,3 +162,4 @@ using ImageViewHandle = VulkanHandle<VkImageView, deleter::VkImageViewDeleter>;
 using CommandPoolHandle = VulkanHandle<VkCommandPool, deleter::VkCommandPoolDeleter>;
 using FenceHandle = VulkanHandle<VkFence, deleter::VkFenceDeleter>;
 using SemaphoreHandle = VulkanHandle<VkSemaphore, deleter::VkSemaphoreDeleter>;
+using ShaderModuleHandle = VulkanHandle<VkShaderModule, deleter::VkShaderModuleDeleter>;

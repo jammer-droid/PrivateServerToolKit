@@ -12,6 +12,7 @@ add_executable(vulkan_renderer
     core/VulkanContext.cpp
     core/Swapchain.cpp
     core/FrameResources.cpp
+    core/ShaderModule.cpp
 
     app/Window.cpp
 )
