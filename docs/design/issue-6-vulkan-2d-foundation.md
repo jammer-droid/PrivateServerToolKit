@@ -2,7 +2,7 @@
 
 - Issue: <https://github.com/jammer-droid/PrivateServerToolKit/issues/6>
 - Parent: [#5 Vulkan World Lab](https://github.com/jammer-droid/PrivateServerToolKit/issues/5)의 S1
-- 상태: 구현 완료 3/6. S1-1~S1-3 complete, S1-4 current, S1-5~S1-6 pending.
+- 상태: 구현 완료 4/6. S1-1~S1-4 complete, S1-5 next, S1-6 pending.
 - 진행 모드: `study-guide` Study session + `lean-implementation` Guide. 사용자가 구현하며 agent는 안내·검토한다. 구현 수정은 별도 요청 범위에서만 한다.
 
 ## 목표와 경계
@@ -190,11 +190,11 @@ renderer_project/
 | S1-1 | complete | Debug/Release 빌드·실행 및 Debug callback 수신 통과. 요구 버전·필수 확장·필수 Layer 미지원 진단과 종료 코드 1 확인. 상세 증거와 한계는 아래 기록. | 지원/목표 API 버전 구분, 소유권과 역순 파괴, 생성자 예외 시 멤버 정리, pNext callback과 지속 messenger의 역할 구분 확인. |
 | S1-2 | complete | Agent의 Debug/Release 빌드 통과, Queue 선택 8개 합성 사례 통과. 사용자 GPU/Surface 조회 로그 및 Device 구현 후 실행 확인. 상세 범위와 한계는 완료 기록 참조. | GLFW_NO_API·Surface·Instance 확장 관계, family index와 queue index, feature 조회/활성화 구분, Queue의 Device 종속 수명 확인. |
 | S1-3 | complete | 설정 선택 경계 검사, Debug/Release 빌드, 세 번째 View 생성 실패 시 정리와 정상 정리 순서 검사 통과. 사용자 빌드·실행 확인. | 요청 최소/실제 이미지 개수, borrowed Image와 owned View, 생성자 실패 시 멤버 RAII 정리 이해 확인. |
-| S1-4 | current | FrameResources의 Graphics Command Pool·Primary Buffer·signaled Fence 구현. Debug/Release 빌드 및 최종 Adopt 순서 수정 후 Debug 빌드 통과. 실제 실행은 agent 미검증. | 제출 전 unsignaled Fence를 무한 대기하면 진행할 수 없음을 설명 확인. |
-| S1-5 | pending | 아직 없음 | 아직 없음 |
+| S1-4 | complete | 두 프레임 슬롯의 Acquire–Submit–Present, Dynamic Rendering clear와 Swapchain 재생성 구현. 최종 Debug/Release 빌드 통과. 사용자 배경색·validation·종료 및 resize 실행 확인. 정리 관행과 검증 범위는 아래 완료 기록 참조. | frame slot/image index, Fence/Semaphore 재사용, 이미지 subresource와 renderArea, Present 자원 정리의 보장 범위 이해 확인. |
+| S1-5 | next | 아직 없음 | 아직 없음 |
 | S1-6 | pending | 아직 없음 | 아직 없음 |
 
-S1-1~S1-3는 완료했다. 다음 행동은 S1-4의 프레임 명령 자원과 동기화 기반을 구성하는 것이다. 후속 진행도·학습 기록은 별도 단계 문서 없이 이 문서의 stable-ID section을 갱신한다.
+S1-1~S1-4는 완료했다. 다음 행동은 S1-5의 Graphics Pipeline과 2D 도형 가이드다. 후속 진행도·학습 기록은 별도 단계 문서 없이 이 문서의 stable-ID section을 갱신한다.
 
 
 ### S1-1 완료 검증 — 2026-09-13
@@ -335,3 +335,13 @@ cmake --build src/vulkan/renderer_project/build/release
 - 정상 종료와 루프 예외 경로 모두 FrameResources·Swapchain 소멸 전에 vkDeviceWaitIdle을 호출한다. 확장 없는 Vulkan에서 Present 자원 파괴의 엄밀한 완료 보장 문제는 남아 있으며, 재생성·종료 단계에서 다룬다.
 - Agent 검증: 최종 수정 후 임시 CMake 디렉터리의 Debug 빌드 및 git diff --check 통과. 최종 코드의 배경색 출력과 validation 오류 해소는 아직 실행 증거가 없다.
 - 다음은 실행 결과 확인과 크기 변경 이벤트 기반 Swapchain 재생성·최소화 후 복원이다. S1-4는 current 상태를 유지한다.
+
+
+### S1-4 완료 기록 — 2026-09-15
+
+- 두 프레임 슬롯의 Command Buffer·Fence·imageAvailable과 이미지별 renderFinished를 사용해 Acquire–Submit–Present 및 Dynamic Rendering clear를 구현했다. 제출 직전 Fence reset과 Acquire 재시도 경로를 구분한다.
+- GLFW framebuffer 콜백은 크기와 변경 플래그를 갱신한다. 렌더링 루프에서 최신 Surface 지원 조건으로 Swapchain을 재생성하며, unique_ptr 교체와 oldSwapchain 전달로 Image View·이미지별 semaphore를 함께 교체한다. 0 크기에서는 이벤트를 기다린다.
+- Acquire SUBOPTIMAL은 획득 성공으로 처리해 제출·Present까지 진행한다. Acquire OUT_OF_DATE와 Present OUT_OF_DATE·SUBOPTIMAL은 재생성을 요청한다. 설정 선택 실패 시 생성으로 진행하지 않는다.
+- **채택한 정리 관행:** 재생성 및 정상·예외 종료 시 vkDeviceWaitIdle 후 기존 자원을 회수한다. 이는 확장 없는 Vulkan 애플리케이션에서 일반적으로 사용하는 방식이다. Device 제출 작업 대기와 Present 측 리소스 사용 완료의 엄밀한 보장은 구분하며, WaitIdle만으로 후자까지 명세상 보장한다고 주장하지 않는다. Present Fence를 제공하는 swapchain_maintenance1 도입은 이번 슬라이스 완료 조건에서 제외한다. 근거: [Khronos Swapchain Semaphore Reuse](https://docs.vulkan.org/guide/latest/swapchain_semaphore_reuse.html).
+- 검증: Agent가 최종 Debug/Release 빌드와 git diff --check를 확인했다. 사용자가 배경색 출력·validation 오류 해소·정상 종료와 resize 실행을 확인했다. Agent의 GUI 실행, 반복 횟수 기록, 최소화·복원 및 0 크기 경로의 별도 실행 증거는 없다. 해당 추가 실행 검증은 이번 완료 판단에서 유보하며 수행한 것으로 기록하지 않는다.
+- 사용자 요청에 따라 위 관행과 검증 범위로 S1-4를 complete 처리한다. 다음은 S1-5 Graphics Pipeline과 2D 도형이다.

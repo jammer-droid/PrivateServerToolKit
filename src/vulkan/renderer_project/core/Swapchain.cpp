@@ -251,7 +251,8 @@ bool Swapchain::ConfigureSwapchainSettings(const SwapchainSupport &support, VkEx
 }
 
 Swapchain::Swapchain(VkDevice device, VkSurfaceKHR surface, SwapchainSettings setting,
-                     PhysicalDeviceSelection selection, VkSurfaceCapabilitiesKHR surfaceCapabilities)
+                     PhysicalDeviceSelection selection, VkSurfaceCapabilitiesKHR surfaceCapabilities,
+                     VkSwapchainKHR oldSwapchain)
     : setting_{setting}
 {
     VkSwapchainCreateInfoKHR swapchainCreateInfo{};
@@ -267,7 +268,7 @@ Swapchain::Swapchain(VkDevice device, VkSurfaceKHR surface, SwapchainSettings se
     swapchainCreateInfo.imageArrayLayers = 1; // swapchain 이미지의 layer를 1로 설정
     swapchainCreateInfo.preTransform = surfaceCapabilities.currentTransform;
     swapchainCreateInfo.clipped = VK_TRUE;
-    swapchainCreateInfo.oldSwapchain = VK_NULL_HANDLE;
+    swapchainCreateInfo.oldSwapchain = oldSwapchain; // oldSwapchain은 신규 swapchain 생성 이후에 retired
 
     const std::uint32_t queueFamilyIndices[2] = {selection.graphicsFamilyIndex, selection.presentFamilyIndex};
     if (selection.graphicsFamilyIndex == selection.presentFamilyIndex)

@@ -18,6 +18,13 @@ void GlfwErrorCallback(int errorCode, const char *description)
     std::fprintf(stderr, "[GLFW] error %d: %s\n", errorCode, description);
 }
 
+// Framebuffer Resize 이벤트를 받기 위한 콜백 함수
+void GlfwFramebufferResizeCallback(GLFWwindow *window, int width, int height)
+{
+    Window *owner = static_cast<Window *>(glfwGetWindowUserPointer(window));
+    owner->ResetFramebuffer(width, height);
+}
+
 }; // namespace
 
 Window::Window()
@@ -43,6 +50,15 @@ Window::Window()
         glfwTerminate();
         throw std::runtime_error("Failed to create GLFW window.\n");
     }
+
+    // 5. framebuffer 사이즈 변경 추적 설정
+    int w = 0, h = 0;
+    glfwGetFramebufferSize(window_, &w, &h);
+    framebuffer_.width = w;
+    framebuffer_.height = h;
+    framebufferResized_ = false;
+
+    EnableFramebufferResizeTracking();
 }
 
 Window::~Window() noexcept
@@ -104,11 +120,15 @@ VkSurfaceKHR Window::CreateSurface(VkInstance instance) const
     return surface;
 }
 
-VkExtent2D Window::GetFramebufferSize() const
+void Window::ResetFramebuffer(int width, int height) noexcept
 {
-    int width = 0;
-    int height = 0;
-    glfwGetFramebufferSize(window_, &width, &height);
+    framebuffer_.width = width;
+    framebuffer_.height = height;
+    this->framebufferResized_ = true;
+}
 
-    return VkExtent2D{static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height)};
+void Window::EnableFramebufferResizeTracking() noexcept
+{
+    glfwSetWindowUserPointer(window_, (void *)this);
+    glfwSetFramebufferSizeCallback(window_, GlfwFramebufferResizeCallback);
 }

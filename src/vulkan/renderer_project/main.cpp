@@ -1,6 +1,7 @@
 #include <vulkan/vulkan.h>
 
 #include <iostream>
+#include <memory>
 
 #include "common/VulkanException.h"
 #include "common/VulkanHandle.h"
@@ -125,26 +126,72 @@ int main()
         {
             throw std::runtime_error("Configure SwapchainSettings failed\n");
         }
-        Swapchain swapchain(context.GetDevice(), surfaceHandle.Get(), swapchainSetting, selection,
-                            swapchainSupport.capabilities);
+
+        std::unique_ptr<Swapchain> swapchainOwner = std::make_unique<Swapchain>(
+            context.GetDevice(), surfaceHandle.Get(), swapchainSetting, selection, swapchainSupport.capabilities);
 
         FrameResources frame(context.GetDevice(), selection.graphicsFamilyIndex);
 
         try
         {
-            while (!window.IsCloseRequested())
+            bool running = true;
+            bool recreateSwapchain = false;
+            while (running)
             {
                 window.PollEvents();
+                if (window.IsCloseRequested())
+                {
+                    running = false;
+                    continue;
+                }
+
+                if (recreateSwapchain || window.HasFramebufferResized())
+                {
+                    VkExtent2D newFramebuffer = window.GetFramebufferSize();
+                    while (newFramebuffer.width == 0 || newFramebuffer.height == 0)
+                    {
+                        if (window.IsCloseRequested())
+                        {
+                            running = false;
+                            break;
+                        }
+                        window.WaitEvents();
+                        newFramebuffer = window.GetFramebufferSize();
+                    }
+
+                    swapchainSupport = Swapchain::QuerySwapchainSupport(selection.physicalDevice, surfaceHandle.Get());
+                    configResult =
+                        Swapchain::ConfigureSwapchainSettings(swapchainSupport, newFramebuffer, &swapchainSetting);
+                    if (!configResult)
+                    {
+                        running = false;
+                        continue;
+                    }
+
+                    VK_CHECK(vkDeviceWaitIdle(context.GetDevice()));
+
+                    std::unique_ptr<Swapchain> newSwapchain = std::make_unique<Swapchain>(
+                        context.GetDevice(), surfaceHandle.Get(), swapchainSetting, selection,
+                        swapchainSupport.capabilities, swapchainOwner->GetSwapchain());
+
+                    swapchainOwner.swap(newSwapchain);
+
+                    window.ClearFramebufferResized();
+                    recreateSwapchain = false;
+                    continue;
+                }
+
                 framebufferSize = window.GetFramebufferSize();
                 if (framebufferSize.width == 0 || framebufferSize.height == 0)
                 {
                     std::cout << "framebuffer size is zero\n";
-                    break;
+                    running = false;
+                    continue;
                 }
 
                 const std::uint32_t currentFrameIndex = frame.GetFrameIndex();
                 VkDevice device = context.GetDevice();
-                VkSwapchainKHR sc = swapchain.GetSwapchain();
+                VkSwapchainKHR sc = swapchainOwner->GetSwapchain();
 
                 VkFence fence = frame.GetFence(currentFrameIndex);
                 VK_CHECK(vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX));
@@ -162,13 +209,13 @@ int main()
                 }
                 if (acquireResult == VK_ERROR_OUT_OF_DATE_KHR)
                 {
-                    break;
+                    recreateSwapchain = true;
+                    continue;
                 }
 
-                // 스왑체인 재생성이 필요한 상태를 만나면 우선 종료하도록 설정
                 // SUBOPTIMAL은 이미지 획득에는 성공했지만, 스왑체인 설정이 현재 Surface와 맞지 않는다는 의미
-                bool finish = (acquireResult == VK_SUBOPTIMAL_KHR);
-                if (!finish)
+                recreateSwapchain = (acquireResult == VK_SUBOPTIMAL_KHR);
+                if (acquireResult != VK_SUBOPTIMAL_KHR)
                 {
                     VK_CHECK(acquireResult);
                 }
@@ -176,7 +223,7 @@ int main()
                 VkCommandBuffer commandBuffer = frame.GetCommandBuffer(currentFrameIndex);
 
                 VK_CHECK(vkResetCommandBuffer(commandBuffer, 0));
-                RecordClearCommands(commandBuffer, swapchain, imageIndex);
+                RecordClearCommands(commandBuffer, *swapchainOwner.get(), imageIndex);
 
                 // for wait
                 VkSemaphoreSubmitInfo imageAvailableSemaInfo{}; // binary semaphore라 value는 0 사용
@@ -189,7 +236,7 @@ int main()
                 commandBufferSubmitInfo.commandBuffer = commandBuffer;
 
                 // for signaled
-                VkSemaphore renderFinishedSemaphore = swapchain.GetRenderFinished(imageIndex);
+                VkSemaphore renderFinishedSemaphore = swapchainOwner->GetRenderFinished(imageIndex);
                 VkSemaphoreSubmitInfo renderFinishedSemaInfo{}; // binary semaphore라 value는 0 사용
                 renderFinishedSemaInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
                 renderFinishedSemaInfo.semaphore = renderFinishedSemaphore;
@@ -219,13 +266,11 @@ int main()
 
                 if (presentResult == VK_ERROR_OUT_OF_DATE_KHR || presentResult == VK_SUBOPTIMAL_KHR)
                 {
-                    break;
+                    recreateSwapchain = true;
                 }
-                VK_CHECK(presentResult);
-
-                if (finish)
+                else
                 {
-                    break;
+                    VK_CHECK(presentResult);
                 }
 
                 frame.AdvanceFrameIndex();

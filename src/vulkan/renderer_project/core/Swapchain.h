@@ -29,7 +29,8 @@ class Swapchain
 {
   public:
     explicit Swapchain(VkDevice device, VkSurfaceKHR surface, SwapchainSettings setting,
-                       PhysicalDeviceSelection selection, VkSurfaceCapabilitiesKHR surfaceCapabilities);
+                       PhysicalDeviceSelection selection, VkSurfaceCapabilitiesKHR surfaceCapabilities,
+                       VkSwapchainKHR oldSwapchain = VK_NULL_HANDLE);
     ~Swapchain() = default;
 
     VK_NON_COPYABLE(Swapchain)
