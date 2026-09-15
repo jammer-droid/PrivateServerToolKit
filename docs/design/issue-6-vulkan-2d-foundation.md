@@ -2,7 +2,7 @@
 
 - Issue: <https://github.com/jammer-droid/PrivateServerToolKit/issues/6>
 - Parent: [#5 Vulkan World Lab](https://github.com/jammer-droid/PrivateServerToolKit/issues/5)의 S1
-- 상태: 구현 완료 4/6. S1-1~S1-4 complete, S1-5 next, S1-6 pending.
+- 상태: 구현 완료 4/6. S1-1~S1-4 complete, S1-5 current, S1-6 pending.
 - 진행 모드: `study-guide` Study session + `lean-implementation` Guide. 사용자가 구현하며 agent는 안내·검토한다. 구현 수정은 별도 요청 범위에서만 한다.
 
 ## 목표와 경계
@@ -191,7 +191,7 @@ renderer_project/
 | S1-2 | complete | Agent의 Debug/Release 빌드 통과, Queue 선택 8개 합성 사례 통과. 사용자 GPU/Surface 조회 로그 및 Device 구현 후 실행 확인. 상세 범위와 한계는 완료 기록 참조. | GLFW_NO_API·Surface·Instance 확장 관계, family index와 queue index, feature 조회/활성화 구분, Queue의 Device 종속 수명 확인. |
 | S1-3 | complete | 설정 선택 경계 검사, Debug/Release 빌드, 세 번째 View 생성 실패 시 정리와 정상 정리 순서 검사 통과. 사용자 빌드·실행 확인. | 요청 최소/실제 이미지 개수, borrowed Image와 owned View, 생성자 실패 시 멤버 RAII 정리 이해 확인. |
 | S1-4 | complete | 두 프레임 슬롯의 Acquire–Submit–Present, Dynamic Rendering clear와 Swapchain 재생성 구현. 최종 Debug/Release 빌드 통과. 사용자 배경색·validation·종료 및 resize 실행 확인. 정리 관행과 검증 범위는 아래 완료 기록 참조. | frame slot/image index, Fence/Semaphore 재사용, 이미지 subresource와 renderArea, Present 자원 정리의 보장 범위 이해 확인. |
-| S1-5 | next | 아직 없음 | 아직 없음 |
+| S1-5 | current | 삼각형 GLSL Vertex/Fragment Shader와 glslc 기반 SPIR-V 빌드 연결. 상세 증거는 중간 기록 참조. | 셰이더 입력·출력과 Pipeline 연결 학습 진행 중. |
 | S1-6 | pending | 아직 없음 | 아직 없음 |
 
 S1-1~S1-4는 완료했다. 다음 행동은 S1-5의 Graphics Pipeline과 2D 도형 가이드다. 후속 진행도·학습 기록은 별도 단계 문서 없이 이 문서의 stable-ID section을 갱신한다.
@@ -345,3 +345,11 @@ cmake --build src/vulkan/renderer_project/build/release
 - **채택한 정리 관행:** 재생성 및 정상·예외 종료 시 vkDeviceWaitIdle 후 기존 자원을 회수한다. 이는 확장 없는 Vulkan 애플리케이션에서 일반적으로 사용하는 방식이다. Device 제출 작업 대기와 Present 측 리소스 사용 완료의 엄밀한 보장은 구분하며, WaitIdle만으로 후자까지 명세상 보장한다고 주장하지 않는다. Present Fence를 제공하는 swapchain_maintenance1 도입은 이번 슬라이스 완료 조건에서 제외한다. 근거: [Khronos Swapchain Semaphore Reuse](https://docs.vulkan.org/guide/latest/swapchain_semaphore_reuse.html).
 - 검증: Agent가 최종 Debug/Release 빌드와 git diff --check를 확인했다. 사용자가 배경색 출력·validation 오류 해소·정상 종료와 resize 실행을 확인했다. Agent의 GUI 실행, 반복 횟수 기록, 최소화·복원 및 0 크기 경로의 별도 실행 증거는 없다. 해당 추가 실행 검증은 이번 완료 판단에서 유보하며 수행한 것으로 기록하지 않는다.
 - 사용자 요청에 따라 위 관행과 검증 범위로 S1-4를 complete 처리한다. 다음은 S1-5 Graphics Pipeline과 2D 도형이다.
+
+
+### S1-5 Shader 빌드 중간 기록
+
+- GLSL 450 Vertex/Fragment Shader를 추가했다. Vertex Shader는 gl_VertexIndex로 내장 정점·색상 배열을 선택하고 location 0의 vec3 색상을 Fragment Shader에 전달한다.
+- glslc를 Vulkan 필수 component로 검색하고 Vulkan 1.3 대상으로 두 SPIR-V를 빌드 디렉터리에 생성한다. 실행 파일이 shader target에 의존하며, RENDERER_SHADER_DIR 컴파일 정의에 출력 디렉터리를 전달한다. 로컬 빌드 경로 계약이며 배포용 경로 정책은 별도다.
+- Agent가 두 SPIR-V 생성·Debug 빌드 및 무변경 재빌드 시 출력 timestamp 유지를 확인했다. 경로 정의의 누락된 $ 수정은 코드로 확인했고 사용자가 수정 후 빌드·셰이더 컴파일을 확인했다. 셰이더 변경 시 선택적 재빌드와 문법 오류 실패 검사는 별도로 수행하지 않았다.
+- 다음은 SPIR-V 로딩과 Shader Module 생성·RAII 정리다. 아직 Graphics Pipeline·draw 연결은 없다.
