@@ -353,3 +353,10 @@ cmake --build src/vulkan/renderer_project/build/release
 - glslc를 Vulkan 필수 component로 검색하고 Vulkan 1.3 대상으로 두 SPIR-V를 빌드 디렉터리에 생성한다. 실행 파일이 shader target에 의존하며, RENDERER_SHADER_DIR 컴파일 정의에 출력 디렉터리를 전달한다. 로컬 빌드 경로 계약이며 배포용 경로 정책은 별도다.
 - Agent가 두 SPIR-V 생성·Debug 빌드 및 무변경 재빌드 시 출력 timestamp 유지를 확인했다. 경로 정의의 누락된 $ 수정은 코드로 확인했고 사용자가 수정 후 빌드·셰이더 컴파일을 확인했다. 셰이더 변경 시 선택적 재빌드와 문법 오류 실패 검사는 별도로 수행하지 않았다.
 - 다음은 SPIR-V 로딩과 Shader Module 생성·RAII 정리다. 아직 Graphics Pipeline·draw 연결은 없다.
+
+
+### S1-5 Shader Module 중간 기록
+
+- ShaderModule은 파일에서 uint32_t 배열로 SPIR-V를 읽고 vkCreateShaderModule 성공 직후 RAII 핸들에 Adopt한다. main에서 Device 생성 후 두 Module을 생성하며 Device보다 먼저 정리한다.
+- 파일 크기는 양수·4의 배수 여부와 size_t/streamsize 표현 범위를 검사한다. uint32_t로 크기를 축소하지 않으며 전체 읽기 실패는 경로를 포함한 예외로 전달한다. 진단용 경로는 filesystem::path::string()으로 변환한다.
+- 수정 후 Agent의 Debug/Release 빌드 통과. 실제 Module 생성·validation, 다른 작업 디렉터리 실행, 읽기 실패 주입은 이번 수정에서 수행하지 않았다. 다음은 Graphics Pipeline 생성이다.

@@ -8,20 +8,21 @@
 #include <iostream>
 #include <ios>
 #include <string>
+#include <limits>
 
 namespace
 {
 
 std::vector<std::uint32_t> ReadSpirV(const std::filesystem::path &shaderPath)
 {
-    std::string pathString(shaderPath.c_str());
+    const std::string pathString = shaderPath.string();
     std::ifstream ifs(shaderPath, std::ios::binary | std::ios::ate);
     if (!ifs.is_open())
     {
         throw std::runtime_error("File Open Failed: " + pathString);
     }
 
-    std::streamsize fileSize = ifs.tellg();
+    const std::streamoff fileSize = ifs.tellg();
 
 #ifndef NDEBUG
     std::cout << "File Open: " << pathString << "(" << fileSize << "B)\n";
@@ -29,15 +30,24 @@ std::vector<std::uint32_t> ReadSpirV(const std::filesystem::path &shaderPath)
 
     if (!(fileSize > 0 && fileSize % 4 == 0))
     {
-        throw std::runtime_error("Invalid File size");
+        throw std::runtime_error("Invalid SPIR-V file size: " + pathString);
     }
 
-    std::vector<std::uint32_t> shaderBytes(static_cast<std::uint32_t>(fileSize) / sizeof(std::uint32_t));
+    const std::uintmax_t unsignedFileSize = static_cast<std::uintmax_t>(fileSize);
+    if (unsignedFileSize > std::numeric_limits<std::size_t>::max() ||
+        unsignedFileSize > static_cast<std::uintmax_t>(std::numeric_limits<std::streamsize>::max()))
+    {
+        throw std::runtime_error("SPIR-V file is too large: " + pathString);
+    }
+
+    const std::size_t byteSize = static_cast<std::size_t>(fileSize);
+    std::vector<std::uint32_t> shaderBytes(byteSize / sizeof(std::uint32_t));
     ifs.seekg(0, std::ios::beg);
 
-    ifs.read(reinterpret_cast<char *>(shaderBytes.data()), fileSize);
-
-    ifs.close();
+    if (!ifs.read(reinterpret_cast<char *>(shaderBytes.data()), static_cast<std::streamsize>(byteSize)))
+    {
+        throw std::runtime_error("Failed to read SPIR-V: " + pathString);
+    }
 
     return shaderBytes;
 }
