@@ -106,6 +106,26 @@ struct VkShaderModuleDeleter
     }
 };
 
+struct VkPipelineLayoutDeleter
+{
+    VkDevice device;
+
+    void operator()(VkPipelineLayout handle) const noexcept
+    {
+        vkDestroyPipelineLayout(device, handle, nullptr);
+    }
+};
+
+struct VkPipelineDeleter
+{
+    VkDevice device;
+
+    void operator()(VkPipeline handle) const noexcept
+    {
+        vkDestroyPipeline(device, handle, nullptr);
+    }
+};
+
 }; // namespace deleter
 
 // VDELETER : 람다식.(C++ 17)
@@ -163,3 +183,5 @@ using CommandPoolHandle = VulkanHandle<VkCommandPool, deleter::VkCommandPoolDele
 using FenceHandle = VulkanHandle<VkFence, deleter::VkFenceDeleter>;
 using SemaphoreHandle = VulkanHandle<VkSemaphore, deleter::VkSemaphoreDeleter>;
 using ShaderModuleHandle = VulkanHandle<VkShaderModule, deleter::VkShaderModuleDeleter>;
+using PipelineLayoutHandle = VulkanHandle<VkPipelineLayout, deleter::VkPipelineLayoutDeleter>;
+using PipelineHandle = VulkanHandle<VkPipeline, deleter::VkPipelineDeleter>;

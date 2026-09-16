@@ -11,6 +11,7 @@
 #include "core/Swapchain.h"
 #include "core/FrameResources.h"
 #include "core/ShaderModule.h"
+#include "core/GraphicsPipeline.h"
 
 #include "app/Window.h"
 
@@ -135,8 +136,9 @@ int main()
         FrameResources frame(context.GetDevice(), selection.graphicsFamilyIndex);
 
         const std::filesystem::path shaderDir{RENDERER_SHADER_DIR};
-        ShaderModule vertexShader(context.GetDevice(), shaderDir / "triangle.vert.spv");
-        ShaderModule fragmentShader(context.GetDevice(), shaderDir / "triangle.frag.spv");
+
+        GraphicsPipeline graphicsPipeline(context.GetDevice(), swapchainOwner->GetSettings().surfaceFormat.format,
+                                          shaderDir);
 
         try
         {
