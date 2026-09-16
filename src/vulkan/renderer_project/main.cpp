@@ -10,7 +10,6 @@
 #include "core/VulkanContext.h"
 #include "core/Swapchain.h"
 #include "core/FrameResources.h"
-#include "core/ShaderModule.h"
 #include "core/GraphicsPipeline.h"
 
 #include "app/Window.h"
@@ -20,7 +19,8 @@ using SurfaceHandle = VulkanHandle<VkSurfaceKHR, deleter::VkSurfaceDeleter>;
 namespace
 {
 
-void RecordClearCommands(VkCommandBuffer commandBuffer, const Swapchain &swapchain, std::uint32_t imageIndex)
+void RecordFrameCommands(VkCommandBuffer commandBuffer, const Swapchain &swapchain, std::uint32_t imageIndex,
+                         const GraphicsPipeline &pipeline)
 {
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -65,6 +65,7 @@ void RecordClearCommands(VkCommandBuffer commandBuffer, const Swapchain &swapcha
     // dynamic rendering - clear
     // 앞에서 메모리 배리어로 전환한 레이아웃 상태에서 이미지에 렌더링
     // 사용하려고 하는 이미지의 layout을 명시
+    // Attachment: ImageView를 이번 렌더링에서 어떤 역할로 사용할지 설정
     VkRenderingAttachmentInfo colorAttachment{};
     colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
     colorAttachment.imageView = swapchain.GetImageView(imageIndex);
@@ -82,6 +83,35 @@ void RecordClearCommands(VkCommandBuffer commandBuffer, const Swapchain &swapcha
     renderingInfo.pColorAttachments = &colorAttachment;
 
     vkCmdBeginRendering(commandBuffer, &renderingInfo);
+
+    // Draw 명령을 사용할 Pipeline 바인딩
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.GetPipeline());
+
+    const VkExtent2D extent = swapchain.GetSettings().extent;
+
+    // NDC 좌표를 framebuffer 좌표로 변환할 영역과 깊이 범위 지정
+    VkViewport viewport{};
+    viewport.x = 0.0f;                                   // Viewport 시작 위치 좌표
+    viewport.y = 0.0f;                                   // Viewport 시작 위치 Y 좌표
+    viewport.width = static_cast<float>(extent.width);   // 가로
+    viewport.height = static_cast<float>(extent.height); // 세로
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+    VkRect2D scissor{};
+    scissor.offset = {0, 0};
+    scissor.extent = extent;
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+    /*
+     * vertexCount: 인스턴스 하나당 사용할 정점 개수
+     * instanceCount: 같은 정점 구성으로 그릴 인스턴스 개수
+     * firstVertex: 시작 정점 번호
+     * firstInstance: 시작 인스턴스 번호
+     */
+    vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+
     vkCmdEndRendering(commandBuffer);
 
     // PresentLayout 전환
@@ -137,8 +167,8 @@ int main()
 
         const std::filesystem::path shaderDir{RENDERER_SHADER_DIR};
 
-        GraphicsPipeline graphicsPipeline(context.GetDevice(), swapchainOwner->GetSettings().surfaceFormat.format,
-                                          shaderDir);
+        std::unique_ptr<GraphicsPipeline> graphicsPipelineOwner = std::make_unique<GraphicsPipeline>(
+            context.GetDevice(), swapchainOwner->GetSettings().surfaceFormat.format, shaderDir);
 
         try
         {
@@ -167,6 +197,7 @@ int main()
                         newFramebuffer = window.GetFramebufferSize();
                     }
 
+                    VkFormat prevFormat = swapchainSetting.surfaceFormat.format;
                     swapchainSupport = Swapchain::QuerySwapchainSupport(selection.physicalDevice, surfaceHandle.Get());
                     configResult =
                         Swapchain::ConfigureSwapchainSettings(swapchainSupport, newFramebuffer, &swapchainSetting);
@@ -181,8 +212,14 @@ int main()
                     std::unique_ptr<Swapchain> newSwapchain = std::make_unique<Swapchain>(
                         context.GetDevice(), surfaceHandle.Get(), swapchainSetting, selection,
                         swapchainSupport.capabilities, swapchainOwner->GetSwapchain());
-
                     swapchainOwner.swap(newSwapchain);
+
+                    if (prevFormat != swapchainSetting.surfaceFormat.format)
+                    {
+                        std::unique_ptr<GraphicsPipeline> newGraphicsPipeline = std::make_unique<GraphicsPipeline>(
+                            context.GetDevice(), swapchainSetting.surfaceFormat.format, shaderDir);
+                        graphicsPipelineOwner.swap(newGraphicsPipeline);
+                    }
 
                     window.ClearFramebufferResized();
                     recreateSwapchain = false;
@@ -231,7 +268,7 @@ int main()
                 VkCommandBuffer commandBuffer = frame.GetCommandBuffer(currentFrameIndex);
 
                 VK_CHECK(vkResetCommandBuffer(commandBuffer, 0));
-                RecordClearCommands(commandBuffer, *swapchainOwner.get(), imageIndex);
+                RecordFrameCommands(commandBuffer, *swapchainOwner.get(), imageIndex, *graphicsPipelineOwner);
 
                 // for wait
                 VkSemaphoreSubmitInfo imageAvailableSemaInfo{}; // binary semaphore라 value는 0 사용

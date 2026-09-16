@@ -360,3 +360,12 @@ cmake --build src/vulkan/renderer_project/build/release
 - ShaderModule은 파일에서 uint32_t 배열로 SPIR-V를 읽고 vkCreateShaderModule 성공 직후 RAII 핸들에 Adopt한다. main에서 Device 생성 후 두 Module을 생성하며 Device보다 먼저 정리한다.
 - 파일 크기는 양수·4의 배수 여부와 size_t/streamsize 표현 범위를 검사한다. uint32_t로 크기를 축소하지 않으며 전체 읽기 실패는 경로를 포함한 예외로 전달한다. 진단용 경로는 filesystem::path::string()으로 변환한다.
 - 수정 후 Agent의 Debug/Release 빌드 통과. 실제 Module 생성·validation, 다른 작업 디렉터리 실행, 읽기 실패 주입은 이번 수정에서 수행하지 않았다. 다음은 Graphics Pipeline 생성이다.
+
+
+### S1-5 삼각형 명령 연결 중간 기록
+
+- GraphicsPipeline은 Pipeline Layout·Pipeline을 RAII 소유하고 생성 중 지역 ShaderModule을 사용한다. Dynamic Rendering의 color format 계약, 빈 vertex input, triangle list, dynamic viewport/scissor, blending·depth/stencil 비활성 상태를 구성했다.
+- RecordFrameCommands는 BeginRendering과 EndRendering 사이에서 Pipeline bind·현재 Swapchain extent의 viewport/scissor·vkCmdDraw(3, 1, 0, 0)를 기록한다.
+- Pipeline을 unique_ptr로 소유하며 Swapchain 재생성 전 Device 대기 이후 format이 바뀐 경우에만 Pipeline도 교체한다. extent 변경은 dynamic state 갱신으로 처리한다.
+- Agent의 Debug/Release 빌드와 git diff --check 통과. 이번 draw 연결의 실제 삼각형 출력·resize·validation은 agent 미실행이며 사용자도 구체 실행 결과를 아직 명시하지 않았다.
+- 사용자는 dynamic viewport로 extent 변경 시 Pipeline 재생성이 불필요한 이유와 Pipeline format 계약·실제 attachment View의 관계를 설명했다. 다음은 Push Constant를 통한 픽셀 단위 위치·크기·색상 전달이다.

@@ -88,7 +88,6 @@ GraphicsPipeline::GraphicsPipeline(VkDevice device, VkFormat colorFormat, const 
     depthStencilCI.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
     depthStencilCI.depthBoundsTestEnable = VK_FALSE;
     depthStencilCI.depthWriteEnable = VK_FALSE;
-    depthStencilCI.depthBoundsTestEnable = VK_FALSE;
     depthStencilCI.stencilTestEnable = VK_FALSE;
 
     const VkDynamicState dynamicStates[] = {
@@ -112,6 +111,7 @@ GraphicsPipeline::GraphicsPipeline(VkDevice device, VkFormat colorFormat, const 
     colorBlendCI.attachmentCount = 1;
     colorBlendCI.pAttachments = &colorBlendAttach;
 
+    // 출력 대상으로 사용할 attachment들의 format 계약
     VkPipelineRenderingCreateInfo renderingCI{};
     renderingCI.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
     renderingCI.colorAttachmentCount = 1;
@@ -133,10 +133,15 @@ GraphicsPipeline::GraphicsPipeline(VkDevice device, VkFormat colorFormat, const 
     pipelineCI.pColorBlendState = &colorBlendCI;
     pipelineCI.pDynamicState = &dynamicCI;
     pipelineCI.pTessellationState = nullptr;
+
+    // 어떤 렌더링 환경에서 사용할지
+    // 현재 Dynamic Rendering을 사용하기 때문에 RenderPass를 연결하지 않음
     pipelineCI.renderPass = VK_NULL_HANDLE;
-    pipelineCI.subpass = 0;
-    pipelineCI.basePipelineIndex = -1;
-    pipelineCI.basePipelineHandle = VK_NULL_HANDLE;
+    pipelineCI.subpass = 0; // RenderPass 안에서 몇 번째 subpass에 사용할 Pipeline인지 결정하는 인덱스
+
+    // 이미 생성된 Pipeline을 기반으로 파생 Pipeline을 만드는 설정
+    pipelineCI.basePipelineIndex = -1; // 생성할 Pipeline들 중, 기반으로 삼을 Pipeline의 인덱스
+    pipelineCI.basePipelineHandle = VK_NULL_HANDLE; // 기반 Pipeline Handle
     pipelineCI.pNext = &renderingCI;
 
     VkPipeline pipeline = VK_NULL_HANDLE;
