@@ -44,7 +44,8 @@ void RecordFrameCommands(VkCommandBuffer commandBuffer, const Swapchain &swapcha
     barrier.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
     barrier.srcAccessMask = VK_ACCESS_2_NONE;
     barrier.dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-    barrier.dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+    // Blending에서 기존 색상을 읽기 위해 COLOR ATTACHMENT READ BIT 설정 추가
+    barrier.dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT;
     barrier.image = swapchain.GetImage(imageIndex);
     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED; // QueueFamily 소유권 이전 불필요
     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -105,16 +106,28 @@ void RecordFrameCommands(VkCommandBuffer commandBuffer, const Swapchain &swapcha
     scissor.extent = extent;
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-    vkCmdPushConstants(commandBuffer, pipeline.GetPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0,
-                       sizeof(DrawPushConstants), &pushConstants);
-
     /*
      * vertexCount: 인스턴스 하나당 사용할 정점 개수
      * instanceCount: 같은 정점 구성으로 그릴 인스턴스 개수
      * firstVertex: 시작 정점 번호
      * firstInstance: 시작 인스턴스 번호
      */
+
+    vkCmdPushConstants(commandBuffer, pipeline.GetPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0,
+                       sizeof(DrawPushConstants), &pushConstants);
     vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+
+    DrawPushConstants rectangle = pushConstants;
+    rectangle.positionAndSize[0] = 180;
+    rectangle.positionAndSize[1] = 140;
+    rectangle.color[0] = 0.0f;
+    rectangle.color[1] = 0.0f;
+    rectangle.color[2] = 1.0f;
+    rectangle.color[3] = 0.5f;
+
+    vkCmdPushConstants(commandBuffer, pipeline.GetPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0,
+                       sizeof(DrawPushConstants), &rectangle);
+    vkCmdDraw(commandBuffer, 6, 1, 3, 0);
 
     vkCmdEndRendering(commandBuffer);
 
@@ -284,8 +297,8 @@ int main()
                 pushConstants.viewportSize[1] = static_cast<float>(extent.height);
 
                 pushConstants.color[0] = 1.0f;
-                pushConstants.color[1] = 0.4f;
-                pushConstants.color[2] = 0.1f;
+                pushConstants.color[1] = 0.0f;
+                pushConstants.color[2] = 0.0f;
                 pushConstants.color[3] = 1.0f;
 
                 RecordFrameCommands(commandBuffer, *swapchainOwner.get(), imageIndex, *graphicsPipelineOwner,

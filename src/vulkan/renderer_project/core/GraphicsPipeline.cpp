@@ -107,8 +107,30 @@ GraphicsPipeline::GraphicsPipeline(VkDevice device, VkFormat colorFormat, const 
     dynamicCI.pDynamicStates = dynamicStates;
     dynamicCI.dynamicStateCount = 2;
 
+    // straight alpha: RGB에 alpha를 미리 곱하지 않음
     VkPipelineColorBlendAttachmentState colorBlendAttach{};
-    colorBlendAttach.blendEnable = VK_FALSE;
+    colorBlendAttach.blendEnable = VK_TRUE;
+
+    /*
+     * 결과 RGB = 새 RGB * 새 Alpha + 기존 RGB * (1 - 새 Alpha)
+     * - 기존 RGB는 attachment에 이미 기록된 색상
+     * - 새 RGB는 Fragment Shader의 출력 색상
+     * - src는 Fragment Shader가 출력한 새로운 값을, dst는 attachment에 이미 저장된 값을 의미
+     * - srcColorBlendFactor: 새 RGB에 곱할 블렌딩 계수
+     * - dstColorBlendFactor: 기존 RGB에 곱할 블렌딩 계수
+     * - colorBlendOp: 두 항목을 결헙하는 연산
+     */
+    colorBlendAttach.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    colorBlendAttach.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    colorBlendAttach.colorBlendOp = VK_BLEND_OP_ADD;
+
+    /*
+     * 결과 Alpha = 새 Alpha + 기존 Alpha * (1 - 새 Alpha)
+     */
+    colorBlendAttach.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    colorBlendAttach.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    colorBlendAttach.alphaBlendOp = VK_BLEND_OP_ADD;
+
     colorBlendAttach.colorWriteMask =
         VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 

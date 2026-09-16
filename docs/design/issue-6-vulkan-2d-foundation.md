@@ -2,7 +2,7 @@
 
 - Issue: <https://github.com/jammer-droid/PrivateServerToolKit/issues/6>
 - Parent: [#5 Vulkan World Lab](https://github.com/jammer-droid/PrivateServerToolKit/issues/5)의 S1
-- 상태: 구현 완료 4/6. S1-1~S1-4 complete, S1-5 current, S1-6 pending.
+- 상태: 구현 완료 5/6. S1-1~S1-5 complete, S1-6 current.
 - 진행 모드: `study-guide` Study session + `lean-implementation` Guide. 사용자가 구현하며 agent는 안내·검토한다. 구현 수정은 별도 요청 범위에서만 한다.
 
 ## 목표와 경계
@@ -134,6 +134,8 @@ renderer_project/
 
 ### S1-5 — Graphics Pipeline과 2D 도형
 
+- **상태:** complete. 코드 검토·빌드, 사용자 도형·블렌딩 화면 및 resize 확인을 바탕으로 완료. 검증 범위는 완료 기록 참조.
+
 - **선행:** S1-4.
 - **결과/seam:** Vertex/Fragment Shader 빌드, pipeline layout·Graphics Pipeline, draw 명령과 2D 입력 데이터. 삼각형에서 위치·크기·색상을 입력받는 도형으로 확장한다.
 - **학습:** vertex 처리·rasterization·fragment 출력, viewport/scissor, attachment format, 좌표 변환과 blending.
@@ -159,7 +161,7 @@ renderer_project/
 | S1-1 | `renderer_project/`의 `vulkan_renderer`, C++17·C Vulkan API, `VK_CHECK`와 예외 기반 초기화 실패 전달을 채택했다. macOS에서 instance 지원 버전 1.4.335와 실행을 확인했고 앱 목표는 1.3이다. 1.3 미만 지원 검사와 macOS portability extension 조회·활성화를 구현했다. Debug의 Validation Layer 조회·활성화와 Release의 비요청 경로를 구현했다. Debug messenger 생성·RAII 정리와 테스트 메시지 수신까지 구현했다. Instance 생성·파괴 진단용 pNext 연결까지 구현했다. |
 | S1-2 | GLFW 채택. API 1.3·swapchain·dynamicRendering·synchronization2 및 Graphics/Present 지원을 요구한다. GPU별 공동 family 우선, 없으면 분리 family를 선택한다. 열거 순서상 첫 적합 GPU를 반환한다. Device 생성 시 family 요청 중복을 제거하고 swapchain·조건부 portability_subset, dynamicRendering·synchronization2를 활성화한다. |
 | S1-3~4 | Present mode와 frame slot 수는 단계 진입 시 정한다. Graphics 경로는 Dynamic Rendering·Synchronization2를 사용하며 S1-2에서 지원을 확인하고 Device 생성 시 필요한 feature만 활성화한다. |
-| S1-5 | Shader 언어·컴파일러, 좌표 원점·축·단위, blending과 그리기 순서. |
+| S1-5 | GLSL 450·glslc의 Vulkan 1.3 대상 SPIR-V 빌드. framebuffer 왼쪽 위 원점·오른쪽 +X·아래쪽 +Y·픽셀 단위. 48바이트 Vertex Push Constant로 위치·크기·색상 전달. Straight alpha source-over blending과 draw 순서에 따른 합성. |
 | S1-6 | 원·선·궤적 표현, instance 데이터와 capacity 정책. |
 
 디버그 UI는 필수 선행 조건이 아니다. 필요성이 생길 때 선택하며 창 이벤트만으로 초기 학습을 시작한다. 추가 플랫폼 검증과 성능 계측은 자동으로 확대하지 않는다.
@@ -191,10 +193,10 @@ renderer_project/
 | S1-2 | complete | Agent의 Debug/Release 빌드 통과, Queue 선택 8개 합성 사례 통과. 사용자 GPU/Surface 조회 로그 및 Device 구현 후 실행 확인. 상세 범위와 한계는 완료 기록 참조. | GLFW_NO_API·Surface·Instance 확장 관계, family index와 queue index, feature 조회/활성화 구분, Queue의 Device 종속 수명 확인. |
 | S1-3 | complete | 설정 선택 경계 검사, Debug/Release 빌드, 세 번째 View 생성 실패 시 정리와 정상 정리 순서 검사 통과. 사용자 빌드·실행 확인. | 요청 최소/실제 이미지 개수, borrowed Image와 owned View, 생성자 실패 시 멤버 RAII 정리 이해 확인. |
 | S1-4 | complete | 두 프레임 슬롯의 Acquire–Submit–Present, Dynamic Rendering clear와 Swapchain 재생성 구현. 최종 Debug/Release 빌드 통과. 사용자 배경색·validation·종료 및 resize 실행 확인. 정리 관행과 검증 범위는 아래 완료 기록 참조. | frame slot/image index, Fence/Semaphore 재사용, 이미지 subresource와 renderArea, Present 자원 정리의 보장 범위 이해 확인. |
-| S1-5 | current | 삼각형 GLSL Vertex/Fragment Shader와 glslc 기반 SPIR-V 빌드 연결. 상세 증거는 중간 기록 참조. | 셰이더 입력·출력과 Pipeline 연결 학습 진행 중. |
-| S1-6 | pending | 아직 없음 | 아직 없음 |
+| S1-5 | complete | Shader 빌드·Module·Graphics Pipeline·삼각형/사각형 draw·Push Constant·blending 구현. Agent Debug/Release 빌드, 사용자 화면과 resize 확인. 상세 검증 범위는 완료 기록 참조. | 로컬→픽셀→NDC→viewport 변환, dynamic state, Pipeline format 계약과 attachment·subresource 관계 설명 확인. |
+| S1-6 | current | Instance 데이터용 host-visible Buffer 기반 가이드 시작. 구현·실행 증거는 아직 없음. | 정점별 입력과 instance별 입력의 역할 구분 학습. |
 
-S1-1~S1-4는 완료했다. 다음 행동은 S1-5의 Graphics Pipeline과 2D 도형 가이드다. 후속 진행도·학습 기록은 별도 단계 문서 없이 이 문서의 stable-ID section을 갱신한다.
+S1-1~S1-5는 완료했다. 다음 행동은 S1-6의 Instancing과 최소 장면 가이드다. 후속 진행도·학습 기록은 별도 단계 문서 없이 이 문서의 stable-ID section을 갱신한다.
 
 
 ### S1-1 완료 검증 — 2026-09-13
@@ -378,3 +380,21 @@ cmake --build src/vulkan/renderer_project/build/release
 - 사용자 첨부 화면에서 단색 주황 삼각형 출력을 확인했다. 위치 (100,80), 크기 (240,180)에 따른 꼭짓점은 (220,80), (340,260), (100,260)이다. 사용자는 로컬 좌표와 양수 높이 viewport의 방향 관계를 설명했다.
 - Agent의 최종 Debug 빌드와 git diff --check 통과. Resize 후 픽셀 크기 유지·validation 로그는 이번 단계에서 별도 실행 증거가 없다.
 - 다음은 같은 좌표 계약으로 사각형 출력과 알파 블렌딩을 연결하는 작업이다.
+
+
+### S1-5 완료 기록 — 2026-09-16
+
+- GLSL→SPIR-V 자동 빌드, Shader Module·Pipeline Layout·Graphics Pipeline의 RAII, Dynamic Rendering draw를 연결했다. Dynamic viewport/scissor로 extent 변경에 대응하고 Swapchain format 변경 시 Pipeline을 재생성한다.
+- 48바이트 Push Constant로 픽셀 위치·크기·viewport 크기·색상을 전달한다. CPU offset/size static_assert와 GLSL vec4 세 개의 배치를 맞췄다. 정점 0~2의 삼각형과 3~8의 사각형을 draw별 Push Constant로 그린다.
+- Vertex→Fragment 색상을 vec4로 전달하고 straight alpha source-over blending을 활성화했다. Color attachment 배리어에 읽기 접근을 추가하고 같은 rendering 안에서 삼각형 후 사각형을 그린다.
+- 사용자 첨부 화면으로 단색 삼각형, 빨간 삼각형과 반투명 파란 사각형의 겹침·배경 합성을 확인했다. 사용자는 창 크기 변경 후에도 이상 없음을 확인했다. 코드 검토에서 기능 오류를 발견하지 못했고, blending 구현의 Debug/Release 빌드와 git diff --check가 통과했다.
+- 좌표 변환의 독립 예시: 800×600에서 (0,0)→(-1,-1), (400,300)→(0,0), (800,600)→(1,1). 위치 (100,80), 크기 (240,180)의 삼각형 꼭짓점은 (220,80), (340,260), (100,260)이다. 이는 수식에 의한 확인이며 GPU readback 검사는 수행하지 않았다.
+- 검증 범위: Agent는 GUI를 직접 실행하지 않았다. 최신 단계의 validation 로그·format 변경 하드웨어 경로·다른 작업 디렉터리 실행·shader 오류 주입은 별도 증거가 없으며 통과로 기록하지 않는다. 사용자 완료 요청에 따라 현재 코드·빌드·화면·resize 증거로 S1-5를 complete 처리한다.
+- 다음은 S1-6 Instancing과 최소 장면이다. S1-5 완료가 instance buffer 업로드·capacity·프레임별 입력 수명 구현을 포함하지는 않는다.
+
+
+### S1-6 첫 작업 — Buffer와 Memory 기반
+
+- 첫 단계는 VkBuffer·VkDeviceMemory 생성, 바인딩, host-visible/coherent 메모리 매핑과 범위 검사된 CPU 쓰기다. 이 단계에서는 GPU draw 입력 연결과 프레임별 갱신을 추가하지 않는다.
+- 공통 정점은 우선 셰이더 배열에 유지하고 개별 위치·크기·색상을 instance-rate vertex input으로 옮기는 순서로 진행한다. viewport 크기는 프레임 공통 데이터다.
+- Buffer 하나당 별도 메모리 할당으로 시작하고 HOST_VISIBLE | HOST_COHERENT 타입을 요구한다. 대응 타입이 없으면 명시적 실패로 처리한다. GPU 사용 중 덮어쓰기 방지는 다음 프레임 슬롯 연결 단계에서 다룬다.
