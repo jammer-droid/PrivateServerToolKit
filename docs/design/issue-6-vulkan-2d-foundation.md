@@ -398,3 +398,11 @@ cmake --build src/vulkan/renderer_project/build/release
 - 첫 단계는 VkBuffer·VkDeviceMemory 생성, 바인딩, host-visible/coherent 메모리 매핑과 범위 검사된 CPU 쓰기다. 이 단계에서는 GPU draw 입력 연결과 프레임별 갱신을 추가하지 않는다.
 - 공통 정점은 우선 셰이더 배열에 유지하고 개별 위치·크기·색상을 instance-rate vertex input으로 옮기는 순서로 진행한다. viewport 크기는 프레임 공통 데이터다.
 - Buffer 하나당 별도 메모리 할당으로 시작하고 HOST_VISIBLE | HOST_COHERENT 타입을 요구한다. 대응 타입이 없으면 명시적 실패로 처리한다. GPU 사용 중 덮어쓰기 방지는 다음 프레임 슬롯 연결 단계에서 다룬다.
+
+
+### S1-6 HostVisibleBuffer 중간 기록
+
+- HostVisibleBuffer가 Vertex Buffer와 전용 DeviceMemory를 RAII 소유한다. memoryTypeBits와 HOST_VISIBLE | HOST_COHERENT 조건으로 메모리 타입을 선택하고 requirements.size로 할당한 뒤 offset 0에 바인딩한다. 생성자 마지막에 map하고 소멸 시 Unmap → Buffer 파괴 → Memory 해제 순서로 정리한다.
+- Write는 0바이트를 허용하고 capacity 초과 및 양수 크기의 null 입력을 복사 전에 거부한다. GPU 사용 중 덮어쓰기 방지는 호출자의 전제조건이며 coherent 메모리가 실행 동기화를 대신하지 않는다.
+- Agent의 Debug/Release 빌드와 git diff --check 통과. 사용자가 주석 추가 후 실행을 확인했다. main의 임시 스코프는 생성·Write·소멸만 수행하며 GPU draw에는 아직 연결하지 않는다. Capacity 초과 호출 및 실패 주입은 별도 실행 증거가 없다.
+- 다음은 FIF별 Instance Buffer와 instance-rate vertex input 연결이다. S1-6는 current 상태를 유지한다.

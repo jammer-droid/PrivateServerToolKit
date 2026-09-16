@@ -8,6 +8,7 @@
 #include "common/VulkanHandle.h"
 
 #include "core/DrawPushConstants.h"
+#include "core/HostVisibleBuffer.h"
 #include "core/VulkanContext.h"
 #include "core/Swapchain.h"
 #include "core/FrameResources.h"
@@ -164,6 +165,12 @@ int main()
                   << "\nRequires portability subset: " << std::boolalpha << selection.requiresPortabilitySubset << '\n';
 
         context.InitializeDevice(selection); // Initialize Logical Device
+        {
+            HostVisibleBuffer buffer(selection.physicalDevice, context.GetDevice(), sizeof(DrawPushConstants));
+
+            DrawPushConstants sample{};
+            buffer.Write(&sample, sizeof(sample));
+        }
 
         VkExtent2D framebufferSize = window.GetFramebufferSize();
         SwapchainSupport swapchainSupport =

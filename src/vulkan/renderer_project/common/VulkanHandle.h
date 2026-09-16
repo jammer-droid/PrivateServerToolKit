@@ -126,6 +126,24 @@ struct VkPipelineDeleter
     }
 };
 
+struct VkBufferDeleter
+{
+    VkDevice device;
+    void operator()(VkBuffer handle) const noexcept
+    {
+        vkDestroyBuffer(device, handle, nullptr);
+    }
+};
+
+struct VkDeviceMemoryDeleter
+{
+    VkDevice device;
+    void operator()(VkDeviceMemory handle) const noexcept
+    {
+        vkFreeMemory(device, handle, nullptr);
+    }
+};
+
 }; // namespace deleter
 
 // VDELETER : 람다식.(C++ 17)
@@ -185,3 +203,5 @@ using SemaphoreHandle = VulkanHandle<VkSemaphore, deleter::VkSemaphoreDeleter>;
 using ShaderModuleHandle = VulkanHandle<VkShaderModule, deleter::VkShaderModuleDeleter>;
 using PipelineLayoutHandle = VulkanHandle<VkPipelineLayout, deleter::VkPipelineLayoutDeleter>;
 using PipelineHandle = VulkanHandle<VkPipeline, deleter::VkPipelineDeleter>;
+using BufferHandle = VulkanHandle<VkBuffer, deleter::VkBufferDeleter>;
+using DeviceMemoryHandle = VulkanHandle<VkDeviceMemory, deleter::VkDeviceMemoryDeleter>;
