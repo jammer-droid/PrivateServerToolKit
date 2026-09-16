@@ -7,6 +7,7 @@
 #include "common/VulkanException.h"
 #include "common/VulkanHandle.h"
 
+#include "core/DrawPushConstants.h"
 #include "core/VulkanContext.h"
 #include "core/Swapchain.h"
 #include "core/FrameResources.h"
@@ -20,7 +21,7 @@ namespace
 {
 
 void RecordFrameCommands(VkCommandBuffer commandBuffer, const Swapchain &swapchain, std::uint32_t imageIndex,
-                         const GraphicsPipeline &pipeline)
+                         const GraphicsPipeline &pipeline, const DrawPushConstants &pushConstants)
 {
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -103,6 +104,9 @@ void RecordFrameCommands(VkCommandBuffer commandBuffer, const Swapchain &swapcha
     scissor.offset = {0, 0};
     scissor.extent = extent;
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+    vkCmdPushConstants(commandBuffer, pipeline.GetPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0,
+                       sizeof(DrawPushConstants), &pushConstants);
 
     /*
      * vertexCount: 인스턴스 하나당 사용할 정점 개수
@@ -268,7 +272,24 @@ int main()
                 VkCommandBuffer commandBuffer = frame.GetCommandBuffer(currentFrameIndex);
 
                 VK_CHECK(vkResetCommandBuffer(commandBuffer, 0));
-                RecordFrameCommands(commandBuffer, *swapchainOwner.get(), imageIndex, *graphicsPipelineOwner);
+
+                DrawPushConstants pushConstants{};
+                pushConstants.positionAndSize[0] = 100.0f;
+                pushConstants.positionAndSize[1] = 80.0f;
+                pushConstants.positionAndSize[2] = 240.0f;
+                pushConstants.positionAndSize[3] = 180.0f;
+
+                VkExtent2D extent = swapchainOwner->GetSettings().extent;
+                pushConstants.viewportSize[0] = static_cast<float>(extent.width);
+                pushConstants.viewportSize[1] = static_cast<float>(extent.height);
+
+                pushConstants.color[0] = 1.0f;
+                pushConstants.color[1] = 0.4f;
+                pushConstants.color[2] = 0.1f;
+                pushConstants.color[3] = 1.0f;
+
+                RecordFrameCommands(commandBuffer, *swapchainOwner.get(), imageIndex, *graphicsPipelineOwner,
+                                    pushConstants);
 
                 // for wait
                 VkSemaphoreSubmitInfo imageAvailableSemaInfo{}; // binary semaphore라 value는 0 사용

@@ -2,6 +2,7 @@
 
 #include "common/VulkanException.h"
 
+#include "core/DrawPushConstants.h"
 #include "core/ShaderModule.h"
 
 namespace
@@ -25,10 +26,16 @@ GraphicsPipeline::GraphicsPipeline(VkDevice device, VkFormat colorFormat, const 
 {
     // 1. PipelineLayout
     //      - Shader에 전달할 Descriptor Set과 Push Constants 정의
+    VkPushConstantRange pushRange{};
+    pushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    pushRange.offset = 0;
+    pushRange.size = sizeof(DrawPushConstants);
+
     VkPipelineLayoutCreateInfo pipelineLayoutCI{};
     pipelineLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pipelineLayoutCI.setLayoutCount = 0;         // descriptor set layout 개수
-    pipelineLayoutCI.pushConstantRangeCount = 0; // push constant range 개수
+    pipelineLayoutCI.pushConstantRangeCount = 1; // push constant range 개수
+    pipelineLayoutCI.pPushConstantRanges = &pushRange;
 
     VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
     VK_CHECK(vkCreatePipelineLayout(device, &pipelineLayoutCI, nullptr, &pipelineLayout));

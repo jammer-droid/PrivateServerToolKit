@@ -14,6 +14,10 @@ class GraphicsPipeline
     VK_NON_COPYABLE(GraphicsPipeline)
     VK_NON_MOVABLE(GraphicsPipeline)
 
+    inline VkPipelineLayout GetPipelineLayout() const noexcept
+    {
+        return pipelineLayoutHandle_.Get();
+    }
     inline VkPipeline GetPipeline() const noexcept
     {
         return pipelineHandle_.Get();

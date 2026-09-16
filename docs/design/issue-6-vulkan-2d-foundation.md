@@ -369,3 +369,12 @@ cmake --build src/vulkan/renderer_project/build/release
 - Pipeline을 unique_ptr로 소유하며 Swapchain 재생성 전 Device 대기 이후 format이 바뀐 경우에만 Pipeline도 교체한다. extent 변경은 dynamic state 갱신으로 처리한다.
 - Agent의 Debug/Release 빌드와 git diff --check 통과. 이번 draw 연결의 실제 삼각형 출력·resize·validation은 agent 미실행이며 사용자도 구체 실행 결과를 아직 명시하지 않았다.
 - 사용자는 dynamic viewport로 extent 변경 시 Pipeline 재생성이 불필요한 이유와 Pipeline format 계약·실제 attachment View의 관계를 설명했다. 다음은 Push Constant를 통한 픽셀 단위 위치·크기·색상 전달이다.
+
+
+### S1-5 Push Constant와 픽셀 좌표 중간 기록
+
+- DrawPushConstants는 위치·크기, framebuffer 크기, 색상을 48바이트로 전달한다. CPU의 float 크기·멤버 offset·전체 크기를 static_assert로 확인하고 GLSL std430의 vec4 세 개와 맞췄다. Vertex stage의 Pipeline Layout 범위와 vkCmdPushConstants를 연결했다.
+- 도형의 0~1 로컬 좌표에 위치·크기를 적용해 framebuffer 픽셀 좌표를 구하고, 현재 Swapchain extent로 NDC를 계산한다. 왼쪽 위 원점, 오른쪽 +X·아래쪽 +Y, framebuffer 픽셀 단위를 사용한다.
+- 사용자 첨부 화면에서 단색 주황 삼각형 출력을 확인했다. 위치 (100,80), 크기 (240,180)에 따른 꼭짓점은 (220,80), (340,260), (100,260)이다. 사용자는 로컬 좌표와 양수 높이 viewport의 방향 관계를 설명했다.
+- Agent의 최종 Debug 빌드와 git diff --check 통과. Resize 후 픽셀 크기 유지·validation 로그는 이번 단계에서 별도 실행 증거가 없다.
+- 다음은 같은 좌표 계약으로 사각형 출력과 알파 블렌딩을 연결하는 작업이다.
