@@ -56,6 +56,16 @@ FrameResources::FrameResources(VkDevice device, std::uint32_t queueFamilyIndex)
     }
 }
 
+FrameResources::FrameResources(VkDevice device, std::uint32_t queueFamilyIndex, VkPhysicalDevice physicalDevice,
+                               VkDeviceSize capacityBytes)
+    : FrameResources{device, queueFamilyIndex}
+{
+    for (std::uint32_t i = 0; i < kFramesInFlight; i++)
+    {
+        instanceBuffers_.emplace_back(physicalDevice, device, capacityBytes);
+    }
+}
+
 std::uint32_t FrameResources::GetFrameIndex() const noexcept
 {
     return frameIndex % kFramesInFlight;

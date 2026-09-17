@@ -9,6 +9,7 @@
 
 #include "core/DrawPushConstants.h"
 #include "core/HostVisibleBuffer.h"
+#include "core/InstanceData.h"
 #include "core/VulkanContext.h"
 #include "core/Swapchain.h"
 #include "core/FrameResources.h"
@@ -21,8 +22,14 @@ using SurfaceHandle = VulkanHandle<VkSurfaceKHR, deleter::VkSurfaceDeleter>;
 namespace
 {
 
+constexpr uint32_t kMaxInstances = 256;
+const InstanceData kInstanceDataArray[3] = {{{50, 50, 100, 100}, {1.0, 0.0, 0.0, 0.75}},
+                                            {{100, 300, 150, 50}, {0.0, 1.0, 0.0, 0.75}},
+                                            {{300, 100, 50, 150}, {0.0, 0.0, 1.0, 0.75}}};
+
 void RecordFrameCommands(VkCommandBuffer commandBuffer, const Swapchain &swapchain, std::uint32_t imageIndex,
-                         const GraphicsPipeline &pipeline, const DrawPushConstants &pushConstants)
+                         const GraphicsPipeline &pipeline, const DrawPushConstants &pushConstants,
+                         VkBuffer instanceBuffer, const std::vector<InstanceData> &instances)
 {
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -107,28 +114,23 @@ void RecordFrameCommands(VkCommandBuffer commandBuffer, const Swapchain &swapcha
     scissor.extent = extent;
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
+    VkDeviceSize offset = 0;
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, &instanceBuffer, &offset);
+
+    vkCmdPushConstants(commandBuffer, pipeline.GetPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0,
+                       sizeof(DrawPushConstants), &pushConstants);
+
     /*
+     * vkCmdDraw params
      * vertexCount: 인스턴스 하나당 사용할 정점 개수
      * instanceCount: 같은 정점 구성으로 그릴 인스턴스 개수
      * firstVertex: 시작 정점 번호
      * firstInstance: 시작 인스턴스 번호
      */
-
-    vkCmdPushConstants(commandBuffer, pipeline.GetPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0,
-                       sizeof(DrawPushConstants), &pushConstants);
-    vkCmdDraw(commandBuffer, 3, 1, 0, 0);
-
-    DrawPushConstants rectangle = pushConstants;
-    rectangle.positionAndSize[0] = 180;
-    rectangle.positionAndSize[1] = 140;
-    rectangle.color[0] = 0.0f;
-    rectangle.color[1] = 0.0f;
-    rectangle.color[2] = 1.0f;
-    rectangle.color[3] = 0.5f;
-
-    vkCmdPushConstants(commandBuffer, pipeline.GetPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0,
-                       sizeof(DrawPushConstants), &rectangle);
-    vkCmdDraw(commandBuffer, 6, 1, 3, 0);
+    if (!instances.empty())
+    {
+        vkCmdDraw(commandBuffer, 6, static_cast<std::uint32_t>(instances.size()), 3, 0);
+    }
 
     vkCmdEndRendering(commandBuffer);
 
@@ -187,7 +189,9 @@ int main()
         std::unique_ptr<Swapchain> swapchainOwner = std::make_unique<Swapchain>(
             context.GetDevice(), surfaceHandle.Get(), swapchainSetting, selection, swapchainSupport.capabilities);
 
-        FrameResources frame(context.GetDevice(), selection.graphicsFamilyIndex);
+        std::vector<InstanceData> instances{kInstanceDataArray[0], kInstanceDataArray[1], kInstanceDataArray[2]};
+        FrameResources frame(context.GetDevice(), selection.graphicsFamilyIndex, selection.physicalDevice,
+                             sizeof(InstanceData) * kMaxInstances);
 
         const std::filesystem::path shaderDir{RENDERER_SHADER_DIR};
 
@@ -198,6 +202,7 @@ int main()
         {
             bool running = true;
             bool recreateSwapchain = false;
+            float deltaX = 0.1f;
             while (running)
             {
                 window.PollEvents();
@@ -265,6 +270,17 @@ int main()
                 VkFence fence = frame.GetFence(currentFrameIndex);
                 VK_CHECK(vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX));
 
+                if (instances.size() > kMaxInstances)
+                {
+                    throw std::runtime_error("Instance capacity exceeded");
+                }
+                if (!instances.empty())
+                {
+                    instances[0].positionAndSize[0] += deltaX;
+                }
+                HostVisibleBuffer &instanceBuffer = frame.GetInstanceBuffer(currentFrameIndex);
+                instanceBuffer.Write(instances.data(), sizeof(InstanceData) * instances.size());
+
                 std::uint32_t imageIndex = 0;
                 VkSemaphore imageAvailable = frame.GetImageAvailable(currentFrameIndex);
                 // Acquire에서 반환된 이미지가 GPU가 접근해도 되는 시점에 imageAvailable이 signal 됨
@@ -294,22 +310,12 @@ int main()
                 VK_CHECK(vkResetCommandBuffer(commandBuffer, 0));
 
                 DrawPushConstants pushConstants{};
-                pushConstants.positionAndSize[0] = 100.0f;
-                pushConstants.positionAndSize[1] = 80.0f;
-                pushConstants.positionAndSize[2] = 240.0f;
-                pushConstants.positionAndSize[3] = 180.0f;
-
                 VkExtent2D extent = swapchainOwner->GetSettings().extent;
                 pushConstants.viewportSize[0] = static_cast<float>(extent.width);
                 pushConstants.viewportSize[1] = static_cast<float>(extent.height);
 
-                pushConstants.color[0] = 1.0f;
-                pushConstants.color[1] = 0.0f;
-                pushConstants.color[2] = 0.0f;
-                pushConstants.color[3] = 1.0f;
-
                 RecordFrameCommands(commandBuffer, *swapchainOwner.get(), imageIndex, *graphicsPipelineOwner,
-                                    pushConstants);
+                                    pushConstants, frame.GetInstanceBuffer(currentFrameIndex).GetBuffer(), instances);
 
                 // for wait
                 VkSemaphoreSubmitInfo imageAvailableSemaInfo{}; // binary semaphore라 value는 0 사용
