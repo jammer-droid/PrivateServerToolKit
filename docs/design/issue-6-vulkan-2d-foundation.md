@@ -2,7 +2,7 @@
 
 - Issue: <https://github.com/jammer-droid/PrivateServerToolKit/issues/6>
 - Parent: [#5 Vulkan World Lab](https://github.com/jammer-droid/PrivateServerToolKit/issues/5)의 S1
-- 상태: 구현 완료 5/6. S1-1~S1-5 complete, S1-6 current.
+- 상태: 구현 완료 6/6. S1-1~S1-6 complete. Vulkan 2D 렌더러 기반 학습 완료(합의한 보류 사항은 최종 기록 참조).
 - 진행 모드: `study-guide` Study session + `lean-implementation` Guide. 사용자가 구현하며 agent는 안내·검토한다. 구현 수정은 별도 요청 범위에서만 한다.
 
 ## 목표와 경계
@@ -145,6 +145,8 @@ renderer_project/
 
 ### S1-6 — Instancing과 최소 장면
 
+- **상태:** complete. 사용자 실행 확인, Agent 경계 실행 검사 및 합의한 보류 범위로 완료.
+
 - **선행:** S1-5.
 - **결과/seam:** instance 데이터 업로드·draw, Renderer2D 책임 정리, 도형·선·준비된 궤적을 조합한 탑다운 장면.
 - **학습:** per-vertex/per-instance 데이터, 버퍼 capacity와 갱신 수명, 도형 조합, 표시 순서와 투명도.
@@ -194,9 +196,9 @@ renderer_project/
 | S1-3 | complete | 설정 선택 경계 검사, Debug/Release 빌드, 세 번째 View 생성 실패 시 정리와 정상 정리 순서 검사 통과. 사용자 빌드·실행 확인. | 요청 최소/실제 이미지 개수, borrowed Image와 owned View, 생성자 실패 시 멤버 RAII 정리 이해 확인. |
 | S1-4 | complete | 두 프레임 슬롯의 Acquire–Submit–Present, Dynamic Rendering clear와 Swapchain 재생성 구현. 최종 Debug/Release 빌드 통과. 사용자 배경색·validation·종료 및 resize 실행 확인. 정리 관행과 검증 범위는 아래 완료 기록 참조. | frame slot/image index, Fence/Semaphore 재사용, 이미지 subresource와 renderArea, Present 자원 정리의 보장 범위 이해 확인. |
 | S1-5 | complete | Shader 빌드·Module·Graphics Pipeline·삼각형/사각형 draw·Push Constant·blending 구현. Agent Debug/Release 빌드, 사용자 화면과 resize 확인. 상세 검증 범위는 완료 기록 참조. | 로컬→픽셀→NDC→viewport 변환, dynamic state, Pipeline format 계약과 attachment·subresource 관계 설명 확인. |
-| S1-6 | current | Instance 데이터용 host-visible Buffer 기반 가이드 시작. 구현·실행 증거는 아직 없음. | 정점별 입력과 instance별 입력의 역할 구분 학습. |
+| S1-6 | complete | FIF별 Instance Buffer·Renderer2D·사각형/원/선/궤적 구현. 사용자 장면·창 수명 실행 확인, Agent 0·1·256·257개 및 3→0 전환 실행 검사 통과. 알려진 validation 메시지는 명시적 보류. | instance-rate 입력, 슬롯 Fence 이후 쓰기, 픽셀 크기와 viewport, 궤적 점→선분 변환 이해 확인. |
 
-S1-1~S1-5는 완료했다. 다음 행동은 S1-6의 Instancing과 최소 장면 가이드다. 후속 진행도·학습 기록은 별도 단계 문서 없이 이 문서의 stable-ID section을 갱신한다.
+S1-1~S1-6을 완료하여 이번 Vulkan 2D 렌더러 기반 학습을 마무리했다. Vulkan Client 및 Compute Pipeline·GPU 백엔드는 후속 작업이다. 후속 진행도·학습 기록은 별도 단계 문서 없이 이 문서의 stable-ID section을 갱신한다.
 
 
 ### S1-1 완료 검증 — 2026-09-13
@@ -436,3 +438,35 @@ cmake --build src/vulkan/renderer_project/build/release
 - 사용자 화면에서 고정 3개 선분과 이동 도형 뒤의 궤적을 확인했다. 현재 이동은 반복당 1픽셀이므로 꽉 찬 궤적의 길이는 약 63픽셀이며 시간 기반 속도·샘플링은 구현하지 않았다.
 - Agent가 실제 CPU helper를 추출한 임시 검사로 0·1개 점, 중복 점 생략, 선분 끝점, 64개 기록 제한과 최대 63개 선분을 확인했다. 최종 수정 후 Debug/Release 빌드와 git diff --check 통과. 최종 순서·빈 장면 수정 이후 GUI 실행은 Agent 미수행이다.
 - 다음은 최종 장면의 resize·최소화·복원·종료와 0·최대·초과 instance 경계 검증 및 문서 완료 정리다. 기존 shaderDemoteToHelperInvocation 미활성화와 Line 입력 검사 보류 결정은 유지하며 validation 무오류로 기록하지 않는다. S1-6는 current 상태다.
+
+
+## S1-6 및 튜토리얼 완료 — 2026-09-17
+
+- 사용자 요청에 따라 S1-1~S1-6 전부 complete 처리한다. 완료 범위는 Graphics Pipeline 기반 2D 렌더러 학습이며 Vulkan 전체 기능이나 GPU 계산 백엔드 구현 완료를 의미하지 않는다.
+- 사용자 제공 화면으로 사각형·원/타원·선분·고정/이동 궤적을 확인했다. 사용자는 최종 실행 확인 항목(resize·최소화·복원·종료)과 기존 보류 메시지 외 새 validation 문제 없음을 확인했다.
+- Agent는 최종 소스의 임시 복사본에 테스트 입력과 계측만 추가해 실제 Renderer·GPU 경로를 Debug로 실행했다. 0·1·256개 각각 8프레임 동안 업로드·draw 개수와 정상 종료를 확인했다. 257개는 업로드·draw 전에 capacity 예외 및 종료 코드 1을 확인했다. 3개 4프레임→0개 4프레임 전환에서 두 FIF 슬롯 모두 개수가 0으로 갱신됐다. 픽셀 readback 검사는 하지 않았다.
+- 기존 CPU helper 검사에서 빈/단일/중복 점, 선분 끝점과 64점·63선분 제한을 확인했다. 최종 구현의 Debug/Release 빌드가 통과했다. 임시 실행 검사 후 파일을 정리했으며 제품 코드는 변경하지 않았다.
+- 검증 환경: macOS, Apple M4 Pro 사용자 환경, AppleClang 16, GLFW 3.4.0, Vulkan SDK/loader 1.4.335 계열, 앱 대상 Vulkan 1.3. 다른 OS·분리 Graphics/Present Queue 하드웨어는 검증하지 않았다.
+
+### 채택한 관행과 명시적 보류
+
+- vkDeviceWaitIdle 후 Swapchain·Present 자원을 회수하는 일반적인 관행을 채택했다. Present 자원 사용 완료를 명세상 엄밀하게 확인하는 maintenance 확장의 Present Fence는 미도입이다.
+- shaderDemoteToHelperInvocation의 지원 확인·활성화는 사용자 결정으로 보류했다. 실제 최종 경계 실행에서도 DemoteToHelperInvocation capability 관련 validation 메시지가 재현됐다. 의도한 Debug callback 테스트 메시지와 이 알려진 오류 외 새 validation 메시지는 없었다. Validation 무오류 상태로 기록하지 않는다.
+- Line 입력의 유한성·양수 두께·서로 다른 끝점 검사는 사용자 결정으로 보류했다. 호출자는 유효한 값을 제공한다. 궤적 생성기는 같은 인접 점을 건너뛴다.
+- 이동은 반복당 고정 거리이며 궤적은 최근 64점이다. 시간 기반 이동·샘플링, 선분 join·경계 안티앨리어싱, live resize 중 갱신 개선, 성능 검증은 완료 범위 밖이다.
+
+### 빌드·실행
+
+저장소 루트에서:
+
+```sh
+cmake -S src/vulkan/renderer_project -B src/vulkan/renderer_project/build/dev -DCMAKE_BUILD_TYPE=Debug
+cmake --build src/vulkan/renderer_project/build/dev
+./src/vulkan/renderer_project/build/dev/vulkan_renderer
+```
+
+셰이더는 glslc로 Vulkan 1.3 대상 SPIR-V를 빌드 디렉터리에 생성한다. RENDERER_SHADER_DIR은 절대 빌드 경로이며 현재 실행 계약은 로컬 빌드용이다.
+
+### 후속 범위
+
+Vulkan Client의 실제 입력·상태 연결, Compute Pipeline·GPU 계산과 Graphics 간 데이터/동기화 연결은 부모 #5에서 별도 계획 후 진행한다. 이번 완료 처리로 부모 #5 전체를 완료하지 않는다.
