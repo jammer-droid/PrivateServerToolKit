@@ -24,9 +24,9 @@ namespace
 {
 
 constexpr uint32_t kMaxInstances = 256;
-const InstanceData kInstanceDataArray[3] = {{{50, 50, 100, 100}, {1.0, 0.0, 0.0, 0.75}},
-                                            {{100, 300, 150, 50}, {0.0, 1.0, 0.0, 0.75}},
-                                            {{300, 100, 50, 150}, {0.0, 0.0, 1.0, 0.75}}};
+const InstanceData kInstanceDataArray[3] = {{{50, 50, 100, 100}, {1.0, 0.0, 0.0, 0.75}, Shape::Rectangle},
+                                            {{100, 300, 150, 50}, {0.0, 1.0, 0.0, 0.75}, Shape::Rectangle},
+                                            {{300, 100, 50, 150}, {0.0, 0.0, 1.0, 0.75}, Shape::Circle}};
 
 void RecordFrameCommands(VkCommandBuffer commandBuffer, const Swapchain &swapchain, std::uint32_t imageIndex,
                          const Renderer2D &renderer, std::uint32_t frameIndex)

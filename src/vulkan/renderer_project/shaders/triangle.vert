@@ -2,8 +2,11 @@
 
 layout(location = 0) in vec4 instancePositionAndSize;
 layout(location = 1) in vec4 instanceColor;
+layout(location = 2) in uint instanceShape;
 
 layout(location = 0) out vec4 vertexColor;
+layout(location = 1) out vec2 localPosition;
+layout(location = 2) flat out uint shape;
 
 layout(push_constant, std430) uniform DrawParameters
 {
@@ -34,5 +37,8 @@ void main()
     vec2 ndc = pixelPos / drawParameters.viewportSize.xy * 2.0 - 1.0;
 
     gl_Position = vec4(ndc, 0.0, 1.0);
+
+    localPosition = positions[gl_VertexIndex];
     vertexColor = instanceColor;
+    shape = instanceShape;
 }

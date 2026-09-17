@@ -49,6 +49,14 @@ void Renderer2D::UpdateInstance(std::uint32_t frameIndex, const std::vector<Inst
         throw std::runtime_error("Instance capacity exceeded");
     }
 
+    for (const InstanceData &instance : instances)
+    {
+        if (instance.shape != Shape::Rectangle && instance.shape != Shape::Circle)
+        {
+            throw std::runtime_error("Unsupported shape");
+        }
+    }
+
     HostVisibleBuffer &hostVisibleBuffer = instanceBuffers_[frameIndex];
     hostVisibleBuffer.Write(instances.data(), sizeof(InstanceData) * instances.size());
     instanceCounts_[frameIndex] = static_cast<std::uint32_t>(instances.size());
