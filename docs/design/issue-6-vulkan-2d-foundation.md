@@ -427,3 +427,12 @@ cmake --build src/vulkan/renderer_project/build/release
 - 현재 glslc의 Vulkan 1.3 대상 Fragment SPIR-V는 DemoteToHelperInvocation capability를 선언하지만 Device에서 해당 feature를 활성화하지 않아 보고된 validation 오류가 남는다. 실행 확인은 해당 오류 해소를 의미하지 않는다. 원 추가 커밋과 현재 Fragment 소스가 동일하며 두 소스를 재컴파일해 같은 capability를 확인했다.
 - Line 입력 검사를 보류했으므로 현재는 호출자가 유효한 좌표·양수 두께·서로 다른 끝점을 제공해야 한다. 길이 0인 선분의 normalize 결과에 의존하지 않는다.
 - 다음은 점 목록을 인접한 선분으로 변환하는 궤적과 최소 장면 구성이다. S1-6는 current 상태를 유지한다.
+
+
+### S1-6 궤적과 최소 장면 중간 기록 — 2026-09-17
+
+- BuildTrailInstances는 인접한 점들을 Line instance로 바꾸고 동일한 인접 점은 생략한다. 점 0·1개는 빈 결과다. TrailInstance는 최근 64개 중심점을 보관하여 최대 63개 선분을 생성한다.
+- 첫 번째 사각형의 중심을 기록하고 매 프레임 궤적→장면 도형 순으로 최종 목록을 구성한다. 빈 장면에서도 Renderer를 갱신하여 이전 슬롯의 draw 개수가 남지 않게 했다. 빈 장면에서는 궤적도 그리지 않지만 CPU 점 기록은 유지한다.
+- 사용자 화면에서 고정 3개 선분과 이동 도형 뒤의 궤적을 확인했다. 현재 이동은 반복당 1픽셀이므로 꽉 찬 궤적의 길이는 약 63픽셀이며 시간 기반 속도·샘플링은 구현하지 않았다.
+- Agent가 실제 CPU helper를 추출한 임시 검사로 0·1개 점, 중복 점 생략, 선분 끝점, 64개 기록 제한과 최대 63개 선분을 확인했다. 최종 수정 후 Debug/Release 빌드와 git diff --check 통과. 최종 순서·빈 장면 수정 이후 GUI 실행은 Agent 미수행이다.
+- 다음은 최종 장면의 resize·최소화·복원·종료와 0·최대·초과 instance 경계 검증 및 문서 완료 정리다. 기존 shaderDemoteToHelperInvocation 미활성화와 Line 입력 검사 보류 결정은 유지하며 validation 무오류로 기록하지 않는다. S1-6는 current 상태다.

@@ -22,10 +22,70 @@ using SurfaceHandle = VulkanHandle<VkSurfaceKHR, deleter::VkSurfaceDeleter>;
 namespace
 {
 
+using Point2D = std::array<float, 2>;
+
+struct TrailInstance
+{
+    const std::uint32_t maxPoint = 64;
+
+    std::deque<Point2D> points_;
+    float thickness = 8.0f;
+    std::array<float, 4> trailColor = {0.25f, 0.1f, 0.85f, 0.5f};
+
+    void UpdatePoints(Point2D point)
+    {
+        if (points_.size() >= maxPoint)
+        {
+            points_.pop_front();
+        }
+
+        points_.push_back(point);
+    }
+};
+
 constexpr uint32_t kMaxInstances = 256;
 const InstanceData kInstanceDataArray[3] = {{{50, 50, 100, 100}, {1.0, 0.0, 0.0, 0.75}, Shape::Rectangle},
                                             {{100, 300, 150, 50}, {0.0, 1.0, 0.0, 0.75}, Shape::Line, 20},
                                             {{300, 100, 50, 150}, {0.0, 0.0, 1.0, 0.75}, Shape::Circle}};
+
+std::vector<InstanceData> BuildTrailInstances(const std::deque<Point2D> &points, float thickness,
+                                              const std::array<float, 4> &color)
+{
+    std::vector<InstanceData> trailInstances;
+    std::uint32_t pointCount = static_cast<std::uint32_t>(points.size());
+    if (pointCount == 0 || pointCount == 1)
+    {
+        return trailInstances;
+    }
+
+    for (std::uint32_t i = 0; i < pointCount - 1; i++)
+    {
+        Point2D p1 = points[i];
+        Point2D p2 = points[i + 1];
+
+        if (p1 == p2)
+        {
+            continue;
+        }
+
+        InstanceData data{};
+        data.positionAndSize[0] = p1[0];
+        data.positionAndSize[1] = p1[1];
+        data.positionAndSize[2] = p2[0];
+        data.positionAndSize[3] = p2[1];
+
+        data.color[0] = color[0];
+        data.color[1] = color[1];
+        data.color[2] = color[2];
+        data.color[3] = color[3];
+        data.thickness = thickness;
+        data.shape = Shape::Line;
+
+        trailInstances.push_back(data);
+    }
+
+    return trailInstances;
+}
 
 void RecordFrameCommands(VkCommandBuffer commandBuffer, const Swapchain &swapchain, std::uint32_t imageIndex,
                          const Renderer2D &renderer, std::uint32_t frameIndex)
@@ -172,7 +232,9 @@ int main()
         {
             bool running = true;
             bool recreateSwapchain = false;
-            float deltaX = 0.1f;
+            float deltaX = 1.0f;
+
+            TrailInstance trailInstance;
             while (running)
             {
                 window.PollEvents();
@@ -239,12 +301,24 @@ int main()
                 {
                     throw std::runtime_error("Instance capacity exceeded");
                 }
+
+                std::vector<InstanceData> renderTarget;
                 if (!instances.empty())
                 {
                     instances[0].positionAndSize[0] += deltaX;
-                }
+                    InstanceData trailTarget = instances[0];
+                    float centerX = trailTarget.positionAndSize[0] + (trailTarget.positionAndSize[2] * 0.5f);
+                    float centerY = trailTarget.positionAndSize[1] + (trailTarget.positionAndSize[3] * 0.5f);
+                    Point2D center = {centerX, centerY};
+                    trailInstance.UpdatePoints(center);
+                    std::vector<InstanceData> trailInstances =
+                        BuildTrailInstances(trailInstance.points_, trailInstance.thickness, trailInstance.trailColor);
 
-                renderer.UpdateInstance(currentFrameIndex, instances);
+                    renderTarget.reserve(instances.size() + trailInstances.size());
+                    renderTarget.insert(renderTarget.end(), trailInstances.begin(), trailInstances.end());
+                    renderTarget.insert(renderTarget.end(), instances.begin(), instances.end());
+                }
+                renderer.UpdateInstance(currentFrameIndex, renderTarget);
 
                 std::uint32_t imageIndex = 0;
                 VkSemaphore imageAvailable = frame.GetImageAvailable(currentFrameIndex);
