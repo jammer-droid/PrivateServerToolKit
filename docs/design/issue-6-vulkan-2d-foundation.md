@@ -406,3 +406,13 @@ cmake --build src/vulkan/renderer_project/build/release
 - Write는 0바이트를 허용하고 capacity 초과 및 양수 크기의 null 입력을 복사 전에 거부한다. GPU 사용 중 덮어쓰기 방지는 호출자의 전제조건이며 coherent 메모리가 실행 동기화를 대신하지 않는다.
 - Agent의 Debug/Release 빌드와 git diff --check 통과. 사용자가 주석 추가 후 실행을 확인했다. main의 임시 스코프는 생성·Write·소멸만 수행하며 GPU draw에는 아직 연결하지 않는다. Capacity 초과 호출 및 실패 주입은 별도 실행 증거가 없다.
 - 다음은 FIF별 Instance Buffer와 instance-rate vertex input 연결이다. S1-6는 current 상태를 유지한다.
+
+
+### S1-6 Instancing과 Renderer2D 분리 중간 기록
+
+- 32바이트 InstanceData의 위치·크기와 색상을 instance-rate vertex input으로 읽고, 16바이트 Push Constant에는 viewport 크기만 전달한다. 슬롯별 Fence 대기 후 같은 슬롯 Buffer를 갱신한다. 0개는 배경 렌더링을 유지하고 용량 초과는 업로드 전에 거부한다.
+- Renderer2D가 Pipeline과 FIF별 Instance Buffer·업로드 개수를 소유하며 UpdateInstance와 RecordDraws로 업로드·draw를 담당한다. FrameResources는 Command Buffer·Fence·imageAvailable을 관리한다. main은 Acquire/Submit/Present와 rendering 범위·배리어를 유지한다.
+- Renderer 생성 시 양수 슬롯 수·capacity를 요구하고, 업로드 및 draw에서 슬롯 범위를 검사한다. format 변경은 새 Pipeline 생성·교체 성공 후 상태를 갱신하며 동일 format 요청은 생략한다.
+- Agent의 최종 Debug/Release 빌드와 git diff --check 통과. 사용자가 Renderer 분리 후 실행을 확인했다. 0·최대·초과 각각의 최종 실행 로그와 Pipeline 생성 실패 주입은 별도 증거가 없다.
+- Resize 드래그 중 기존 화면이 늘어나다 종료 후 픽셀 크기로 복귀하는 현상은 이벤트 처리 지연 가능성을 확인했다. GLFW PollEvents의 live resize 중 지연이 유력하지만 계측으로 확정하지는 않았다. 현재 픽셀 좌표 계약은 유지한다.
+- 다음은 instance 종류를 추가하여 사각형 영역의 fragment를 원 모양으로 제한하는 작업이다. 선·궤적은 후속 작업으로 남긴다.

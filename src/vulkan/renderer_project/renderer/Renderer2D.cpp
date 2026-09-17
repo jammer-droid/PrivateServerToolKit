@@ -7,27 +7,60 @@
 
 Renderer2D::Renderer2D(VkPhysicalDevice physicalDevice, VkDevice device, VkFormat colorFormat, std::uint32_t frameCount,
                        std::uint32_t maxInstances, const std::filesystem::path &shaderPath)
-    : physicalDevice_{physicalDevice}, device_{device}, colorFormat_{colorFormat}, frameCount_{frameCount},
-      maxInstances_{maxInstances}, shaderPath_{shaderPath}
+    : device_{device}, colorFormat_{colorFormat}, frameCount_{frameCount}, maxInstances_{maxInstances},
+      shaderPath_{shaderPath}
 {
+    if (frameCount == 0 || maxInstances == 0)
+    {
+        throw std::runtime_error("Invalid frameCount or maxInstances.\n");
+    }
+
     graphicsPipelineOwner_ = std::make_unique<GraphicsPipeline>(device, colorFormat, shaderPath);
 
-    std::uint32_t capacityBytes = sizeof(InstanceData) * maxInstances;
+    instanceCounts_.resize(frameCount, 0);
+    VkDeviceSize capacityBytes = sizeof(InstanceData) * maxInstances;
     for (std::uint32_t i = 0; i < frameCount; i++)
     {
         instanceBuffers_.emplace_back(physicalDevice, device, capacityBytes);
     }
 }
 
+void Renderer2D::UpdateColorFormat(VkFormat colorFormat)
+{
+    if (colorFormat_ == colorFormat)
+    {
+        return;
+    }
+    std::unique_ptr<GraphicsPipeline> newGraphicsPipeline =
+        std::make_unique<GraphicsPipeline>(device_, colorFormat, shaderPath_);
+
+    graphicsPipelineOwner_.swap(newGraphicsPipeline);
+    colorFormat_ = colorFormat;
+}
+
 void Renderer2D::UpdateInstance(std::uint32_t frameIndex, const std::vector<InstanceData> &instances)
 {
-    instanceCount_ = static_cast<std::uint32_t>(instances.size());
+    if (frameIndex >= instanceCounts_.size())
+    {
+        throw std::runtime_error("Invalid frame index");
+    }
+    if (instances.size() > maxInstances_)
+    {
+        throw std::runtime_error("Instance capacity exceeded");
+    }
+
     HostVisibleBuffer &hostVisibleBuffer = instanceBuffers_[frameIndex];
     hostVisibleBuffer.Write(instances.data(), sizeof(InstanceData) * instances.size());
+    instanceCounts_[frameIndex] = static_cast<std::uint32_t>(instances.size());
 }
 
 void Renderer2D::RecordDraws(VkCommandBuffer commandBuffer, VkExtent2D extent, std::uint32_t frameIndex) const
 {
+    if (frameIndex >= instanceCounts_.size())
+    {
+        throw std::runtime_error("Invalid frame index");
+    }
+
     // Draw 명령을 사용할 Pipeline 바인딩
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelineOwner_->GetPipeline());
 
@@ -56,5 +89,5 @@ void Renderer2D::RecordDraws(VkCommandBuffer commandBuffer, VkExtent2D extent, s
     vkCmdPushConstants(commandBuffer, graphicsPipelineOwner_->GetPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, 0,
                        sizeof(DrawPushConstants), &pushConstants);
 
-    vkCmdDraw(commandBuffer, 6, instanceCount_, 3, 0);
+    vkCmdDraw(commandBuffer, 6, instanceCounts_[frameIndex], 3, 0);
 }

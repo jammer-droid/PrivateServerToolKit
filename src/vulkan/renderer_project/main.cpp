@@ -167,7 +167,7 @@ int main()
 
         std::vector<InstanceData> instances{kInstanceDataArray[0], kInstanceDataArray[1], kInstanceDataArray[2]};
         Renderer2D renderer(selection.physicalDevice, context.GetDevice(), swapchainSetting.surfaceFormat.format,
-                            FrameResources::FramesInFlight(), instances.size(), shaderDir);
+                            FrameResources::FramesInFlight(), kMaxInstances, shaderDir);
 
         try
         {
@@ -214,12 +214,7 @@ int main()
                         swapchainSupport.capabilities, swapchainOwner->GetSwapchain());
                     swapchainOwner.swap(newSwapchain);
 
-                    if (prevFormat != swapchainSetting.surfaceFormat.format)
-                    {
-                        std::unique_ptr<GraphicsPipeline> newGraphicsPipeline = std::make_unique<GraphicsPipeline>(
-                            context.GetDevice(), swapchainSetting.surfaceFormat.format, shaderDir);
-                        renderer.GraphicsPipelineOwner().swap(newGraphicsPipeline);
-                    }
+                    renderer.UpdateColorFormat(swapchainSetting.surfaceFormat.format);
 
                     window.ClearFramebufferResized();
                     recreateSwapchain = false;
