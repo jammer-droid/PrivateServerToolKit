@@ -16,6 +16,8 @@ add_executable(vulkan_renderer
     core/GraphicsPipeline.cpp
     core/HostVisibleBuffer.cpp
 
+    renderer/Renderer2D.cpp
+
     app/Window.cpp
 )
 

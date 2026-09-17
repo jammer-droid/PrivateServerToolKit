@@ -2,7 +2,6 @@
 
 #include "common/VulkanHeaders.h"
 #include "common/VulkanHandle.h"
-#include "core/HostVisibleBuffer.h"
 
 #include <deque>
 
@@ -10,8 +9,8 @@ class FrameResources
 {
   public:
     explicit FrameResources(VkDevice device, std::uint32_t queueFamilyIndex);
-    explicit FrameResources(VkDevice device, std::uint32_t queueFamilyIndex, VkPhysicalDevice physicalDevice,
-                            VkDeviceSize capacityBytes);
+    // explicit FrameResources(VkDevice device, std::uint32_t queueFamilyIndex, VkPhysicalDevice physicalDevice,
+    //                         VkDeviceSize capacityBytes);
 
     ~FrameResources() = default;
 
@@ -34,9 +33,9 @@ class FrameResources
     {
         frameIndex++;
     }
-    inline HostVisibleBuffer &GetInstanceBuffer(std::uint32_t index) noexcept
+    static inline const std::uint32_t FramesInFlight() noexcept
     {
-        return instanceBuffers_[index];
+        return kFramesInFlight;
     }
 
     std::uint32_t GetFrameIndex() const noexcept;
@@ -53,7 +52,6 @@ class FrameResources
 
     std::deque<FenceHandle> fenceHandles_;
     std::deque<SemaphoreHandle> imageAvailableSemaphoreHandles_;
-    std::deque<HostVisibleBuffer> instanceBuffers_;
 
     std::uint32_t frameIndex = 0;
 };
