@@ -3,6 +3,7 @@
 layout(location = 0) in vec4 instancePositionAndSize;
 layout(location = 1) in vec4 instanceColor;
 layout(location = 2) in uint instanceShape;
+layout(location = 3) in float instanceThickness;
 
 layout(location = 0) out vec4 vertexColor;
 layout(location = 1) out vec2 localPosition;
@@ -30,9 +31,27 @@ const vec2 positions[9] = vec2[](
         vec2(0.0, 1.0)
     );
 
+const uint ShapeLine = 2u;
+
 void main()
 {
-    vec2 pixelPos = instancePositionAndSize.xy + positions[gl_VertexIndex] * instancePositionAndSize.zw;
+    vec2 local = positions[gl_VertexIndex];
+    vec2 pixelPos;
+
+    if (instanceShape == ShapeLine)
+    {
+        vec2 start = instancePositionAndSize.xy;
+        vec2 end = instancePositionAndSize.zw;
+
+        vec2 dir = normalize(end - start);
+        vec2 normal = vec2(-dir.y, dir.x);
+
+        pixelPos = mix(start, end, local.x) + normal * ((local.y - 0.5) * instanceThickness);
+    }
+    else
+    {
+        pixelPos = instancePositionAndSize.xy + local * instancePositionAndSize.zw;
+    }
 
     vec2 ndc = pixelPos / drawParameters.viewportSize.xy * 2.0 - 1.0;
 

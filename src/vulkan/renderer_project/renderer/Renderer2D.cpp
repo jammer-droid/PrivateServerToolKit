@@ -51,7 +51,7 @@ void Renderer2D::UpdateInstance(std::uint32_t frameIndex, const std::vector<Inst
 
     for (const InstanceData &instance : instances)
     {
-        if (instance.shape != Shape::Rectangle && instance.shape != Shape::Circle)
+        if (instance.shape != Shape::Rectangle && instance.shape != Shape::Circle && instance.shape != Shape::Line)
         {
             throw std::runtime_error("Unsupported shape");
         }

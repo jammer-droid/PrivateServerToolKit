@@ -58,16 +58,17 @@ GraphicsPipeline::GraphicsPipeline(VkDevice device, VkFormat colorFormat, const 
     vertexInstanceBinding.stride = sizeof(InstanceData);
     vertexInstanceBinding.inputRate = VK_VERTEX_INPUT_RATE_INSTANCE;
 
-    VkVertexInputAttributeDescription vertexAttributes[3]{
+    VkVertexInputAttributeDescription vertexAttributes[4]{
         {0, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(InstanceData, positionAndSize)},
         {1, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(InstanceData, color)},
-        {2, 0, VK_FORMAT_R32_UINT, offsetof(InstanceData, shape)}};
+        {2, 0, VK_FORMAT_R32_UINT, offsetof(InstanceData, shape)},
+        {3, 0, VK_FORMAT_R32_SFLOAT, offsetof(InstanceData, thickness)}};
 
     VkPipelineVertexInputStateCreateInfo vertexInputStateCI{};
     vertexInputStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertexInputStateCI.vertexBindingDescriptionCount = 1; // 버텍스 버퍼를 읽는 규칙
     vertexInputStateCI.pVertexBindingDescriptions = &vertexInstanceBinding;
-    vertexInputStateCI.vertexAttributeDescriptionCount = 3; // 버텍스 셰이더의 입력 속성
+    vertexInputStateCI.vertexAttributeDescriptionCount = 4; // 버텍스 셰이더의 입력 속성
     vertexInputStateCI.pVertexAttributeDescriptions = vertexAttributes;
 
     // 버텍스를 어떤 규칙으로 묶어 점/선/삼각형을 만들지 결정. 이렇게 만드는 도형을 Primitiv라고 부름

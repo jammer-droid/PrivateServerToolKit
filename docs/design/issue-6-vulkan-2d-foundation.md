@@ -416,3 +416,14 @@ cmake --build src/vulkan/renderer_project/build/release
 - Agent의 최종 Debug/Release 빌드와 git diff --check 통과. 사용자가 Renderer 분리 후 실행을 확인했다. 0·최대·초과 각각의 최종 실행 로그와 Pipeline 생성 실패 주입은 별도 증거가 없다.
 - Resize 드래그 중 기존 화면이 늘어나다 종료 후 픽셀 크기로 복귀하는 현상은 이벤트 처리 지연 가능성을 확인했다. GLFW PollEvents의 live resize 중 지연이 유력하지만 계측으로 확정하지는 않았다. 현재 픽셀 좌표 계약은 유지한다.
 - 다음은 instance 종류를 추가하여 사각형 영역의 fragment를 원 모양으로 제한하는 작업이다. 선·궤적은 후속 작업으로 남긴다.
+
+
+### S1-6 원·선분 표현 중간 기록 — 2026-09-17
+
+- InstanceData에 Shape 구분을 추가하여 사각형·원/타원을 같은 draw에서 처리한다. Fragment Shader는 보간한 로컬 좌표로 원 밖을 discard한다. 종류 값은 R32_UINT 입력과 flat 출력으로 전달한다.
+- Line은 positionAndSize를 시작점·끝점으로 해석하고 offset 36의 thickness를 사용한다. 전체 stride는 48바이트를 유지한다. Vertex Shader에서 픽셀 공간의 방향·수직 벡터로 두께 있는 사각형을 구성하며, 양 끝은 평평하게 끝난다.
+- 초기화 전 출력 변수를 읽던 분기를 instanceShape 입력으로 수정하고 Renderer의 허용 종류에 Line을 추가했다. Agent의 최종 Debug 빌드와 git diff --check 통과. 사용자가 실행을 확인했다.
+- **사용자 결정으로 보류:** shaderDemoteToHelperInvocation 지원 확인·활성화와 Line 입력의 유한성·양수 두께·서로 다른 끝점 검사를 이번 커밋에서 추가하지 않는다.
+- 현재 glslc의 Vulkan 1.3 대상 Fragment SPIR-V는 DemoteToHelperInvocation capability를 선언하지만 Device에서 해당 feature를 활성화하지 않아 보고된 validation 오류가 남는다. 실행 확인은 해당 오류 해소를 의미하지 않는다. 원 추가 커밋과 현재 Fragment 소스가 동일하며 두 소스를 재컴파일해 같은 capability를 확인했다.
+- Line 입력 검사를 보류했으므로 현재는 호출자가 유효한 좌표·양수 두께·서로 다른 끝점을 제공해야 한다. 길이 0인 선분의 normalize 결과에 의존하지 않는다.
+- 다음은 점 목록을 인접한 선분으로 변환하는 궤적과 최소 장면 구성이다. S1-6는 current 상태를 유지한다.
