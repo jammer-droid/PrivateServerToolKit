@@ -9,6 +9,7 @@ include(GenerateExportHeader)
 find_package(Vulkan REQUIRED COMPONENTS glslc)
 find_package(glfw3 REQUIRED CONFIG)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
+find_package(glm CONFIG REQUIRED)
 
 add_library(vulkan_runtime SHARED
     common/VulkanException.cpp
@@ -66,6 +67,8 @@ target_link_libraries(
     PRIVATE
     Vulkan::Vulkan
     glfw
+    PUBLIC
+    glm::glm
 )
 
 # install 시에 내보낼 타겟을 목록에 등록
@@ -81,13 +84,16 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/generated/VulkanRuntimeExport.h"
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
-install(FILES app/Application.h app/IGame.h
+install(
+    FILES app/Application.h app/IGame.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/runtime/app
 )
-install(FILES renderer/DrawData2D.h
+install(
+    FILES renderer/DrawData2D.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/runtime/renderer
 )
-install(FILES common/ClassTraits.h
+install(
+    FILES common/ClassTraits.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/runtime/common
 )
 

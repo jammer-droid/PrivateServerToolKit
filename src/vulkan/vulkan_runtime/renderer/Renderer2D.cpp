@@ -64,17 +64,17 @@ void Renderer2D::UpdateDrawData(std::uint32_t frameIndex, DrawData2DView drawDat
         case DrawShape2D::Rectangle:
         case DrawShape2D::Circle:
             instance.shape = item.shape == DrawShape2D::Rectangle ? Shape::Rectangle : Shape::Circle;
-            instance.positionAndSize[0] = item.geometry.rect.x;
-            instance.positionAndSize[1] = item.geometry.rect.y;
-            instance.positionAndSize[2] = item.geometry.rect.width;
-            instance.positionAndSize[3] = item.geometry.rect.height;
+            instance.positionAndSize[0] = item.geometry.rect.position.x;
+            instance.positionAndSize[1] = item.geometry.rect.position.y;
+            instance.positionAndSize[2] = item.geometry.rect.size.x;
+            instance.positionAndSize[3] = item.geometry.rect.size.y;
             break;
         case DrawShape2D::Line:
             instance.shape = Shape::Line;
-            instance.positionAndSize[0] = item.geometry.line.startX;
-            instance.positionAndSize[1] = item.geometry.line.startY;
-            instance.positionAndSize[2] = item.geometry.line.endX;
-            instance.positionAndSize[3] = item.geometry.line.endY;
+            instance.positionAndSize[0] = item.geometry.line.start.x;
+            instance.positionAndSize[1] = item.geometry.line.start.y;
+            instance.positionAndSize[2] = item.geometry.line.end.x;
+            instance.positionAndSize[3] = item.geometry.line.end.y;
             break;
         default:
             throw std::runtime_error("Unsupported draw shape");

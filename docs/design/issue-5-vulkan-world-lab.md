@@ -2,7 +2,7 @@
 
 - Issue: [Vulkan World Lab: 독립 렌더러와 대규모 투사체·AOI·군중 이동](https://github.com/jammer-droid/PrivateServerToolKit/issues/5)
 - 선행 결과: [#6 Vulkan 2D 렌더러 기반 학습](issue-6-vulkan-2d-foundation.md), S1-1~S1-6 완료.
-- 상태: S2-1 실행 구조 완료. 클라이언트 기반 1/6 완료, 다음은 S2-2 수학·ECS다. 상세 구현 계약은 단계 진입 시 확정한다.
+- 상태: S2-1 실행 구조 완료. 클라이언트 기반 1/6 완료, 현재 S2-2 수학·ECS의 GLM 공통 타입 도입을 진행 중이다. 상세 구현 계약은 단계 진입 시 확정한다.
 - 진행 방식: 사용자가 직접 구현하고 agent가 개념 안내와 코드·실행 검토를 담당한다. 문서 작성은 구현 위임이 아니다.
 
 ## 목표와 범위
@@ -80,11 +80,24 @@ S0의 보존 작업과 S2의 구조 설계는 독립적으로 진행할 수 있�
 
 ### S2-2 — 수학과 ECS
 
+- **현재 진행:** GLM을 app/runtime/공개 API의 공통 수학 타입으로 채택했다. DrawData2D의 위치·크기·끝점은 glm::vec2, 색상은 glm::vec4다. WorldSandbox도 같은 DrawItem2D를 보관해 별도 RectState/LineState와 ToDrawItem2D 변환을 제거했다. GPU InstanceData의 48바이트 계약은 유지하며 runtime에서 명시적으로 패킹한다.
+- **이번 검증:** 기존 dev preset의 runtime 빌드·설치와 앱 빌드 통과. CPU 검증에서 초기 도형/색상/두께, 100회 갱신의 위치·중심점·궤적 순서와 최대 63선분, 조회 사이 뷰 유효성을 확인했다. ASan/UBSan 진단 없음. 최종 공통 타입 변경에서는 installed target의 glm::glm 공개 의존성과 Config의 find_dependency(glm CONFIG)를 확인했다. 공개 헤더 소비자의 렌더링·경로 오류·Game 예외 전달 smoke도 통과했으며 VUID 오류는 없었다. 화면 비교·resize는 이번에 재검증하지 않았다.
+- **남은 범위:** 방향·0 길이 정규화 정책의 학습/검증과 ECS 구현은 아직 완료하지 않았다. runtime은 GLM 빌드 연결만 준비했으며 실제 계산 사용은 필요한 기능에서 추가한다.
+
 - **선행/학습:** S2-1. 벡터·기하 연산과 Entity 식별·수명, Component 저장, System 갱신을 직접 구현한다.
 - **결과/seam:** CPU 수학 타입, EntityManager와 기본 Transform/표현 데이터, 월드 데이터에서 렌더링 입력을 추출하는 경계.
 - **불변식:** ECS가 Vulkan 핸들의 소유자가 되지 않는다. CPU 타입과 GPU 전송 layout을 동일하다고 가정하지 않는다. 생성·제거와 순회 중 변경의 적용 시점을 정의한다.
 - **완료/검증:** ECS로 도형을 생성·이동·제거한다. 0 길이 벡터, 기본 연산, 빈 월드, 제거 후 ID 접근 및 ID 재사용 정책을 작은 독립 사례로 확인한다.
 - **남은 결정:** 직접 작성할 수학 연산과 외부 수학 라이브러리의 범위, ECS 저장 구조와 ID 정책. 특정 ECS 라이브러리로 직접 구현을 대체하지 않는다.
+
+### S2-2 GLM 공개 계약
+
+- runtime은 glm::glm을 PUBLIC으로 연결하고 Config에서 find_dependency(glm CONFIG)를 수행한다. 앱은 runtime 패키지를 통해 GLM 요구사항을 전달받으며 별도 중복 find/link 설정은 제거한다.
+- 앱/runtime은 같은 GLM 버전과 타입 배치에 영향을 주는 매크로 설정을 사용한다. 이 SDK는 서로 다른 GLM 설정 사이의 binary compatibility를 보장하지 않으며 API 변경 후 양쪽을 재빌드한다.
+- GeometryData2D는 rect/line union을 유지한다. GLM 멤버의 초기화와 활성 멤버를 명확하게 하기 위해 typed 생성자를 두며, line으로 전환할 때 LineData2D로 생성한 GeometryData2D 값을 대입한다. shape만 바꿔 inactive 멤버를 읽지 않는다.
+- Game은 공개 DrawItem2D 값을 직접 갱신하고 최종 표시 배열에 복사한다. 목록 구성과 GPU 업로드 복사는 남지만 GLM을 숨기기 위한 별도 API 값 변환은 제거했다. GPU InstanceData로 reinterpret_cast/memcpy하는 것은 허용하지 않는다.
+- **후속 방향:** GPU 전달 구조체의 벡터 필드도 GLM 타입으로 통일한다. 이번 변경에서는 기존 primitive 기반 InstanceData를 유지한다. 전환 시 sizeof/offsetof와 static_assert로 크기·offset을 검증하고 Vulkan attribute format 및 셰이더 입력 계약을 일치시킨다. 공개 DrawItem2D와 GPU 전송 구조체의 역할 구분은 유지한다.
+- 기존 dev preset 빌드·설치 및 앱 링크, ASan/UBSan을 적용한 100회 상태 검증 통과. 임시 검증 소스/로그는 앱 build/dev의 glm-state-check.cpp, glm-api-check.log에 있다. 성능 측정이나 버퍼 재사용 최적화는 이번 변경에 포함하지 않는다.
 
 ### S2-3 — 상호작용과 시뮬레이션 시간
 
@@ -161,7 +174,7 @@ S0의 보존 작업과 S2의 구조 설계는 독립적으로 진행할 수 있�
 
 ## 다음 결정과 첫 실험
 
-1. **S2-2 다음:** GLM을 내부 계산에 도입하고 WorldSandbox의 좌표 계산에서 공개 DrawItem2D로 변환하는 경계를 정한다. API에 GLM 타입은 노출하지 않는다. 이후 ECS 식별·저장·갱신 계약을 구체화한다.
+1. **S2-2 다음:** GLM 공통 타입 사용을 기반으로 방향·0 길이 정규화 정책을 확인하고 ECS 식별·저장·갱신 계약을 구체화한다. GLM은 공개 API에서 허용하지만 Vulkan 타입과 GPU 전송 layout은 내부에 둔다.
 2. **S0 및 관련 화면 구현 전:** 시안 보존 위치와 조작·구역 정책을 정리한다. 새로 정해야 하는 범위를 기존 시안과 구분한다.
 3. **각 단계에서 결정:** 수학 라이브러리 경계, ECS 저장 구조, 고정 틱, 리소스 ID, graph 모델과 profiler 형식은 위 단계의 미정 목록을 따른다.
 4. **S3~S6 상세 설계까지 보류:** 시나리오별 부하·정확성, AOI 정책 전환, 충돌 동률, 군중 경로/회피 모델과 CPU/GPU 역할 분담. 상위 이슈의 필수 시나리오는 유지한다.

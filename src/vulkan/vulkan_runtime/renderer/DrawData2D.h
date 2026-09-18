@@ -1,5 +1,8 @@
 #pragma once
 
+#include <glm/vec2.hpp>
+#include <glm/vec4.hpp>
+
 #include <cstddef>
 #include <cstdint>
 
@@ -13,19 +16,27 @@ enum class DrawShape2D : std::uint32_t
 union GeometryData2D {
     struct RectData2D
     {
-        float x; // left top x
-        float y; // left top y
-        float width;
-        float height;
-    } rect{};
+        glm::vec2 position{0.0f}; // left top, framebuffer pixels
+        glm::vec2 size{0.0f};
+    } rect;
 
     struct LineData2D
     {
-        float startX;
-        float startY;
-        float endX;
-        float endY;
+        glm::vec2 start{0.0f};
+        glm::vec2 end{0.0f};
     } line;
+
+    GeometryData2D() : rect{}
+    {
+    }
+
+    explicit GeometryData2D(RectData2D value) : rect{value}
+    {
+    }
+
+    explicit GeometryData2D(LineData2D value) : line{value}
+    {
+    }
 };
 
 struct DrawItem2D
@@ -34,8 +45,8 @@ struct DrawItem2D
 
     GeometryData2D geometry{};
 
-    float color[4]{1.0f, 1.0f, 1.0f, 1.0f}; // RGBA, straight alpha
-    float thickness{1.0f};                  // 선분의 두께, framebuffer 픽셀 단위
+    glm::vec4 color{1.0f}; // RGBA, straight alpha
+    float thickness{1.0f}; // 선분의 두께, framebuffer 픽셀 단위
 };
 
 struct DrawData2DView

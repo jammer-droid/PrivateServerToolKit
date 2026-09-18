@@ -1,6 +1,6 @@
 #pragma once
 
-#include "renderer/DrawData2D.h"
+struct DrawData2DView;
 
 class IGame
 {

@@ -1,5 +1,8 @@
 @PACKAGE_INIT@
 
+include(CMakeFindDependencyMacro)
+find_dependency(glm CONFIG)
+
 set_and_check(VulkanRuntime_BUILTIN_SHADER_DIR "@PACKAGE_VULKAN_RUNTIME_SHADER_INSTALL_DIR@")
 
 set_and_check(VulkanRuntime_SHADER_ROOT "@PACKAGE_VULKAN_RUNTIME_SHADER_ROOT_INSTALL_DIR@")

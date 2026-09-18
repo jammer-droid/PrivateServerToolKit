@@ -1,8 +1,10 @@
 #pragma once
 
 #include "runtime/app/IGame.h"
+#include "runtime/renderer/DrawData2D.h"
 
-#include <array>
+#include <glm/glm.hpp>
+
 #include <cstddef>
 #include <deque>
 #include <vector>
@@ -20,10 +22,11 @@ class WorldSandbox final : public IGame
   private:
     void RebuildDrawData();
 
-    using Point2D = std::array<float, 2>;
     static constexpr std::size_t MaxTrailPoints = 64;
 
-    std::vector<DrawItem2D> baseItems_;
-    std::deque<Point2D> trailPoints_;
+    DrawItem2D rectangle_;
+    DrawItem2D circle_;
+    DrawItem2D line_;
+    std::deque<glm::vec2> trailPoints_;
     std::vector<DrawItem2D> drawItems_;
 };
