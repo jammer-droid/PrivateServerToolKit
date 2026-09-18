@@ -167,6 +167,8 @@ renderer_project/
 
 ## 후속 구현 방향
 
+후속 기본 흐름과 단계별 Vulkan 확장 목록은 [#5 World Lab 계획](issue-5-vulkan-world-lab.md)에서 관리한다. 이 문서는 완료한 기반 학습의 계약과 검증 기록을 유지한다.
+
 - 수학: CPU의 벡터·기하 연산과 월드/카메라/화면 좌표 변환을 제공하고 GPU 전송 데이터 배치와 분리한다.
 - 월드: Entity 수명과 Component·System을 직접 구현하고 입력 Action, 고정 틱, 재현 가능한 입력·상태 흐름을 구성한다.
 - 렌더링: 월드에서 추출한 프레임 데이터를 Renderer에 전달한다. 다중 패스의 리소스 사용·의존성·상태 전환을 Render Graph로 표현한다.
