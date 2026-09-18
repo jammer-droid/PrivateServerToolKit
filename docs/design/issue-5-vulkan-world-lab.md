@@ -75,6 +75,7 @@ S0의 보존 작업과 S2의 구조 설계는 독립적으로 진행할 수 있�
 - **현재 작은 작업:** SHARED 전환과 WorldSandbox 연결 이후 Application/Pimpl로 실행 루프를 옮겼다. 앱 소스는 Game·설정·Run 호출만 사용한다. SDK는 공개 헤더 5개만 설치하며 Vulkan/GLFW는 PRIVATE 링크 의존성이다. 내부 클래스 8개의 export를 제거했다. Application 공개 함수와 현재 예외 전달용 VulkanException의 export는 유지한다.
 - **셰이더:** 현재 `7daf3cc`의 asset 구성에 따라 runtime이 builtin 소스를 컴파일·설치하고, 앱 asset 타깃이 실행 파일 옆 `shaders/runtime`에 복사한다. 앱의 추가 셰이더는 별도로 컴파일한다. 세부 빌드 동작은 [스크립트 사용법](../../src/vulkan/script/README.md)을 따른다. 앱은 builtin 경로를 `ApplicationConfig::shaderDirectory`로 전달하고 Application이 즉시 복사한다. 최초 앱 컴파일/공유 출력 경로 구성에서 이 방식으로 갱신됐다.
 - **빌드:** 아래 독립 빌드·패키지 사용 절차를 따른다. 각 프로젝트의 `.clangd`는 자신의 `build/dev/compile_commands.json`을 참조한다. 앱 빌드는 runtime 소스를 다시 컴파일하지 않는다.
+- **SDK include 접두사:** 앱은 `runtime/app/Application.h`, `runtime/app/IGame.h`처럼 설치 헤더를 구분한다. 원본 헤더는 runtime의 기존 app/common/renderer 폴더에 유지하고, 설치 경로만 `include/runtime/`으로 둔다. 설치 타깃은 `${prefix}/include`와 `${prefix}/include/runtime`을 모두 전달한다. 따라서 앱은 `runtime/...`으로 구분하고, 공개 헤더 내부에서는 기존 `common/...`, `renderer/...` 참조를 유지한다. 접두사는 앱의 표기 규칙이며, 두 검색 경로를 제공하므로 접두사 없는 include를 기술적으로 금지하지는 않는다. 생성된 `VulkanRuntimeExport.h`는 기존 SDK include 루트에 유지한다. 이 변경은 기존 dev preset의 runtime build/install과 앱 build로 검증했다.
 - **현재 패키지:** Application/IGame/DrawData2D/ClassTraits와 생성된 export 헤더만 설치한다. 패키지 config는 Vulkan/GLFW 개발 패키지를 찾지 않는다. 예외 타입 export와 build-tree include 노출은 남아 있으며, 장기 ABI 안정성을 약속하는 배포 API는 아니다.
 
 ### S2-2 — 수학과 ECS
@@ -264,6 +265,8 @@ cmake --build --preset dev
 - 다음 단계는 S2-2다. S0와 S2-2~S2-6 및 S3~S7은 완료되지 않았다.
 
 ## 변경 기록
+
+- SDK 헤더 설치 경로에 `runtime/` 접두사를 추가했다. 앱의 include를 변경하고 runtime 소스 배치는 유지했다. 두 INSTALL_INTERFACE 경로가 설치된 타깃에 전달되는 것을 확인했으며, 기존 dev preset의 runtime 빌드·설치와 앱 빌드가 통과했다.
 
 - S2-1 후속: 패키지 분리 커밋 `94244c9` 이후 SHARED·명시적 export·runtime 측 소멸자·소비자 로딩 경로를 추가했다.
 

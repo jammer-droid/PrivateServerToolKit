@@ -1,6 +1,6 @@
 #pragma once
 
-#include "app/IGame.h"
+#include "runtime/app/IGame.h"
 
 #include <array>
 #include <cstddef>

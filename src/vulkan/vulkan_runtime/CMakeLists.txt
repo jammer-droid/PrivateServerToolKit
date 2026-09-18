@@ -58,6 +58,7 @@ target_include_directories(
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/runtime>
 )
 
 target_link_libraries(
@@ -81,13 +82,13 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/generated/VulkanRuntimeExport.h"
 )
 
 install(FILES app/Application.h app/IGame.h
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/app
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/runtime/app
 )
 install(FILES renderer/DrawData2D.h
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/renderer
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/runtime/renderer
 )
 install(FILES common/ClassTraits.h
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/common
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/runtime/common
 )
 
 set(VULKAN_RUNTIME_BUILTIN_SHADER_DIR "${CMAKE_CURRENT_BINARY_DIR}/shaders/runtime")
