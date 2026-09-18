@@ -535,6 +535,11 @@ PhysicalDeviceSelection VulkanContext::SelectPhysicalDevice(VkSurfaceKHR surface
             std::cout << "Skipped: synchronization2 is not supported\n";
             continue;
         }
+        if (features13.shaderDemoteToHelperInvocation != VK_TRUE)
+        {
+            std::cout << "Skipped: shaderDemoteToHelperInvocation is not supported\n";
+            continue;
+        }
 
         // device에서 지원하는 Queue Family를 순회하여 graphics, present를 만족하는 queue 반환
         const std::optional<QueueFamilySelection> queues = FindQueueFamilies(device, surface);
@@ -563,6 +568,7 @@ void VulkanContext::InitializeDevice(const PhysicalDeviceSelection &selection)
     enabledFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
     enabledFeatures.dynamicRendering = VK_TRUE;
     enabledFeatures.synchronization2 = VK_TRUE;
+    enabledFeatures.shaderDemoteToHelperInvocation = VK_TRUE;
 
     VkDeviceCreateInfo deviceCreateInfo{};
     deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;

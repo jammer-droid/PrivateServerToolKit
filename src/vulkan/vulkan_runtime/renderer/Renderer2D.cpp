@@ -38,6 +38,60 @@ void Renderer2D::UpdateColorFormat(VkFormat colorFormat)
     colorFormat_ = colorFormat;
 }
 
+void Renderer2D::UpdateDrawData(std::uint32_t frameIndex, DrawData2DView drawData)
+{
+    if (frameIndex >= instanceCounts_.size())
+    {
+        throw std::runtime_error("Invalid frame index");
+    }
+    if (drawData.count > maxInstances_)
+    {
+        throw std::runtime_error("Instance capacity exceeded");
+    }
+    if (drawData.count > 0 && drawData.items == nullptr)
+    {
+        throw std::runtime_error("Draw data is null");
+    }
+
+    std::vector<InstanceData> instances;
+    instances.reserve(drawData.count);
+    for (std::size_t index = 0; index < drawData.count; ++index)
+    {
+        const DrawItem2D &item = drawData.items[index];
+        InstanceData instance{};
+        switch (item.shape)
+        {
+        case DrawShape2D::Rectangle:
+        case DrawShape2D::Circle:
+            instance.shape = item.shape == DrawShape2D::Rectangle ? Shape::Rectangle : Shape::Circle;
+            instance.positionAndSize[0] = item.geometry.rect.x;
+            instance.positionAndSize[1] = item.geometry.rect.y;
+            instance.positionAndSize[2] = item.geometry.rect.width;
+            instance.positionAndSize[3] = item.geometry.rect.height;
+            break;
+        case DrawShape2D::Line:
+            instance.shape = Shape::Line;
+            instance.positionAndSize[0] = item.geometry.line.startX;
+            instance.positionAndSize[1] = item.geometry.line.startY;
+            instance.positionAndSize[2] = item.geometry.line.endX;
+            instance.positionAndSize[3] = item.geometry.line.endY;
+            break;
+        default:
+            throw std::runtime_error("Unsupported draw shape");
+        }
+
+        for (std::size_t component = 0; component < 4; ++component)
+        {
+            instance.color[component] = item.color[component];
+        }
+        instance.thickness = item.thickness;
+        instances.push_back(instance);
+    }
+
+    // 전체 입력 검증·변환 후 업로드한다. 빈 입력도 프레임의 도형 개수를 갱신한다.
+    UpdateInstance(frameIndex, instances);
+}
+
 void Renderer2D::UpdateInstance(std::uint32_t frameIndex, const std::vector<InstanceData> &instances)
 {
     if (frameIndex >= instanceCounts_.size())
