@@ -15,16 +15,13 @@ Instance부터 Graphics Pipeline 기반 2D 렌더러까지 직접 구성하면�
 
 제외: Compute Pipeline, 기존 Compute 실습의 사전 리팩터링, GPU 계산 백엔드, AOI·충돌·군중 계산, 실제 플레이어 이동·추적 카메라·미니맵, 성능 벤치마크, 범용 엔진과 에셋 파이프라인. 표시용 궤적은 준비된 데이터로 검증한다.
 
-## 현재 근거와 상위 계획 조정
+## 현재 상태와 상위 계획 관계
 
-- 최초 검토한 `src/vulkan/main.cpp`는 780줄의 Compute 실습이다. Instance/Device, Buffer/Memory, Descriptor, Compute Pipeline, Command Buffer/Fence와 순차 작업 검증이 한 함수에 있다. 이를 참고 자료로 보존하며 Graphics 구현의 완료 증거로 간주하지 않는다.
-- 최초 검토한 `src/vulkan/CMakeLists.txt`는 C++17 및 Vulkan을 사용하는 독립 실행 타깃이다. 창·Surface·Swapchain·Graphics Pipeline은 아직 없다.
-- 기존 코드는 Vulkan 1.3을 요청하고 MoltenVK를 선택하며 Compute Queue를 찾는다. 새 경로는 Surface에 대한 Present 지원과 Graphics 지원을 확인해야 한다.
-- 기존 이슈 #5는 S0 → S1 순서였으나 사용자는 이번 기반 학습을 우선하기로 했다. 이 서브 이슈는 S0 완료를 선행 조건으로 두지 않는다. S0 보존 작업은 미완료로 남으며 부모의 완료 조건을 축소하지 않는다.
-- 부모의 S1 ID는 유지한다. 아래 S1-1~S1-6은 본 서브 이슈가 소유하는 하위 단계다. 부모 S2~S7은 이 문서에서 재정의하지 않는다.
-- 문서 작성 시 코드 실행 검증은 수행하지 않았다. 기존 실행에 대한 부모 이슈 기록과 이번 실행 증거는 구분한다.
-
-문서 작성 중 worktree에서 기존 파일들이 `src/vulkan/compute_project/` 아래로 이동한 상태를 확인했다. 이 이동은 이번 문서 작업의 변경이 아니며 보존한다. 다음 안내에서는 해당 경로의 Compute 실습을 참고하고 Graphics 실행 골격은 별도로 구성한다. 이동 후 빌드·실행은 아직 검증하지 않았다.
+- S1-1~S1-6 기반 학습은 완료했다. Graphics 실행 코드는 `src/vulkan/renderer_project/`, 기존 Compute 실습은 `src/vulkan/compute_project/`에 있다.
+- 부모 #5의 S1 렌더러 기반을 제공한다. S0 프로토타입 보존은 별도 미완료 항목이며 S2~S7의 월드·계산·비교 실험은 후속 범위다.
+- 다음 작업은 완성된 렌더러를 기반으로 클라이언트의 수학·ECS·입력·고정 틱·카메라·Render Graph·시각 프로파일링 구조를 확장하는 것이다. 기반 학습 완료와 후속 기능 구현 완료를 혼동하지 않는다.
+- 2026-09-18 사용자 확인에 따라 feature 활성화 누락은 현재 미해결 항목으로 관리하지 않는다. 과거 실행 당시의 진단은 검증 이력이며, 재발 보고가 있을 때만 다시 조사한다.
+- 아래 단계별 중간 기록은 각 작업 당시의 상태다. 현재 완료 상태와 후속 범위는 이 절과 최종 완료 기록을 기준으로 한다.
 
 ## 학습 방식과 개념 깊이
 
@@ -32,7 +29,7 @@ Instance부터 Graphics Pipeline 기반 2D 렌더러까지 직접 구성하면�
 
 - **구현 수준:** 객체 소유·파괴 순서, extension/feature 협상, Graphics/Present Queue 선택, Acquire–Submit–Present, Command Buffer 재사용, Fence/Semaphore, 이미지 layout, Shader 입출력, 2D 좌표와 instance 데이터.
 - **개념 수준:** 메모리 유형·배치 전략, Render Pass와 Dynamic Rendering의 차이, CPU/GPU 병렬 진행과 프레임 수/Swapchain 이미지 수의 차이.
-- **보류:** Shader Reflection, Pipeline Factory, 범용 Pool, Bindless, Render Graph, 복잡한 allocator, PBR·모델 로딩과 대규모 최적화.
+- **이 기반 학습 범위 밖:** Shader Reflection, Pipeline 관리 자동화, 리소스 풀, Bindless, Render Graph, 복잡한 allocator, PBR·모델 로딩과 대규모 최적화. 일부 항목은 부모 #5의 클라이언트 확장에서 다룬다.
 
 진행 기록에는 구현 결과와 이해 증거를 분리한다. 실행하지 않은 결과는 통과로 적지 않고 사용자가 생략한 학습은 숙달 대신 skipped로 기록한다.
 
@@ -154,25 +151,29 @@ renderer_project/
 - **완료 증거:** 0개·1개·다수·capacity 경계, 서로 다른 위치·크기·색상, 선·궤적, 창 수명 회귀 확인과 validation 결과. 최종 장면 캡처 및 실행 명령.
 - **이해 확인:** Instancing이 어떤 데이터를 공유하고 무엇을 개별 입력으로 받는지, 프레임 입력 수명을 설명한다.
 
-## 단계 진입 시 확정할 결정
+## 기반 학습에서 확정한 선택
 
-아래는 확정된 선택이 아니다. 앞 단계와 무관한 선택으로 학습을 막지 않고 해당 단계의 안내에서 하나씩 해결한다.
+아래는 완료한 기반 학습의 선택이다. 후속 클라이언트의 라이브러리·자료구조·API 선택을 미리 확정하는 표가 아니다.
 
-| 시점 | 남은 결정과 제안 방향 |
+| 단계 | 구현한 선택 |
 |---|---|
 | S1-1 | `renderer_project/`의 `vulkan_renderer`, C++17·C Vulkan API, `VK_CHECK`와 예외 기반 초기화 실패 전달을 채택했다. macOS에서 instance 지원 버전 1.4.335와 실행을 확인했고 앱 목표는 1.3이다. 1.3 미만 지원 검사와 macOS portability extension 조회·활성화를 구현했다. Debug의 Validation Layer 조회·활성화와 Release의 비요청 경로를 구현했다. Debug messenger 생성·RAII 정리와 테스트 메시지 수신까지 구현했다. Instance 생성·파괴 진단용 pNext 연결까지 구현했다. |
 | S1-2 | GLFW 채택. API 1.3·swapchain·dynamicRendering·synchronization2 및 Graphics/Present 지원을 요구한다. GPU별 공동 family 우선, 없으면 분리 family를 선택한다. 열거 순서상 첫 적합 GPU를 반환한다. Device 생성 시 family 요청 중복을 제거하고 swapchain·조건부 portability_subset, dynamicRendering·synchronization2를 활성화한다. |
-| S1-3~4 | Present mode와 frame slot 수는 단계 진입 시 정한다. Graphics 경로는 Dynamic Rendering·Synchronization2를 사용하며 S1-2에서 지원을 확인하고 Device 생성 시 필요한 feature만 활성화한다. |
+| S1-3~4 | FIFO Present mode와 두 프레임 슬롯을 사용한다. Graphics 경로는 Dynamic Rendering·Synchronization2를 사용하고 이미지별 Present 대기 semaphore와 슬롯별 Fence·획득 semaphore를 구분한다. |
 | S1-5 | GLSL 450·glslc의 Vulkan 1.3 대상 SPIR-V 빌드. framebuffer 왼쪽 위 원점·오른쪽 +X·아래쪽 +Y·픽셀 단위. 48바이트 Vertex Push Constant로 위치·크기·색상 전달. Straight alpha source-over blending과 draw 순서에 따른 합성. |
-| S1-6 | 원·선·궤적 표현, instance 데이터와 capacity 정책. |
+| S1-6 | Renderer2D·FIF별 host-visible Instance Buffer를 사용한다. 48바이트 instance 데이터로 사각형·원/타원·선분을 표현하고, 16바이트 Push Constant로 viewport 크기를 전달한다. 최대 256개 instance와 최근 64점 궤적을 사용한다. |
 
 디버그 UI는 필수 선행 조건이 아니다. 필요성이 생길 때 선택하며 창 이벤트만으로 초기 학습을 시작한다. 추가 플랫폼 검증과 성능 계측은 자동으로 확대하지 않는다.
 
-## 참고 자료
+## 후속 구현 방향
 
-1. [Khronos Tutorial](https://docs.vulkan.org/tutorial/latest/00_Introduction.html) — 개념/실습. 초기화에서 Graphics 출력까지의 흐름을 참고한다. 확인한 최신판은 Vulkan 1.4·C++20·Vulkan-Hpp·Slang 기준이므로 현재 코드에 그대로 복사하지 않는다.
-2. [Khronos Instancing](https://docs.vulkan.org/samples/latest/samples/api/instancing/README.html) — S1-6 실습. 같은 mesh에 개별 instance 입력을 주는 방식을 참고한다.
-3. [Khronos Swapchain Semaphore Reuse](https://docs.vulkan.org/guide/latest/swapchain_semaphore_reuse.html) — S1-4 정확성 reference. submission 완료와 presentation semaphore 재사용 조건을 구분한다.
+- 수학: CPU의 벡터·기하 연산과 월드/카메라/화면 좌표 변환을 제공하고 GPU 전송 데이터 배치와 분리한다.
+- 월드: Entity 수명과 Component·System을 직접 구현하고 입력 Action, 고정 틱, 재현 가능한 입력·상태 흐름을 구성한다.
+- 렌더링: 월드에서 추출한 프레임 데이터를 Renderer에 전달한다. 다중 패스의 리소스 사용·의존성·상태 전환을 Render Graph로 표현한다.
+- 관찰: CPU 스코프 계측과 GPU 패스 시간을 수집하고 Visual Profiler에서 표시·기록한다. 렌더링 시간과 시뮬레이션 비용을 구분한다.
+- Vulkan 학습 확장: Descriptor·이미지/텍스처·샘플러·업로드·다중 렌더 타깃·멀티샘플링·쿼리 등 아직 렌더러에서 다루지 않은 기능을 실제 클라이언트 동작에 연결해 학습한다.
+- 구현 방식: 사용자가 핵심 코드를 직접 작성하고 Agent는 작은 작업 단위의 안내·검토를 제공한다. 외부 라이브러리 선택과 구체 저장 구조는 해당 작업에서 결정하며 학습 대상 구현을 대체하는 것으로 미리 확정하지 않는다.
+- 부모 #5의 S0~S7 ID와 목표를 유지한다. Render Graph·도구·클라이언트 확장은 이 문서의 완료된 S1-1~S1-6을 재개하는 작업이 아니다.
 
 ## S1-1 확정 결정
 
@@ -196,9 +197,9 @@ renderer_project/
 | S1-3 | complete | 설정 선택 경계 검사, Debug/Release 빌드, 세 번째 View 생성 실패 시 정리와 정상 정리 순서 검사 통과. 사용자 빌드·실행 확인. | 요청 최소/실제 이미지 개수, borrowed Image와 owned View, 생성자 실패 시 멤버 RAII 정리 이해 확인. |
 | S1-4 | complete | 두 프레임 슬롯의 Acquire–Submit–Present, Dynamic Rendering clear와 Swapchain 재생성 구현. 최종 Debug/Release 빌드 통과. 사용자 배경색·validation·종료 및 resize 실행 확인. 정리 관행과 검증 범위는 아래 완료 기록 참조. | frame slot/image index, Fence/Semaphore 재사용, 이미지 subresource와 renderArea, Present 자원 정리의 보장 범위 이해 확인. |
 | S1-5 | complete | Shader 빌드·Module·Graphics Pipeline·삼각형/사각형 draw·Push Constant·blending 구현. Agent Debug/Release 빌드, 사용자 화면과 resize 확인. 상세 검증 범위는 완료 기록 참조. | 로컬→픽셀→NDC→viewport 변환, dynamic state, Pipeline format 계약과 attachment·subresource 관계 설명 확인. |
-| S1-6 | complete | FIF별 Instance Buffer·Renderer2D·사각형/원/선/궤적 구현. 사용자 장면·창 수명 실행 확인, Agent 0·1·256·257개 및 3→0 전환 실행 검사 통과. 알려진 validation 메시지는 명시적 보류. | instance-rate 입력, 슬롯 Fence 이후 쓰기, 픽셀 크기와 viewport, 궤적 점→선분 변환 이해 확인. |
+| S1-6 | complete | FIF별 Instance Buffer·Renderer2D·사각형/원/선/궤적 구현. 사용자 장면·창 수명 실행 확인, Agent 0·1·256·257개 및 3→0 전환 실행 검사 통과. 당시 validation 진단과 이후 사용자 확인은 최종 기록 참조. | instance-rate 입력, 슬롯 Fence 이후 쓰기, 픽셀 크기와 viewport, 궤적 점→선분 변환 이해 확인. |
 
-S1-1~S1-6을 완료하여 이번 Vulkan 2D 렌더러 기반 학습을 마무리했다. Vulkan Client 및 Compute Pipeline·GPU 백엔드는 후속 작업이다. 후속 진행도·학습 기록은 별도 단계 문서 없이 이 문서의 stable-ID section을 갱신한다.
+S1-1~S1-6을 완료하여 이번 Vulkan 2D 렌더러 기반 학습을 마무리했다. Vulkan Client 및 Compute Pipeline·GPU 백엔드는 후속 작업이다. 이 문서는 완료한 S1-1~S1-6의 기록을 유지한다. 후속 클라이언트 계획은 부모 #5에서 관리하고, 이번 정리에서는 새 설계 문서를 만들지 않는다.
 
 
 ### S1-1 완료 검증 — 2026-09-13
@@ -451,7 +452,7 @@ cmake --build src/vulkan/renderer_project/build/release
 ### 채택한 관행과 명시적 보류
 
 - vkDeviceWaitIdle 후 Swapchain·Present 자원을 회수하는 일반적인 관행을 채택했다. Present 자원 사용 완료를 명세상 엄밀하게 확인하는 maintenance 확장의 Present Fence는 미도입이다.
-- shaderDemoteToHelperInvocation의 지원 확인·활성화는 사용자 결정으로 보류했다. 실제 최종 경계 실행에서도 DemoteToHelperInvocation capability 관련 validation 메시지가 재현됐다. 의도한 Debug callback 테스트 메시지와 이 알려진 오류 외 새 validation 메시지는 없었다. Validation 무오류 상태로 기록하지 않는다.
+- 과거 경계 실행에서는 DemoteToHelperInvocation 관련 진단을 기록했다. 2026-09-18 사용자 확인에 따라 feature 활성화 누락은 현재 미해결 항목에서 제외한다. 당시 실행 결과를 소급해 변경하지 않으며 이번 정리에서 추가 실행 검증은 하지 않았다.
 - Line 입력의 유한성·양수 두께·서로 다른 끝점 검사는 사용자 결정으로 보류했다. 호출자는 유효한 값을 제공한다. 궤적 생성기는 같은 인접 점을 건너뛴다.
 - 이동은 반복당 고정 거리이며 궤적은 최근 64점이다. 시간 기반 이동·샘플링, 선분 join·경계 안티앨리어싱, live resize 중 갱신 개선, 성능 검증은 완료 범위 밖이다.
 
