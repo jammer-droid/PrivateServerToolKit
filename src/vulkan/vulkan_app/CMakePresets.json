@@ -8,11 +8,13 @@
     "configurePresets": [
         {
             "name": "dev",
-            "displayName": "VulkanRenderer",
+            "displayName": "Vulkan App Debug",
             "binaryDir": "${sourceDir}/build/${presetName}",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "CMAKE_PREFIX_PATH": "${sourceDir}/../vulkan_runtime/build/dev/sdk",
+                "SHADER_OUTPUT_DIR": "${sourceDir}/../vulkan_runtime/build/dev/shaders"
             }
         }
     ],
@@ -20,7 +22,10 @@
         {
             "name": "dev",
             "configurePreset": "dev",
-            "configuration": "Debug"
+            "configuration": "Debug",
+            "targets": [
+                "vulkan_app"
+            ]
         }
     ]
 }

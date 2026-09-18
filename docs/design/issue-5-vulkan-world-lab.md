@@ -18,11 +18,11 @@ World Lab을 첫 사용 사례로 삼아 다른 프로젝트에서도 활용할 
 ## 현재 근거와 계획의 수준
 
 - GitHub #5는 OPEN이며 목표·상위 범위·완료 조건의 기준이다. 본 문서는 그 범위 안의 진행 순서와 세부 계약을 소유한다.
-- #6의 완료 기록과 `src/vulkan/renderer_project/`가 출발점이다. CMake의 `vulkan_renderer` 실행 타깃, GLFW 창, Vulkan 실행 기반, Renderer2D와 도형 인스턴싱이 있다.
+- #6의 완료 기록과 기존 `renderer_project`가 출발점이다. 현재 소스는 `src/vulkan/vulkan_app/`과 `src/vulkan/vulkan_runtime/`으로 분리했다. GLFW 창, Vulkan 실행 기반, Renderer2D와 도형 인스턴싱을 유지한다.
 - 수학 기반, ECS 월드, 카메라·미니맵, Render Graph, Visual Profiler와 월드 계산 백엔드 비교는 앞으로 구현할 내용이다. 기존 `compute_project`의 실습을 해당 백엔드의 검증 완료로 보지 않는다.
 - #5 본문에 보존된 시안은 S0에서 저장소로 옮겨야 한다. 현재 시안의 표시 규모는 실제 처리량 증거가 아니다.
 - 루트 `CONTEXT.md`의 서버 측 WorldRuntime과 이 클라이언트 기반을 동일한 모듈로 확정하지 않는다. 공유 실행 계층이나 공용 ABI를 새로 정의하지 않는다.
-- 현재 확인한 이슈와 합의한 방향 사이에 범위 충돌은 없다. 단, 타깃 분리 방식 등 미정 사항이 있으므로 문서 전체가 곧 구현 준비 완료 상태인 것은 아니다.
+- 현재 확인한 이슈와 합의한 방향 사이에 범위 충돌은 없다. 단, 공개 인터페이스 등 미정 사항이 있으므로 문서 전체가 곧 구현 준비 완료 상태인 것은 아니다.
 
 ## 고정 흐름과 Vulkan 확장의 관계
 
@@ -68,7 +68,12 @@ S0의 보존 작업과 S2의 구조 설계는 독립적으로 진행할 수 있�
 - **결과/seam:** 창·이벤트·실행 루프·렌더러와 World Lab 전용 장면을 연결하는 경계. 기존 `main.cpp`, `app`, `renderer`, `core`를 출발점으로 삼는다.
 - **불변식:** 도메인 로직을 Vulkan 초기화에 넣지 않는다. 기존 GPU 자원 재사용과 종료 순서를 보존한다. 클래스 수를 늘리는 것 자체를 목표로 삼지 않는다.
 - **완료/검증:** 기존 도형 장면이 새 실행 구조에서 표시되고 resize·최소화/복원·종료가 유지된다. 독립 빌드와 해당 실행 경로를 확인한다.
-- **남은 결정:** 공통 기반과 실행 앱을 처음부터 별도 타깃으로 나눌지, 한 타깃 내부에서 먼저 분리할지. 정적 라이브러리는 제안이며 확정하지 않았다.
+- **확정:** `vulkan_app`과 `vulkan_runtime`을 별도 디렉터리·CMake 타깃으로 분리한다. runtime을 독립 빌드·설치한 후 앱이 `find_package(VulkanRuntime CONFIG REQUIRED)`와 `VulkanRuntime::Runtime` 타깃으로 소비한다. 최초 `add_subdirectory` 구성은 이 독립 패키지 구성으로 대체했다.
+- **후속 공개 경계:** 공유 라이브러리와 C++ 인터페이스를 사용한다. 앱/runtime은 같은 호환 도구 체인으로 함께 빌드하며, C++17 자체가 ABI 호환성을 보장한다고 가정하지 않는다. 앱의 Game은 앱 소유, Application은 참조로 빌리고 렌더링 입력은 호출 동안 읽어 내부 자원으로 복사한다. 공개 경계에서 Vulkan 타입·함수와 구현 저장 구조를 숨긴다. 내부 Vulkan을 다중 API용으로 추상화하지 않는다.
+- **현재 작은 작업:** 디렉터리와 빌드 경계만 분리한다. runtime은 이 작업에서 STATIC을 유지하며, 공유 라이브러리 전환·export·Pimpl·게임 콜백 계약은 다음 작업이다. 현재 앱의 Vulkan 직접 호출도 그때 옮긴다.
+- **셰이더:** 소스는 runtime의 `shaders/`에 두고 SDK의 `share/VulkanRuntime/shaders`에 설치한다. 패키지가 제공한 `VulkanRuntime_SHADER_SOURCE_DIR`에서 앱이 읽어 컴파일한다. 개발 preset의 출력은 독립 runtime의 `build/dev/shaders`이며 `SHADER_OUTPUT_DIR`로 재정의할 수 있다. 다른 앱은 같은 셰이더 파일을 덮어쓰지 않도록 별도 출력 디렉터리를 지정한다. 현재는 `main.cpp`에 경로를 전달하고, Application 분리 시 runtime 내부 경로 처리를 정리한다. runtime은 앱의 셰이더 빌드 타깃에 의존하지 않는다.
+- **빌드:** 아래 독립 빌드·패키지 사용 절차를 따른다. 각 프로젝트의 `.clangd`는 자신의 `build/dev/compile_commands.json`을 참조한다. 앱 빌드는 runtime 소스를 다시 컴파일하지 않는다.
+- **현재 패키지의 한계:** STATIC 라이브러리와 현재 앱이 사용하는 기존 헤더를 임시로 설치한다. Vulkan과 정적 링크에 필요한 GLFW 의존성은 패키지 config가 찾는다. Vulkan을 숨긴 최소 공개 헤더와 SHARED 전환은 다음 작업이며, 지금 패키지를 안정된 배포 API로 취급하지 않는다.
 
 ### S2-2 — 수학과 ECS
 
@@ -153,13 +158,55 @@ S0의 보존 작업과 S2의 구조 설계는 독립적으로 진행할 수 있�
 
 ## 다음 결정과 첫 실험
 
-1. **S2-1 진입 전:** 공통 기반/World Lab의 빌드 타깃과 디렉터리 경계를 정한다. 별도 정적 라이브러리+실행 앱 분리는 추천 후보이고 사용자 확정 전이다. 대안은 한 실행 타깃 안에서 책임부터 분리하는 것이다.
+1. **S2-1 다음:** 디렉터리/빌드 분리 이후 Application과 게임 인터페이스의 최소 API·호출 시점·오류·소유권을 정하고, C++ 공유 라이브러리 공개 경계를 구현한다.
 2. **S0 및 관련 화면 구현 전:** 시안 보존 위치와 조작·구역 정책을 정리한다. 새로 정해야 하는 범위를 기존 시안과 구분한다.
 3. **각 단계에서 결정:** 수학 라이브러리 경계, ECS 저장 구조, 고정 틱, 리소스 ID, graph 모델과 profiler 형식은 위 단계의 미정 목록을 따른다.
 4. **S3~S6 상세 설계까지 보류:** 시나리오별 부하·정확성, AOI 정책 전환, 충돌 동률, 군중 경로/회피 모델과 CPU/GPU 역할 분담. 상위 이슈의 필수 시나리오는 유지한다.
 
-첫 실험은 **기존 도형 장면을 최소 Application/씬 경계 뒤에서 실행하고, 동일한 resize·최소화/복원·종료 동작을 확인하는 것**이다. 타깃 경계를 정한 뒤 S2-1의 첫 가이드를 작성한다. ECS와 Render Graph를 이 첫 실험에 함께 넣지 않는다.
+첫 실험은 **기존 도형 장면을 최소 Application/씬 경계 뒤에서 실행하고, 동일한 resize·최소화/복원·종료 동작을 확인하는 것**이다. 디렉터리 분리 이후 이 실행 경계를 구현한다. ECS와 Render Graph를 이 첫 실험에 함께 넣지 않는다.
+
+## 독립 빌드와 패키지 사용
+
+runtime 디렉터리에서 먼저 실행한다.
+
+```sh
+cmake --preset dev
+cmake --build --preset dev
+cmake --install build/dev
+```
+
+개발 SDK는 `src/vulkan/vulkan_runtime/build/dev/sdk`에 생성된다. 라이브러리, 현재 필요한 헤더, 셰이더 소스와 `lib/cmake/VulkanRuntime`의 config/targets 파일을 포함한다. 시스템 설치나 관리자 권한은 필요하지 않는다. runtime 소스·헤더·셰이더를 수정하면 빌드·설치를 갱신한다.
+
+그다음 앱 디렉터리에서 실행한다.
+
+```sh
+cmake --preset dev
+cmake --build --preset dev
+./build/dev/vulkan_app
+```
+
+앱 preset의 `CMAKE_PREFIX_PATH`는 개발 SDK를 가리킨다. 다른 소비자는 자신의 preset이나 configure 인자로 SDK prefix를 제공하고 `VulkanRuntime::Runtime`을 링크한다. 패키지의 include/link 설정은 소비자에게 전달되지만 runtime의 빌드 preset을 실행하거나 병합하지 않는다. 독립 runtime의 Debug/Release와 소비자의 도구 체인·구성을 호환되게 유지한다.
+
+패키지는 설치 위치를 기준으로 경로를 계산한다. SDK를 다른 디렉터리로 복사해도 원래 runtime 소스/빌드 경로를 요구하지 않는다. Vulkan/GLFW 개발 의존성은 현재 임시 정적 패키지의 외부 요구사항이다. 셰이더 컴파일 도구는 앱이 찾는다. 공유 라이브러리의 런타임 검색 경로와 배포는 SHARED 전환 시 다룬다.
+
+## S2-1 독립 패키지 검증
+
+- runtime의 `dev` configure/build/install 성공. 자체 compile database와 `build/dev/sdk` 생성 확인.
+- 앱의 `dev` configure/build 성공. runtime 소스를 빌드하지 않고 설치된 라이브러리를 링크하며, runtime의 `build/dev/shaders`에 셰이더 생성 확인.
+- SDK를 임시 위치로 복사하고 앱의 `main.cpp`/CMake만 별도 consumer 디렉터리에 복사해 새 빌드 성공. 해당 compile database는 `main.cpp` 한 개이며 설치된 include 경로를 사용하고 원래 runtime 소스/빌드 경로를 참조하지 않음을 확인했다.
+- 패키지 생성 파일의 원래 runtime 경로 유출 여부와 `git diff --check`, 신규 CMake/preset 공백 검사를 확인했다. GUI 실행은 이번 작업에서 수행하지 않았다.
+
+## S2-1 최초 디렉터리 분리 검증 이력
+
+- 앱 디렉터리에서 새 `dev` 빌드 트리로 configure/build 성공. `vulkan_app`, `vulkan_runtime/libvulkan_runtime.a`, `vulkan_runtime/shaders/*.spv` 생성 확인.
+- 이동한 C++·셰이더 파일 26개의 내용이 기존 커밋과 동일함을 확인했다. CMake와 preset, 편집기 compile database 경로만 조정했다.
+- `git diff --check`와 새 빌드 설정의 공백 검사를 통과했다. 디렉터리 이동 이후 GUI 실행·resize 확인은 아직 하지 않았다.
+- 기존 `renderer_project/build`는 과거 빌드 캐시로 남겨두었으며 새 빌드에서 사용하지 않는다. S2-1 전체는 Application/공개 인터페이스 작업이 남아 있다.
 
 ## 변경 기록
+
+- S2-1 후속: runtime 자체 preset과 install/export 패키지를 추가하고 앱의 `add_subdirectory`를 `find_package`로 교체했다. 셰이더 소스도 패키지에 포함하며 앱에서 컴파일한다.
+
+- S2-1 후속: 앱/runtime 디렉터리와 CMake를 분리했다. C++ 공유 라이브러리 공개 경계는 다음 작업으로 기록했다.
 
 - 2026-09-18: 최초 작성. 기존 S0~S7을 보존하고 S2-1~S2-6의 기본 흐름과 V-01~V-12 확장 목록을 추가했다. 확장 선택 시점과 필수/선택 범위를 분리했다. 소스 코드·GitHub 상태 변경은 포함하지 않는다.

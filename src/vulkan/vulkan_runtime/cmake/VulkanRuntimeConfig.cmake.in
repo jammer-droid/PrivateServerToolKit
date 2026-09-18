@@ -1,0 +1,11 @@
+@PACKAGE_INIT@
+
+set_and_check(VulkanRuntime_SHADER_SOURCE_DIR "@PACKAGE_VULKAN_RUNTIME_SHADER_INSTALL_DIR@")
+
+include(CMakeFindDependencyMacro)
+find_dependency(Vulkan)
+# The static runtime still needs GLFW when the consumer is linked.
+find_dependency(glfw3 CONFIG)
+
+include("${CMAKE_CURRENT_LIST_DIR}/VulkanRuntimeTargets.cmake")
+check_required_components(VulkanRuntime)

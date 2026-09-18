@@ -17,6 +17,8 @@ Instance부터 Graphics Pipeline 기반 2D 렌더러까지 직접 구성하면�
 
 ## 현재 상태와 상위 계획 관계
 
+후속 S2-1에서 소스를 `src/vulkan/vulkan_app/`과 `src/vulkan/vulkan_runtime/`으로 분리했다. 아래 `renderer_project` 경로와 빌드 명령은 기반 학습 당시의 기록이며 현재 빌드 방법은 [#5 계획](issue-5-vulkan-world-lab.md#s2-1--실행-구조)을 따른다.
+
 - S1-1~S1-6 기반 학습은 완료했다. Graphics 실행 코드는 `src/vulkan/renderer_project/`, 기존 Compute 실습은 `src/vulkan/compute_project/`에 있다.
 - 부모 #5의 S1 렌더러 기반을 제공한다. S0 프로토타입 보존은 별도 미완료 항목이며 S2~S7의 월드·계산·비교 실험은 후속 범위다.
 - 다음 작업은 완성된 렌더러를 기반으로 클라이언트의 수학·ECS·입력·고정 틱·카메라·Render Graph·시각 프로파일링 구조를 확장하는 것이다. 기반 학습 완료와 후속 기능 구현 완료를 혼동하지 않는다.
