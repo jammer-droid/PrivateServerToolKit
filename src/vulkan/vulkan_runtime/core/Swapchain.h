@@ -1,5 +1,7 @@
 #pragma once
 
+#include "VulkanRuntimeExport.h"
+
 #include "common/VulkanHeaders.h"
 #include "common/VulkanHandle.h"
 #include "core/VulkanContext.h"
@@ -28,10 +30,11 @@ struct SwapchainSettings
 class Swapchain
 {
   public:
-    explicit Swapchain(VkDevice device, VkSurfaceKHR surface, SwapchainSettings setting,
-                       PhysicalDeviceSelection selection, VkSurfaceCapabilitiesKHR surfaceCapabilities,
-                       VkSwapchainKHR oldSwapchain = VK_NULL_HANDLE);
-    ~Swapchain() = default;
+    VULKAN_RUNTIME_API explicit Swapchain(VkDevice device, VkSurfaceKHR surface, SwapchainSettings setting,
+                                          PhysicalDeviceSelection selection,
+                                          VkSurfaceCapabilitiesKHR surfaceCapabilities,
+                                          VkSwapchainKHR oldSwapchain = VK_NULL_HANDLE);
+    VULKAN_RUNTIME_API ~Swapchain() noexcept;
 
     VK_NON_COPYABLE(Swapchain)
     VK_NON_MOVABLE(Swapchain)
@@ -62,10 +65,12 @@ class Swapchain
     }
 
   public:
-    static SwapchainSupport QuerySwapchainSupport(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface);
-    static void PrintSwapchainSupport(const SwapchainSupport &swapchainSupport, VkExtent2D framebufferSize);
-    static bool ConfigureSwapchainSettings(const SwapchainSupport &support, VkExtent2D framebuffer,
-                                           SwapchainSettings *outSetting);
+    VULKAN_RUNTIME_API static SwapchainSupport QuerySwapchainSupport(VkPhysicalDevice physicalDevice,
+                                                                     VkSurfaceKHR surface);
+    VULKAN_RUNTIME_API static void PrintSwapchainSupport(const SwapchainSupport &swapchainSupport,
+                                                         VkExtent2D framebufferSize);
+    VULKAN_RUNTIME_API static bool ConfigureSwapchainSettings(const SwapchainSupport &support, VkExtent2D framebuffer,
+                                                              SwapchainSettings *outSetting);
 
   private:
     SwapchainSettings setting_;

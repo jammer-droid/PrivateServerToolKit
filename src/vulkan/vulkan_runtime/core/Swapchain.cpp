@@ -382,3 +382,5 @@ Swapchain::Swapchain(VkDevice device, VkSurfaceKHR surface, SwapchainSettings se
         renderFinishedHandles_.back().Adopt(semaphore, deleter::VkSemaphoreDeleter{device});
     }
 }
+
+Swapchain::~Swapchain() noexcept = default;

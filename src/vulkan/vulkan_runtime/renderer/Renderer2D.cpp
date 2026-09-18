@@ -99,3 +99,5 @@ void Renderer2D::RecordDraws(VkCommandBuffer commandBuffer, VkExtent2D extent, s
 
     vkCmdDraw(commandBuffer, 6, instanceCounts_[frameIndex], 3, 0);
 }
+
+Renderer2D::~Renderer2D() noexcept = default;

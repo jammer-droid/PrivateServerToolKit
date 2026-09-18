@@ -1,5 +1,7 @@
 #pragma once
 
+#include "VulkanRuntimeExport.h"
+
 #include "common/VulkanHeaders.h"
 #include "common/VulkanHandle.h"
 
@@ -8,11 +10,11 @@
 class FrameResources
 {
   public:
-    explicit FrameResources(VkDevice device, std::uint32_t queueFamilyIndex);
+    VULKAN_RUNTIME_API explicit FrameResources(VkDevice device, std::uint32_t queueFamilyIndex);
     // explicit FrameResources(VkDevice device, std::uint32_t queueFamilyIndex, VkPhysicalDevice physicalDevice,
     //                         VkDeviceSize capacityBytes);
 
-    ~FrameResources() = default;
+    VULKAN_RUNTIME_API ~FrameResources() noexcept;
 
     VK_NON_COPYABLE(FrameResources)
     VK_NON_MOVABLE(FrameResources)
@@ -38,7 +40,7 @@ class FrameResources
         return kFramesInFlight;
     }
 
-    std::uint32_t GetFrameIndex() const noexcept;
+    VULKAN_RUNTIME_API std::uint32_t GetFrameIndex() const noexcept;
 
   private:
     static const std::uint32_t kFramesInFlight = 2;

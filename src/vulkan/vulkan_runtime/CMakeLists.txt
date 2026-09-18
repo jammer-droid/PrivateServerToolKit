@@ -4,11 +4,12 @@ project(VulkanRuntime LANGUAGES CXX)
 
 include(GNUInstallDirs) #  lib, include, bin, share 같은 설치 경로 변수를 제공.
 include(CMakePackageConfigHelpers) # 다른 프로젝트 find_package가 읽을 설정 파일 생성 도구 제공.
+include(GenerateExportHeader)
 
 find_package(Vulkan REQUIRED)
 find_package(glfw3 REQUIRED CONFIG)
 
-add_library(vulkan_runtime STATIC
+add_library(vulkan_runtime SHARED
     common/VulkanException.cpp
 
     core/VulkanContext.cpp
@@ -26,7 +27,16 @@ add_library(vulkan_runtime STATIC
 add_library(VulkanRuntime::Runtime ALIAS vulkan_runtime)
 
 # 외부 사용자가 사용할 이름을 Runtime으로 설정
-set_target_properties(vulkan_runtime PROPERTIES EXPORT_NAME Runtime)
+set_target_properties(vulkan_runtime PROPERTIES
+    EXPORT_NAME Runtime
+    CXX_VISIBILITY_PRESET hidden
+    VISIBILITY_INLINES_HIDDEN YES
+)
+
+generate_export_header(vulkan_runtime
+    EXPORT_FILE_NAME "generated/VulkanRuntimeExport.h"
+    EXPORT_MACRO_NAME VULKAN_RUNTIME_API
+)
 
 target_compile_features(
     vulkan_runtime PUBLIC cxx_std_17
@@ -36,6 +46,7 @@ target_include_directories(
     vulkan_runtime
     PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
@@ -52,6 +63,10 @@ install(TARGETS vulkan_runtime
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/generated/VulkanRuntimeExport.h"
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
 # Transitional headers required by the current app.

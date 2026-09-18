@@ -601,3 +601,5 @@ void VulkanContext::InitializeDevice(const PhysicalDeviceSelection &selection)
     vkGetDeviceQueue(deviceHandle_.Get(), selection.graphicsFamilyIndex, 0, &graphicsQueue_);
     vkGetDeviceQueue(deviceHandle_.Get(), selection.presentFamilyIndex, 0, &presentQueue_);
 }
+
+VulkanContext::~VulkanContext() noexcept = default;

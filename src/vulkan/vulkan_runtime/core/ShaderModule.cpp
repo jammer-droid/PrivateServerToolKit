@@ -68,3 +68,5 @@ ShaderModule::ShaderModule(VkDevice device, const std::filesystem::path &shaderP
 
     shaderHandle_.Adopt(shaderModule, deleter::VkShaderModuleDeleter{device});
 }
+
+ShaderModule::~ShaderModule() noexcept = default;

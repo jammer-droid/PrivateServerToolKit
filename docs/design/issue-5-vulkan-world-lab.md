@@ -70,10 +70,10 @@ S0의 보존 작업과 S2의 구조 설계는 독립적으로 진행할 수 있�
 - **완료/검증:** 기존 도형 장면이 새 실행 구조에서 표시되고 resize·최소화/복원·종료가 유지된다. 독립 빌드와 해당 실행 경로를 확인한다.
 - **확정:** `vulkan_app`과 `vulkan_runtime`을 별도 디렉터리·CMake 타깃으로 분리한다. runtime을 독립 빌드·설치한 후 앱이 `find_package(VulkanRuntime CONFIG REQUIRED)`와 `VulkanRuntime::Runtime` 타깃으로 소비한다. 최초 `add_subdirectory` 구성은 이 독립 패키지 구성으로 대체했다.
 - **후속 공개 경계:** 공유 라이브러리와 C++ 인터페이스를 사용한다. 앱/runtime은 같은 호환 도구 체인으로 함께 빌드하며, C++17 자체가 ABI 호환성을 보장한다고 가정하지 않는다. 앱의 Game은 앱 소유, Application은 참조로 빌리고 렌더링 입력은 호출 동안 읽어 내부 자원으로 복사한다. 공개 경계에서 Vulkan 타입·함수와 구현 저장 구조를 숨긴다. 내부 Vulkan을 다중 API용으로 추상화하지 않는다.
-- **현재 작은 작업:** 디렉터리와 빌드 경계만 분리한다. runtime은 이 작업에서 STATIC을 유지하며, 공유 라이브러리 전환·export·Pimpl·게임 콜백 계약은 다음 작업이다. 현재 앱의 Vulkan 직접 호출도 그때 옮긴다.
+- **현재 작은 작업:** 패키지 분리 다음으로 runtime을 SHARED로 전환하고 export와 소비자 로딩을 검증한다. Application/Pimpl·게임 콜백 계약은 다음 작업이다. 현재 앱의 Vulkan 직접 호출도 그때 옮긴다.
 - **셰이더:** 소스는 runtime의 `shaders/`에 두고 SDK의 `share/VulkanRuntime/shaders`에 설치한다. 패키지가 제공한 `VulkanRuntime_SHADER_SOURCE_DIR`에서 앱이 읽어 컴파일한다. 개발 preset의 출력은 독립 runtime의 `build/dev/shaders`이며 `SHADER_OUTPUT_DIR`로 재정의할 수 있다. 다른 앱은 같은 셰이더 파일을 덮어쓰지 않도록 별도 출력 디렉터리를 지정한다. 현재는 `main.cpp`에 경로를 전달하고, Application 분리 시 runtime 내부 경로 처리를 정리한다. runtime은 앱의 셰이더 빌드 타깃에 의존하지 않는다.
 - **빌드:** 아래 독립 빌드·패키지 사용 절차를 따른다. 각 프로젝트의 `.clangd`는 자신의 `build/dev/compile_commands.json`을 참조한다. 앱 빌드는 runtime 소스를 다시 컴파일하지 않는다.
-- **현재 패키지의 한계:** STATIC 라이브러리와 현재 앱이 사용하는 기존 헤더를 임시로 설치한다. Vulkan과 정적 링크에 필요한 GLFW 의존성은 패키지 config가 찾는다. Vulkan을 숨긴 최소 공개 헤더와 SHARED 전환은 다음 작업이며, 지금 패키지를 안정된 배포 API로 취급하지 않는다.
+- **현재 패키지의 한계:** SHARED 라이브러리와 현재 앱이 사용하는 기존 헤더를 임시로 설치한다. Vulkan은 여전히 공개 의존성이며 config가 찾고, GLFW는 runtime 내부 링크 의존성이다. Vulkan을 숨긴 최소 공개 헤더는 다음 작업이며, 지금 패키지를 안정된 배포 API로 취급하지 않는다.
 
 ### S2-2 — 수학과 ECS
 
@@ -187,9 +187,29 @@ cmake --build --preset dev
 
 앱 preset의 `CMAKE_PREFIX_PATH`는 개발 SDK를 가리킨다. 다른 소비자는 자신의 preset이나 configure 인자로 SDK prefix를 제공하고 `VulkanRuntime::Runtime`을 링크한다. 패키지의 include/link 설정은 소비자에게 전달되지만 runtime의 빌드 preset을 실행하거나 병합하지 않는다. 독립 runtime의 Debug/Release와 소비자의 도구 체인·구성을 호환되게 유지한다.
 
-패키지는 설치 위치를 기준으로 경로를 계산한다. SDK를 다른 디렉터리로 복사해도 원래 runtime 소스/빌드 경로를 요구하지 않는다. Vulkan/GLFW 개발 의존성은 현재 임시 정적 패키지의 외부 요구사항이다. 셰이더 컴파일 도구는 앱이 찾는다. 공유 라이브러리의 런타임 검색 경로와 배포는 SHARED 전환 시 다룬다.
+패키지는 설치 위치를 기준으로 경로를 계산한다. SDK를 다른 디렉터리로 복사해도 원래 runtime 소스/빌드 경로를 요구하지 않는다. 현재 패키지는 Vulkan 개발 의존성을 요구하고 셰이더 컴파일 도구는 앱이 찾는다. GLFW 개발 패키지는 runtime 빌드에 필요하며 앱 configure에는 필요하지 않다. 다만 실행 환경에는 링크한 Vulkan Loader와 GLFW 공유 라이브러리가 존재해야 한다. 이 SDK가 third-party 라이브러리를 함께 배포하는 것은 아니다.
 
-## S2-1 독립 패키지 검증
+## S2-1 공유 라이브러리 계약
+
+- `vulkan_runtime`은 SHARED이며 `VulkanRuntime::Runtime` 패키지 이름은 유지한다. macOS의 dylib, Windows의 DLL/import library, Linux의 shared object는 CMake가 플랫폼에 맞게 생성한다. 실제 검증 환경은 macOS/AppleClang 16/libc++ Debug이며 다른 플랫폼은 미검증이다.
+- `GenerateExportHeader`가 생성한 `VulkanRuntimeExport.h`를 SDK에 설치한다. 기본 visibility는 hidden, 외부에서 호출하는 out-of-line 함수는 `VULKAN_RUNTIME_API`로 공개한다. 기존 `VulkanException`은 typed catch의 RTTI/vtable을 위해 타입도 공개한다.
+- runtime 소유 자원을 정리하는 기본 소멸자를 `.cpp`로 옮겼다. 기존 클래스 layout, STL 인자/반환, Vulkan 타입과 inline getter는 임시 C++ 경계에 남아 있다. 같은 compiler/standard library/호환 runtime 설정으로 빌드하며 헤더 변경 시 앱도 재빌드한다. 이 단계는 ABI 안정화 완료가 아니다.
+- 기존 예외 정책은 이 전환에서 보존한다. runtime의 `VulkanException`/표준 예외를 앱에서 잡는 임시 계약이며 예외 비활성 빌드나 서로 다른 C++ 런타임 조합은 지원 계약이 아니다. Application의 최종 오류/콜백 정책은 다음에 확정한다.
+- Unix의 개발 앱은 imported shared target으로부터 CMake가 생성한 build RPATH로 SDK 라이브러리를 찾는다. Windows는 post-build에서 runtime DLL을 실행 파일 옆에 복사한다. Third-party DLL 배치와 설치된 앱의 배포 경로는 이 작업의 검증 범위 밖이다.
+- 기존 dev SDK에 과거 `.a`가 남아 있어도 갱신된 imported target은 공유 라이브러리를 가리킨다. 새 SDK 설치 경로에서는 공유 라이브러리만 설치된다.
+
+## S2-1 공유 라이브러리 검증
+
+- macOS에서 runtime configure/build/install 및 앱 configure/build 통과. `otool -L`로 앱의 `@rpath/libvulkan_runtime.dylib` 참조를 확인했다.
+- 새 임시 SDK에는 dylib만 설치되고 `.a`가 없음을 확인했다. 그 SDK를 사용하는 별도 소비자를 빌드했으며 runtime 소스 빌드와 GLFW package 탐색 없이 링크했다.
+- `nm`으로 공개 함수·소멸자와 예외 RTTI가 존재하고 `ReadSpirV`, 내부 Instance 생성 helper, Window 내부 callback 설정 함수가 외부 심볼에 없음을 확인했다. 표준 라이브러리에서 발생하는 일부 심볼은 남아 있으며 엄격한 export allowlist는 아직 제공하지 않는다.
+- 임시 boundary consumer에서 runtime이 던진 `VulkanException`의 typed catch·메시지·결과 코드, 성공 경로, 두 차례 Instance 생성·소멸을 확인하고 exit 0으로 종료했다.
+- 원본 앱의 임시 복사본에만 4프레임 후 종료 조건을 넣어 공유 라이브러리 기반 렌더링·정상 종료(exit 0)를 확인했다. 제품 코드에 자동 종료 옵션은 추가하지 않았다. resize·최소화는 재검증하지 않았다.
+- 실행 로그에 과거 `DemoteToHelperInvocation` capability 관련 `VUID-VkShaderModuleCreateInfo-pCode-08740` 진단이 다시 관찰됐다. 이번 작업은 셰이더/feature 동작을 변경하지 않았으며 이 진단의 수정은 포함하지 않는다. 따라서 validation 무오류 실행으로 기록하지 않는다.
+- 임시 검증 자료: `/var/folders/32/hd2fw_xd7yg_hsc4n6lj201w0000gn/T/vulkan-shared-check-0d7knufn/`의 소비자 소스·빌드·로그. 임시 자료는 영구 테스트 자산이 아니며 검증 범위와 결과는 이 문서에 보존한다.
+- Windows/Linux 실행, third-party 라이브러리를 포함한 독립 배포, 최종 Pimpl/Game 공개 API는 미검증/후속 범위다.
+
+## S2-1 독립 패키지 검증 이력
 
 - runtime의 `dev` configure/build/install 성공. 자체 compile database와 `build/dev/sdk` 생성 확인.
 - 앱의 `dev` configure/build 성공. runtime 소스를 빌드하지 않고 설치된 라이브러리를 링크하며, runtime의 `build/dev/shaders`에 셰이더 생성 확인.
@@ -204,6 +224,8 @@ cmake --build --preset dev
 - 기존 `renderer_project/build`는 과거 빌드 캐시로 남겨두었으며 새 빌드에서 사용하지 않는다. S2-1 전체는 Application/공개 인터페이스 작업이 남아 있다.
 
 ## 변경 기록
+
+- S2-1 후속: 패키지 분리 커밋 `94244c9` 이후 SHARED·명시적 export·runtime 측 소멸자·소비자 로딩 경로를 추가했다.
 
 - S2-1 후속: runtime 자체 preset과 install/export 패키지를 추가하고 앱의 `add_subdirectory`를 `find_package`로 교체했다. 셰이더 소스도 패키지에 포함하며 앱에서 컴파일한다.
 

@@ -70,3 +70,5 @@ std::uint32_t FrameResources::GetFrameIndex() const noexcept
 {
     return frameIndex % kFramesInFlight;
 }
+
+FrameResources::~FrameResources() noexcept = default;

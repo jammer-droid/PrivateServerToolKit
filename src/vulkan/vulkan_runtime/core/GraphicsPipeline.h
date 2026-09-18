@@ -1,5 +1,7 @@
 #pragma once
 
+#include "VulkanRuntimeExport.h"
+
 #include "common/ClassTraits.h"
 #include "common/VulkanHandle.h"
 
@@ -8,8 +10,9 @@
 class GraphicsPipeline
 {
   public:
-    explicit GraphicsPipeline(VkDevice device, VkFormat colorFormat, const std::filesystem::path &shaderPath);
-    ~GraphicsPipeline() = default;
+    VULKAN_RUNTIME_API explicit GraphicsPipeline(VkDevice device, VkFormat colorFormat,
+                                                 const std::filesystem::path &shaderPath);
+    VULKAN_RUNTIME_API ~GraphicsPipeline() noexcept;
 
     VK_NON_COPYABLE(GraphicsPipeline)
     VK_NON_MOVABLE(GraphicsPipeline)

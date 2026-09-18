@@ -1,5 +1,7 @@
 #pragma once
 
+#include "VulkanRuntimeExport.h"
+
 #include "common/ClassTraits.h"
 #include "common/VulkanHandle.h"
 
@@ -17,9 +19,9 @@ struct PhysicalDeviceSelection
 class VulkanContext
 {
   public:
-    VulkanContext();
-    explicit VulkanContext(const std::vector<const char *> &requiredInstanceExtensions);
-    ~VulkanContext() = default;
+    VULKAN_RUNTIME_API VulkanContext();
+    VULKAN_RUNTIME_API explicit VulkanContext(const std::vector<const char *> &requiredInstanceExtensions);
+    VULKAN_RUNTIME_API ~VulkanContext() noexcept;
 
     VK_NON_COPYABLE(VulkanContext)
     VK_NON_MOVABLE(VulkanContext)
@@ -43,11 +45,11 @@ class VulkanContext
     }
 
   public:
-    static std::uint32_t GetApiVersion();
+    VULKAN_RUNTIME_API static std::uint32_t GetApiVersion();
 
-    PhysicalDeviceSelection SelectPhysicalDevice(VkSurfaceKHR surface) const;
+    VULKAN_RUNTIME_API PhysicalDeviceSelection SelectPhysicalDevice(VkSurfaceKHR surface) const;
 
-    void InitializeDevice(const PhysicalDeviceSelection &selection);
+    VULKAN_RUNTIME_API void InitializeDevice(const PhysicalDeviceSelection &selection);
 
   private:
     InstanceHandle instanceHandle_;

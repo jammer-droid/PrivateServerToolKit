@@ -23,3 +23,5 @@ VkResult VulkanException::Result() const noexcept
 {
     return result_;
 }
+
+VulkanException::~VulkanException() noexcept = default;

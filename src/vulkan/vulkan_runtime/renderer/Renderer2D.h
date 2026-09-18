@@ -1,5 +1,7 @@
 #pragma once
 
+#include "VulkanRuntimeExport.h"
+
 #include "common/ClassTraits.h"
 #include "common/VulkanHeaders.h"
 #include "common/VulkanException.h"
@@ -17,16 +19,18 @@
 class Renderer2D
 {
   public:
-    explicit Renderer2D(VkPhysicalDevice physical, VkDevice device, VkFormat colorFormat, std::uint32_t frameCount,
-                        std::uint32_t maxInstances_, const std::filesystem::path &shaderPath);
-    ~Renderer2D() = default;
+    VULKAN_RUNTIME_API explicit Renderer2D(VkPhysicalDevice physical, VkDevice device, VkFormat colorFormat,
+                                           std::uint32_t frameCount, std::uint32_t maxInstances_,
+                                           const std::filesystem::path &shaderPath);
+    VULKAN_RUNTIME_API ~Renderer2D() noexcept;
 
     VK_NON_COPYABLE(Renderer2D)
     VK_NON_MOVABLE(Renderer2D)
 
-    void UpdateColorFormat(VkFormat colorFormat);
-    void UpdateInstance(std::uint32_t frameIndex, const std::vector<InstanceData> &instances);
-    void RecordDraws(VkCommandBuffer commandBuffer, VkExtent2D extent, std::uint32_t frameIndex) const;
+    VULKAN_RUNTIME_API void UpdateColorFormat(VkFormat colorFormat);
+    VULKAN_RUNTIME_API void UpdateInstance(std::uint32_t frameIndex, const std::vector<InstanceData> &instances);
+    VULKAN_RUNTIME_API void RecordDraws(VkCommandBuffer commandBuffer, VkExtent2D extent,
+                                        std::uint32_t frameIndex) const;
 
   private:
     VkDevice device_;

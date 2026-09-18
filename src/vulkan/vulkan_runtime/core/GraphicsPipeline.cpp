@@ -193,3 +193,5 @@ GraphicsPipeline::GraphicsPipeline(VkDevice device, VkFormat colorFormat, const 
 
     pipelineHandle_.Adopt(pipeline, deleter::VkPipelineDeleter{device});
 }
+
+GraphicsPipeline::~GraphicsPipeline() noexcept = default;
