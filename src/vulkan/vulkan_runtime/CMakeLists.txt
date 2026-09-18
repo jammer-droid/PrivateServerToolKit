@@ -23,6 +23,7 @@ add_library(vulkan_runtime SHARED
     renderer/Renderer2D.cpp
 
     app/Window.cpp
+    app/Application.cpp
 )
 
 add_library(VulkanRuntime::Runtime ALIAS vulkan_runtime)
@@ -33,6 +34,14 @@ set_target_properties(vulkan_runtime PROPERTIES
     CXX_VISIBILITY_PRESET hidden
     VISIBILITY_INLINES_HIDDEN YES
 )
+
+# Runtime에서 Vulkan, glfw 공유 라이브러리 설치 경로를 사용할 수 있도록 설정
+if(UNIX)
+    set_property(TARGET vulkan_runtime PROPERTY INSTALL_RPATH
+        "$<TARGET_FILE_DIR:Vulkan::Vulkan>"
+        "$<TARGET_FILE_DIR:glfw>"
+    )
+endif()
 
 generate_export_header(vulkan_runtime
     EXPORT_FILE_NAME "generated/VulkanRuntimeExport.h"
@@ -53,8 +62,9 @@ target_include_directories(
 
 target_link_libraries(
     vulkan_runtime
-    PUBLIC Vulkan::Vulkan
-    PRIVATE glfw
+    PRIVATE
+    Vulkan::Vulkan
+    glfw
 )
 
 # install 시에 내보낼 타겟을 목록에 등록
@@ -70,11 +80,14 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/generated/VulkanRuntimeExport.h"
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
-# Transitional headers required by the current app.
-# Narrow this set with the Application API.
-install(DIRECTORY app common core renderer
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-    FILES_MATCHING PATTERN "*.h"
+install(FILES app/Application.h app/IGame.h
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/app
+)
+install(FILES renderer/DrawData2D.h
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/renderer
+)
+install(FILES common/ClassTraits.h
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/common
 )
 
 set(VULKAN_RUNTIME_BUILTIN_SHADER_DIR "${CMAKE_CURRENT_BINARY_DIR}/shaders/runtime")

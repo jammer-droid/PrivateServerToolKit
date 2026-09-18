@@ -3,7 +3,12 @@ cmake_minimum_required(VERSION 3.24)
 project(VulkanApp LANGUAGES CXX)
 
 find_package(VulkanRuntime CONFIG REQUIRED)
-find_package(Vulkan REQUIRED COMPONENTS glslc)
+find_program(GLSLC_EXECUTABLE
+    NAMES glslc
+    HINTS "$ENV{VULKAN_SDK}"
+    PATH_SUFFIXES bin Bin
+    REQUIRED
+)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 add_executable(vulkan_app
@@ -45,7 +50,7 @@ set(APP_USER_SHADER_OUTPUT_DIR "${VulkanRuntime_SHADER_ROOT}/app" CACHE PATH
 add_custom_target(vulkan_app_assets ALL
     COMMAND Python3::Interpreter "${VulkanRuntime_SHADER_COMPILER}"
         -s "${APP_USER_SHADER_SOURCE_DIR}" -o "${APP_USER_SHADER_OUTPUT_DIR}"
-        --target-env vulkan1.3 --glslc "$<TARGET_FILE:Vulkan::glslc>"
+        --target-env vulkan1.3 --glslc "${GLSLC_EXECUTABLE}"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${APP_BUILTIN_SHADER_DIR}"
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
         "${VulkanRuntime_BUILTIN_SHADER_DIR}" "${APP_BUILTIN_SHADER_DIR}"

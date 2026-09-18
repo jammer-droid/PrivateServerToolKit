@@ -192,6 +192,7 @@ template <typename VHANDLE, typename VDELETER> class VulkanHandle
     VDELETER deleter_{};
 };
 
+using SurfaceHandle = VulkanHandle<VkSurfaceKHR, deleter::VkSurfaceDeleter>;
 using InstanceHandle = VulkanHandle<VkInstance, deleter::VkInstanceDeleter>;
 using DebugMessengerHandle = VulkanHandle<VkDebugUtilsMessengerEXT, deleter::VkDebugUtilsMessengerDeleter>;
 using DeviceHandle = VulkanHandle<VkDevice, deleter::VkDeviceDeleter>;

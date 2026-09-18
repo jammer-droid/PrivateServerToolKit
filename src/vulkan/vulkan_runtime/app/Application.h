@@ -6,11 +6,17 @@
 
 class IGame;
 
+struct ApplicationConfig
+{
+    // 생성자 호출 동안 유효한 경로. Application이 내부 저장소로 복사한다.
+    const char *shaderDirectory{nullptr};
+};
+
 class Application
 {
   public:
     // game은 Application보다 오래 살아야 한다. 소유권을 이전하지 않는다.
-    VULKAN_RUNTIME_API explicit Application(IGame &game);
+    VULKAN_RUNTIME_API Application(const ApplicationConfig &config, IGame &game);
     VULKAN_RUNTIME_API ~Application() noexcept;
 
     VK_NON_COPYABLE(Application)

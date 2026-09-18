@@ -70,10 +70,10 @@ S0의 보존 작업과 S2의 구조 설계는 독립적으로 진행할 수 있�
 - **완료/검증:** 기존 도형 장면이 새 실행 구조에서 표시되고 resize·최소화/복원·종료가 유지된다. 독립 빌드와 해당 실행 경로를 확인한다.
 - **확정:** `vulkan_app`과 `vulkan_runtime`을 별도 디렉터리·CMake 타깃으로 분리한다. runtime을 독립 빌드·설치한 후 앱이 `find_package(VulkanRuntime CONFIG REQUIRED)`와 `VulkanRuntime::Runtime` 타깃으로 소비한다. 최초 `add_subdirectory` 구성은 이 독립 패키지 구성으로 대체했다.
 - **후속 공개 경계:** 공유 라이브러리와 C++ 인터페이스를 사용한다. 앱/runtime은 같은 호환 도구 체인으로 함께 빌드하며, C++17 자체가 ABI 호환성을 보장한다고 가정하지 않는다. 앱의 Game은 앱 소유, Application은 참조로 빌리고 렌더링 입력은 호출 동안 읽어 내부 자원으로 복사한다. 공개 경계에서 Vulkan 타입·함수와 구현 저장 구조를 숨긴다. 내부 Vulkan을 다중 API용으로 추상화하지 않는다.
-- **현재 작은 작업:** 패키지 분리 다음으로 runtime을 SHARED로 전환하고 export와 소비자 로딩을 검증한다. Application/Pimpl·게임 콜백 계약은 다음 작업이다. 현재 앱의 Vulkan 직접 호출도 그때 옮긴다.
-- **셰이더:** 소스는 runtime의 `shaders/`에 두고 SDK의 `share/VulkanRuntime/shaders`에 설치한다. 패키지가 제공한 `VulkanRuntime_SHADER_SOURCE_DIR`에서 앱이 읽어 컴파일한다. 개발 preset의 출력은 독립 runtime의 `build/dev/shaders`이며 `SHADER_OUTPUT_DIR`로 재정의할 수 있다. 다른 앱은 같은 셰이더 파일을 덮어쓰지 않도록 별도 출력 디렉터리를 지정한다. 현재는 `main.cpp`에 경로를 전달하고, Application 분리 시 runtime 내부 경로 처리를 정리한다. runtime은 앱의 셰이더 빌드 타깃에 의존하지 않는다.
+- **현재 작은 작업:** SHARED 전환과 WorldSandbox 연결 이후 Application/Pimpl로 실행 루프를 옮겼다. 앱 소스는 Game·설정·Run 호출만 사용한다. SDK는 공개 헤더 5개만 설치하며 Vulkan/GLFW는 PRIVATE 링크 의존성이다. 내부 클래스의 export 축소는 다음 범위다.
+- **셰이더:** 현재 `7daf3cc`의 asset 구성에 따라 runtime이 builtin 소스를 컴파일·설치하고, 앱 asset 타깃이 실행 파일 옆 `shaders/runtime`에 복사한다. 앱의 추가 셰이더는 별도로 컴파일한다. 세부 빌드 동작은 [스크립트 사용법](../../src/vulkan/script/README.md)을 따른다. 앱은 builtin 경로를 `ApplicationConfig::shaderDirectory`로 전달하고 Application이 즉시 복사한다. 최초 앱 컴파일/공유 출력 경로 구성에서 이 방식으로 갱신됐다.
 - **빌드:** 아래 독립 빌드·패키지 사용 절차를 따른다. 각 프로젝트의 `.clangd`는 자신의 `build/dev/compile_commands.json`을 참조한다. 앱 빌드는 runtime 소스를 다시 컴파일하지 않는다.
-- **현재 패키지의 한계:** SHARED 라이브러리와 현재 앱이 사용하는 기존 헤더를 임시로 설치한다. Vulkan은 여전히 공개 의존성이며 config가 찾고, GLFW는 runtime 내부 링크 의존성이다. Vulkan을 숨긴 최소 공개 헤더는 다음 작업이며, 지금 패키지를 안정된 배포 API로 취급하지 않는다.
+- **현재 패키지:** Application/IGame/DrawData2D/ClassTraits와 생성된 export 헤더만 설치한다. 패키지 config는 Vulkan/GLFW 개발 패키지를 찾지 않는다. 내부 export 심볼과 build-tree include 노출은 후속 정리 대상이며, 장기 ABI 안정성을 약속하는 배포 API는 아니다.
 
 ### S2-2 — 수학과 ECS
 
@@ -187,7 +187,7 @@ cmake --build --preset dev
 
 앱 preset의 `CMAKE_PREFIX_PATH`는 개발 SDK를 가리킨다. 다른 소비자는 자신의 preset이나 configure 인자로 SDK prefix를 제공하고 `VulkanRuntime::Runtime`을 링크한다. 패키지의 include/link 설정은 소비자에게 전달되지만 runtime의 빌드 preset을 실행하거나 병합하지 않는다. 독립 runtime의 Debug/Release와 소비자의 도구 체인·구성을 호환되게 유지한다.
 
-패키지는 설치 위치를 기준으로 경로를 계산한다. SDK를 다른 디렉터리로 복사해도 원래 runtime 소스/빌드 경로를 요구하지 않는다. 현재 패키지는 Vulkan 개발 의존성을 요구하고 셰이더 컴파일 도구는 앱이 찾는다. GLFW 개발 패키지는 runtime 빌드에 필요하며 앱 configure에는 필요하지 않다. 다만 실행 환경에는 링크한 Vulkan Loader와 GLFW 공유 라이브러리가 존재해야 한다. 이 SDK가 third-party 라이브러리를 함께 배포하는 것은 아니다.
+패키지는 설치 위치를 기준으로 경로를 계산한다. SDK를 다른 디렉터리로 복사해도 원래 runtime 소스/빌드 경로를 요구하지 않는다. 현재 SDK 소비에는 Vulkan/GLFW 개발 패키지가 필요하지 않다. runtime 빌드에는 이 개발 의존성이 필요하고, 앱은 사용자 셰이더를 위한 glslc 실행 파일과 Python만 별도로 찾는다. 다만 실행 환경에는 링크한 Vulkan Loader와 GLFW 공유 라이브러리가 존재해야 한다. 이 SDK가 third-party 라이브러리를 함께 배포하는 것은 아니다.
 
 ## S2-1 공유 라이브러리 계약
 
@@ -222,6 +222,27 @@ cmake --build --preset dev
 - 이동한 C++·셰이더 파일 26개의 내용이 기존 커밋과 동일함을 확인했다. CMake와 preset, 편집기 compile database 경로만 조정했다.
 - `git diff --check`와 새 빌드 설정의 공백 검사를 통과했다. 디렉터리 이동 이후 GUI 실행·resize 확인은 아직 하지 않았다.
 - 기존 `renderer_project/build`는 과거 빌드 캐시로 남겨두었으며 새 빌드에서 사용하지 않는다. S2-1 전체는 Application/공개 인터페이스 작업이 남아 있다.
+
+## S2-1 Application 실행 경계와 검증
+
+- `ApplicationConfig`는 `const char* shaderDirectory`만 공개한다. null/빈 문자열은 생성자가 거부하고, 유효한 문자열은 Impl의 `std::filesystem::path`로 복사한다. 원본 문자열은 생성자 이후 유지하지 않아도 된다. 파일 존재와 SPIR-V 로딩 실패는 Run에서 기존 예외 경로로 전달한다.
+- 앱은 WorldSandbox를 소유하고 Application은 `IGame&`를 빌린다. Game은 Application보다 오래 살아야 한다. Impl은 runtime에서 생성·파괴하며 공개 헤더에는 포인터만 둔다.
+- Window·Context·Surface·Swapchain·FrameResources·Renderer2D와 명령 기록/제출은 `Application.cpp` 안에서 처리한다. 이 단계에서는 Run의 지역 자원으로 기존 역순 파괴를 유지한다. 정상 종료와 Game 예외 모두 GPU 대기를 자원 파괴 전에 수행한다.
+- `Run()`은 메인 스레드에서 동기 실행하고 Game 콜백도 같은 스레드에서 순차 호출한다. 동시·재진입 호출은 지원하지 않는다. 고정 틱은 아직 도입하지 않았으며 기존 fence 대기 이후 Update→GetDrawData→복사/업로드 순서를 유지한다.
+- 최소화 대기 중 종료 요청을 받은 경우 재생성을 진행하지 않고 루프 종료로 이어지게 했다. 기존 미사용 `prevFormat` 변수도 제거했다.
+- runtime 빌드·설치와 앱 빌드 통과. 앱 main/WorldSandbox와 공개 Application/IGame 헤더에서 Vulkan 타입·함수·core 헤더 직접 사용이 없음을 확인했다. SDK의 광범위한 헤더 설치와 Vulkan PUBLIC 의존성은 아직 유지한다.
+- 설치된 SDK를 사용하는 임시 consumer에서 null/빈 설정 거부, 잘못된 셰이더 경로 실패, 5회째 Game 갱신 예외 전달을 검증했다. 이어 정상 경로에서 75회 Game 갱신, 두 번의 창 크기 변경, 창 닫기 후 Run 반환을 확인했다. 생성자에 전달한 경로 문자열을 지운 뒤에도 실행됐고, Application 파괴 후에도 Game 데이터가 유효했다.
+- 임시 consumer의 창 조작은 검증용 Cocoa 코드이며 제품 코드에 추가하지 않았다. 검증 자료는 `/var/folders/32/hd2fw_xd7yg_hsc4n6lj201w0000gn/T/application-api-check-nwav2lwt/`에 있다. 결과 exit 0, VUID 진단 없음. 최소화·복원과 다른 OS 실행은 이번 검증에서 제외했다.
+- `5fa0dc2`에서 shaderDemoteToHelperInvocation 지원 검사·활성화 후 기존 Demote 진단이 해소됐다. 아래 오류 기록은 수정 전 이력이다.
+
+## S2-1 공개 SDK 정리 검증
+
+- 기존 `dev` preset을 그대로 사용해 사용자에 의해 비워진 두 프로젝트의 `build/dev`에서 새로 configure/build했다. runtime은 `cmake --install build/dev`로 기존 preset의 SDK 위치에 설치했다. 별도 preset·SDK 검증 경로를 추가하지 않았다.
+- 설치 헤더는 `VulkanRuntimeExport.h`, `app/Application.h`, `app/IGame.h`, `renderer/DrawData2D.h`, `common/ClassTraits.h`의 5개다. `core`, Window, Renderer2D 헤더는 SDK에 없다.
+- Vulkan과 GLFW는 runtime의 PRIVATE 링크 의존성이다. 패키지 config의 Vulkan 탐색을 제거했고 앱은 `find_program(GLSLC_EXECUTABLE)`로 셰이더 컴파일 도구만 찾는다. 설치된 imported target에 Vulkan/GLFW 링크 요구사항이 없고 앱의 컴파일 명령이 SDK include만 사용하는지 확인했다.
+- 첫 실행에서 Vulkan Loader의 `@rpath/libvulkan.1.dylib`를 찾지 못했다. runtime의 Unix INSTALL_RPATH에 발견한 Vulkan/GLFW 라이브러리 디렉터리를 명시하고 다시 빌드·설치해 해결했다. 이 경로는 현재 개발 환경의 외부 라이브러리 위치이며 third-party 재배포/다른 장비 지원 증거는 아니다.
+- 같은 `dev` 앱 실행에서 로딩 성공과 VUID 없는 실행 로그를 확인했다. GUI 자동화 도구가 이 독립 실행 파일을 식별하지 못해 창 조작·정상 닫기는 이번에 재검증하지 않았고, 검증 프로세스는 SIGTERM으로 정리했다. 기존 정상 종료 검증과 구분한다. 로그는 앱의 `build/dev/sdk-check.log`에 있다.
+- preset 변경 없음, `git diff --check` 통과. 내부 심볼 export는 이번 범위에서 유지했다.
 
 ## 변경 기록
 
