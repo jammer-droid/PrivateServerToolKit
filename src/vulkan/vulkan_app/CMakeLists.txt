@@ -4,9 +4,12 @@ project(VulkanApp LANGUAGES CXX)
 
 find_package(VulkanRuntime CONFIG REQUIRED)
 find_package(Vulkan REQUIRED COMPONENTS glslc)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 add_executable(vulkan_app
-    main.cpp)
+    main.cpp
+    app/WorldSandbox.cpp
+)
 
 target_link_libraries(
     vulkan_app
@@ -25,49 +28,27 @@ if(WIN32)
     )
 endif()
 
-# SHADER_OUTPUT_DIR가 cache에 저장되어 있으면 덮지 않고, 없으면 여기에서 지정한 값을 사용
-set(SHADER_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/shaders" CACHE PATH
-    "Directory for app-compiled runtime shaders")
+# Builtin shaders are compiled and installed by the runtime package.
+# Use the actual executable directory for single- and multi-config generators.
+set(APP_BUILTIN_SHADER_DIR "$<TARGET_FILE_DIR:vulkan_app>/shaders/runtime")
 
-target_compile_definitions(
-    vulkan_app
-    PRIVATE
-    RENDERER_SHADER_DIR="${SHADER_OUTPUT_DIR}"
+target_compile_definitions(vulkan_app PRIVATE
+    RENDERER_SHADER_DIR="${APP_BUILTIN_SHADER_DIR}"
 )
 
-# shader build
+set(APP_USER_SHADER_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shaders" CACHE PATH
+    "Directory containing app shader sources")
+set(APP_USER_SHADER_OUTPUT_DIR "${VulkanRuntime_SHADER_ROOT}/app" CACHE PATH
+    "App shader output directory; use a unique subdirectory for each app sharing an SDK")
 
-add_custom_command(
-    OUTPUT "${SHADER_OUTPUT_DIR}/triangle.vert.spv"
-
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "${SHADER_OUTPUT_DIR}"
-    COMMAND Vulkan::glslc
-            --target-env=vulkan1.3
-            "${VulkanRuntime_SHADER_SOURCE_DIR}/triangle.vert"
-            -o "${SHADER_OUTPUT_DIR}/triangle.vert.spv"
-
-    DEPENDS "${VulkanRuntime_SHADER_SOURCE_DIR}/triangle.vert"
-
+# Run after the executable, including shader-only edits without relinking.
+add_custom_target(vulkan_app_assets ALL
+    COMMAND Python3::Interpreter "${VulkanRuntime_SHADER_COMPILER}"
+        -s "${APP_USER_SHADER_SOURCE_DIR}" -o "${APP_USER_SHADER_OUTPUT_DIR}"
+        --target-env vulkan1.3 --glslc "$<TARGET_FILE:Vulkan::glslc>"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${APP_BUILTIN_SHADER_DIR}"
+    COMMAND "${CMAKE_COMMAND}" -E copy_directory
+        "${VulkanRuntime_BUILTIN_SHADER_DIR}" "${APP_BUILTIN_SHADER_DIR}"
     VERBATIM
 )
-
-add_custom_command(
-    OUTPUT "${SHADER_OUTPUT_DIR}/triangle.frag.spv"
-
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "${SHADER_OUTPUT_DIR}"
-    COMMAND Vulkan::glslc
-            --target-env=vulkan1.3
-            "${VulkanRuntime_SHADER_SOURCE_DIR}/triangle.frag"
-            -o "${SHADER_OUTPUT_DIR}/triangle.frag.spv"
-
-    DEPENDS "${VulkanRuntime_SHADER_SOURCE_DIR}/triangle.frag"
-
-    VERBATIM
-)
-
-add_custom_target(compile_shaders DEPENDS
-    "${SHADER_OUTPUT_DIR}/triangle.vert.spv"
-    "${SHADER_OUTPUT_DIR}/triangle.frag.spv"
-)
-
-add_dependencies(vulkan_app compile_shaders)
+add_dependencies(vulkan_app_assets vulkan_app)

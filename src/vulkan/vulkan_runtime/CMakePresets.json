@@ -21,7 +21,9 @@
         {
             "name": "dev",
             "configurePreset": "dev",
-            "targets": ["vulkan_runtime"]
+            "targets": [
+                "vulkan_runtime_assets"
+            ]
         }
     ]
 }

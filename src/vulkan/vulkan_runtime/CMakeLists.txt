@@ -6,8 +6,9 @@ include(GNUInstallDirs) #  lib, include, bin, share 같은 설치 경로 변수�
 include(CMakePackageConfigHelpers) # 다른 프로젝트 find_package가 읽을 설정 파일 생성 도구 제공.
 include(GenerateExportHeader)
 
-find_package(Vulkan REQUIRED)
+find_package(Vulkan REQUIRED COMPONENTS glslc)
 find_package(glfw3 REQUIRED CONFIG)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 add_library(vulkan_runtime SHARED
     common/VulkanException.cpp
@@ -76,16 +77,35 @@ install(DIRECTORY app common core renderer
     FILES_MATCHING PATTERN "*.h"
 )
 
-install(DIRECTORY shaders/
-    DESTINATION ${CMAKE_INSTALL_DATADIR}/VulkanRuntime/shaders
-    FILES_MATCHING
-        PATTERN "*.vert"
-        PATTERN "*.frag"
-)
+set(VULKAN_RUNTIME_BUILTIN_SHADER_DIR "${CMAKE_CURRENT_BINARY_DIR}/shaders/runtime")
+set(VULKAN_RUNTIME_SHADER_INSTALL_DIR "shaders/runtime")
+set(VULKAN_RUNTIME_SHADER_ROOT_INSTALL_DIR "shaders")
+set(VULKAN_RUNTIME_SHADER_SCRIPT_INSTALL_PATH
+    "${CMAKE_INSTALL_DATADIR}/VulkanRuntime/tools/compile_shaders.py")
+set(VULKAN_RUNTIME_SHADER_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/../script/compile_shaders.py")
 
-set(
-    VULKAN_RUNTIME_SHADER_INSTALL_DIR
-    "${CMAKE_INSTALL_DATADIR}/VulkanRuntime/shaders")
+# This target runs after the library, including shader-only edits without relinking.
+add_custom_target(vulkan_runtime_assets ALL
+    COMMAND Python3::Interpreter "${VULKAN_RUNTIME_SHADER_SCRIPT}"
+        -s "${CMAKE_CURRENT_SOURCE_DIR}/shaders"
+        -o "${VULKAN_RUNTIME_BUILTIN_SHADER_DIR}"
+        --target-env vulkan1.3 --glslc "$<TARGET_FILE:Vulkan::glslc>"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory
+        "${CMAKE_INSTALL_PREFIX}/${VULKAN_RUNTIME_SHADER_INSTALL_DIR}"
+    COMMAND "${CMAKE_COMMAND}" -E copy_directory
+        "${VULKAN_RUNTIME_BUILTIN_SHADER_DIR}"
+        "${CMAKE_INSTALL_PREFIX}/${VULKAN_RUNTIME_SHADER_INSTALL_DIR}"
+    VERBATIM
+)
+add_dependencies(vulkan_runtime_assets vulkan_runtime)
+
+install(DIRECTORY "${VULKAN_RUNTIME_BUILTIN_SHADER_DIR}/"
+    DESTINATION "${VULKAN_RUNTIME_SHADER_INSTALL_DIR}"
+    FILES_MATCHING PATTERN "*.spv"
+)
+install(FILES "${VULKAN_RUNTIME_SHADER_SCRIPT}"
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/VulkanRuntime/tools"
+)
 set(
     VULKAN_RUNTIME_PACKAGE_DIR
     "${CMAKE_INSTALL_LIBDIR}/cmake/VulkanRuntime")
@@ -95,7 +115,10 @@ configure_package_config_file(
     cmake/VulkanRuntimeConfig.cmake.in
     "${CMAKE_CURRENT_BINARY_DIR}/VulkanRuntimeConfig.cmake"
     INSTALL_DESTINATION "${VULKAN_RUNTIME_PACKAGE_DIR}"
-    PATH_VARS VULKAN_RUNTIME_SHADER_INSTALL_DIR
+    PATH_VARS
+        VULKAN_RUNTIME_SHADER_INSTALL_DIR
+        VULKAN_RUNTIME_SHADER_ROOT_INSTALL_DIR
+        VULKAN_RUNTIME_SHADER_SCRIPT_INSTALL_PATH
 )
 
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/VulkanRuntimeConfig.cmake"

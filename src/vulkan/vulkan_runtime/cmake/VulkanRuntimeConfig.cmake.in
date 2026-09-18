@@ -1,6 +1,9 @@
 @PACKAGE_INIT@
 
-set_and_check(VulkanRuntime_SHADER_SOURCE_DIR "@PACKAGE_VULKAN_RUNTIME_SHADER_INSTALL_DIR@")
+set_and_check(VulkanRuntime_BUILTIN_SHADER_DIR "@PACKAGE_VULKAN_RUNTIME_SHADER_INSTALL_DIR@")
+
+set_and_check(VulkanRuntime_SHADER_ROOT "@PACKAGE_VULKAN_RUNTIME_SHADER_ROOT_INSTALL_DIR@")
+set_and_check(VulkanRuntime_SHADER_COMPILER "@PACKAGE_VULKAN_RUNTIME_SHADER_SCRIPT_INSTALL_PATH@")
 
 include(CMakeFindDependencyMacro)
 find_dependency(Vulkan)
