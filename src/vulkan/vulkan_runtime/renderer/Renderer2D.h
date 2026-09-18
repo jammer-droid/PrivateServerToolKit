@@ -1,7 +1,5 @@
 #pragma once
 
-#include "VulkanRuntimeExport.h"
-
 #include "common/ClassTraits.h"
 #include "common/VulkanHeaders.h"
 #include "common/VulkanException.h"
@@ -20,20 +18,18 @@
 class Renderer2D
 {
   public:
-    VULKAN_RUNTIME_API explicit Renderer2D(VkPhysicalDevice physical, VkDevice device, VkFormat colorFormat,
-                                           std::uint32_t frameCount, std::uint32_t maxInstances_,
-                                           const std::filesystem::path &shaderPath);
-    VULKAN_RUNTIME_API ~Renderer2D() noexcept;
+    explicit Renderer2D(VkPhysicalDevice physical, VkDevice device, VkFormat colorFormat, std::uint32_t frameCount,
+                        std::uint32_t maxInstances_, const std::filesystem::path &shaderPath);
+    ~Renderer2D() noexcept;
 
     VK_NON_COPYABLE(Renderer2D)
     VK_NON_MOVABLE(Renderer2D)
 
-    VULKAN_RUNTIME_API void UpdateColorFormat(VkFormat colorFormat);
+    void UpdateColorFormat(VkFormat colorFormat);
     // 현재 프레임 슬롯의 GPU 사용 완료 후 호출한다. 입력 뷰는 호출 중에만 읽는다.
-    VULKAN_RUNTIME_API void UpdateDrawData(std::uint32_t frameIndex, DrawData2DView drawData);
-    VULKAN_RUNTIME_API void UpdateInstance(std::uint32_t frameIndex, const std::vector<InstanceData> &instances);
-    VULKAN_RUNTIME_API void RecordDraws(VkCommandBuffer commandBuffer, VkExtent2D extent,
-                                        std::uint32_t frameIndex) const;
+    void UpdateDrawData(std::uint32_t frameIndex, DrawData2DView drawData);
+    void UpdateInstance(std::uint32_t frameIndex, const std::vector<InstanceData> &instances);
+    void RecordDraws(VkCommandBuffer commandBuffer, VkExtent2D extent, std::uint32_t frameIndex) const;
 
   private:
     VkDevice device_;

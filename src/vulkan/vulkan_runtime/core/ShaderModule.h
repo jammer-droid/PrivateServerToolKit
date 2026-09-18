@@ -1,7 +1,5 @@
 #pragma once
 
-#include "VulkanRuntimeExport.h"
-
 #include "common/ClassTraits.h"
 #include "common/VulkanHandle.h"
 
@@ -10,8 +8,8 @@
 class ShaderModule
 {
   public:
-    VULKAN_RUNTIME_API explicit ShaderModule(VkDevice device, const std::filesystem::path &shaderPath);
-    VULKAN_RUNTIME_API ~ShaderModule() noexcept;
+    explicit ShaderModule(VkDevice device, const std::filesystem::path &shaderPath);
+    ~ShaderModule() noexcept;
 
     VK_NON_COPYABLE(ShaderModule)
     VK_NON_MOVABLE(ShaderModule)

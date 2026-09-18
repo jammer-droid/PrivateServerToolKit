@@ -1,7 +1,5 @@
 #pragma once
 
-#include "VulkanRuntimeExport.h"
-
 #include "common/ClassTraits.h"
 #include "common/VulkanHeaders.h"
 #include "common/VulkanHandle.h"
@@ -11,10 +9,9 @@
 class HostVisibleBuffer
 {
   public:
-    VULKAN_RUNTIME_API explicit HostVisibleBuffer(VkPhysicalDevice physicalDevice, VkDevice device,
-                                                  VkDeviceSize capacityBytes);
+    explicit HostVisibleBuffer(VkPhysicalDevice physicalDevice, VkDevice device, VkDeviceSize capacityBytes);
 
-    VULKAN_RUNTIME_API ~HostVisibleBuffer() noexcept;
+    ~HostVisibleBuffer() noexcept;
 
     VK_NON_COPYABLE(HostVisibleBuffer)
     VK_NON_MOVABLE(HostVisibleBuffer)
@@ -28,7 +25,7 @@ class HostVisibleBuffer
         return capacityBytes_;
     }
 
-    VULKAN_RUNTIME_API void Write(const void *data, std::size_t byteCount);
+    void Write(const void *data, std::size_t byteCount);
 
   private:
     VkDevice device_;
