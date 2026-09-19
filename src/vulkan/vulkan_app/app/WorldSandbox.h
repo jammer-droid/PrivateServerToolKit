@@ -3,6 +3,8 @@
 #include "runtime/app/IGame.h"
 #include "runtime/renderer/DrawData2D.h"
 
+#include "ecs/EntityManager.h"
+
 #include <glm/glm.hpp>
 
 #include <cstddef>
@@ -23,6 +25,12 @@ class WorldSandbox final : public IGame
     void RebuildDrawData();
 
     static constexpr std::size_t MaxTrailPoints = 64;
+
+  private:
+    EntityManager entityManager_;
+    EntityId rectEntityId_{0};
+
+    std::vector<EntityId> sandboxEntities;
 
     DrawItem2D rectangle_;
     DrawItem2D circle_;

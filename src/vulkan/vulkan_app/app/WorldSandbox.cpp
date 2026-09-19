@@ -1,9 +1,19 @@
 #include "WorldSandbox.h"
 
+#include "ecs/MovementSystem.h"
+
+constexpr float SimulationTimeStep = 1.0f / 60.0f;
+
 WorldSandbox::WorldSandbox()
 {
-    rectangle_.geometry.rect = {{50.0f, 50.0f}, {100.0f, 100.0f}};
-    rectangle_.color = {1.0f, 0.0f, 0.0f, 0.75f};
+    rectangle_.geometry.rect.size = {100.0f, 100.0f};
+    rectangle_.color = {1.0f, 0.5f, 0.0f, 0.75f};
+
+    EntityId id = entityManager_.CreateEntity();
+    Entity *entity = entityManager_.FindEntity(id);
+    entity->transform = Transform2D{glm::vec2{50.0f, 50.0f}};
+    entity->velocity = Velocity2D{glm::vec2{60.0f, 0.0f}};
+    rectEntityId_ = id;
 
     line_.shape = DrawShape2D::Line;
     line_.geometry = GeometryData2D{GeometryData2D::LineData2D{{100.0f, 300.0f}, {150.0f, 50.0f}}};
@@ -20,13 +30,20 @@ WorldSandbox::WorldSandbox()
 
 void WorldSandbox::Update()
 {
-    rectangle_.geometry.rect.position += glm::vec2{1.0f, 0.0f};
-    const glm::vec2 center = rectangle_.geometry.rect.position + rectangle_.geometry.rect.size * 0.5f;
-    if (trailPoints_.size() >= MaxTrailPoints)
+    // 실제 프레임 시간이 아니라 Update 한 번에 적용하는 임시 시뮬레이션 간격이다.
+    UpdateMovement(entityManager_.GetEntities(), SimulationTimeStep);
+    entityManager_.FlushDestroyed();
+
+    const Entity *entity = entityManager_.FindEntity(rectEntityId_);
+    if (entity != nullptr && entity->transform.has_value())
     {
-        trailPoints_.pop_front();
+        const glm::vec2 center = entity->transform->position + rectangle_.geometry.rect.size * 0.5f;
+        if (trailPoints_.size() >= MaxTrailPoints)
+        {
+            trailPoints_.pop_front();
+        }
+        trailPoints_.push_back(center);
     }
-    trailPoints_.push_back(center);
 
     RebuildDrawData();
 }
@@ -58,7 +75,13 @@ void WorldSandbox::RebuildDrawData()
         drawItems_.push_back(segment);
     }
 
-    drawItems_.push_back(rectangle_);
+    const Entity *entity = entityManager_.FindEntity(rectEntityId_);
+    if (entity != nullptr && !entity->pendingDestroy && entity->transform.has_value())
+    {
+        DrawItem2D rectangle = rectangle_;
+        rectangle.geometry.rect.position = entity->transform->position;
+        drawItems_.push_back(rectangle);
+    }
     drawItems_.push_back(line_);
     drawItems_.push_back(circle_);
 }
