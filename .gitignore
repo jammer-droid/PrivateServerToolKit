@@ -10,3 +10,4 @@ CMakeUserPresets.json
 src/vulkan/build/
 src/vulkan/cmake-build-debug/
 src/vulkan/*/build
+automation
