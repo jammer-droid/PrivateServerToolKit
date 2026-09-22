@@ -1,26 +1,26 @@
 #pragma once
 
 #include "Components.h"
-#include "Entitiy.h"
+#include "EntityManager.h"
 
-#include <vector>
+using MovementFunc = void (*)(Transform2D &, const Velocity2D &, float);
 
 inline void IntegrateMovement(Transform2D &transform, const Velocity2D &velocity, float dt)
 {
     transform.position += (velocity.value * dt);
 }
 
-inline void UpdateMovement(std::vector<Entity> &entities, float dt)
+inline void UpdateMovement(EntityManager &manager, float dt)
 {
-    for (Entity &entity : entities)
-    {
-        if (entity.pendingDestroy)
+    MovementFunc func = &IntegrateMovement;
+    manager.ForEach([dt, &func](const SparseHandle &handle, Entity &value) {
+        if (value.pendingDestroy)
         {
-            continue;
+            return;
         }
-        if (entity.transform.has_value() && entity.velocity.has_value())
+        if (value.transform.has_value() && value.velocity.has_value())
         {
-            IntegrateMovement(entity.transform.value(), entity.velocity.value(), dt);
+            func(value.transform.value(), value.velocity.value(), dt);
         }
-    }
+    });
 }

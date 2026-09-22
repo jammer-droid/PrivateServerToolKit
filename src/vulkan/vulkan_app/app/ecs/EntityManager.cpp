@@ -1,70 +1,43 @@
 #include "EntityManager.h"
 
-#include <algorithm>
-#include <stdexcept>
+#include <vector>
 
-EntityId EntityManager::CreateEntity()
+SparseHandle EntityManager::CreateEntity()
 {
-    if (nextId_ == 0)
-    {
-        throw std::overflow_error("Id is overflowed");
-    }
-
-    Entity entity{};
-
-    entity.id = nextId_;
-
-    entities_.push_back(entity);
-
-    nextId_++;
-    return entity.id;
+    return entities_.Add(Entity{});
 }
 
-Entity *EntityManager::FindEntity(EntityId id)
+Entity *EntityManager::FindEntity(SparseHandle handle)
 {
-    for (Entity &entity : entities_)
-    {
-        if (entity.id == id)
-        {
-            return &entity;
-        }
-    }
-
-    return nullptr;
+    return entities_.TryGet(handle);
 }
 
-const Entity *EntityManager::FindEntity(EntityId id) const
+const Entity *EntityManager::FindEntity(SparseHandle handle) const
 {
-    for (const Entity &entity : entities_)
-    {
-        if (entity.id == id)
-        {
-            return &entity;
-        }
-    }
-
-    return nullptr;
+    return entities_.TryGet(handle);
 }
 
-void EntityManager::DestroyEntity(EntityId id)
+void EntityManager::DestroyEntity(SparseHandle handle)
 {
-    for (Entity &entity : entities_)
+    Entity *entity = entities_.TryGet(handle);
+    if (entity)
     {
-        if (entity.id == id)
-        {
-            entity.pendingDestroy = true;
-        }
+        entity->pendingDestroy = true;
     }
 }
 
 void EntityManager::FlushDestroyed()
 {
-    auto iter =
-        std::remove_if(entities_.begin(), entities_.end(), [](Entity &entity) { return entity.pendingDestroy; });
-    entities_.erase(iter, entities_.end());
-}
+    std::vector<SparseHandle> removed;
+    ForEach([&removed](const SparseHandle &handle, Entity &value) {
+        if (value.pendingDestroy)
+        {
+            removed.push_back(handle);
+        }
+    });
 
-std::vector<Entity> &EntityManager::GetEntities()
-{
-    return entities_;
+    for (SparseHandle &handle : removed)
+    {
+        entities_.Remove(handle);
+    }
 }

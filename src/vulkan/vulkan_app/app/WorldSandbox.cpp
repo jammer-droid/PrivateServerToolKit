@@ -9,8 +9,9 @@ WorldSandbox::WorldSandbox()
     rectangle_.geometry.rect.size = {100.0f, 100.0f};
     rectangle_.color = {1.0f, 0.5f, 0.0f, 0.75f};
 
-    EntityId id = entityManager_.CreateEntity();
+    SparseHandle id = entityManager_.CreateEntity();
     Entity *entity = entityManager_.FindEntity(id);
+
     entity->transform = Transform2D{glm::vec2{50.0f, 50.0f}};
     entity->velocity = Velocity2D{glm::vec2{60.0f, 0.0f}};
     rectEntityId_ = id;
@@ -31,7 +32,7 @@ WorldSandbox::WorldSandbox()
 void WorldSandbox::Update()
 {
     // 실제 프레임 시간이 아니라 Update 한 번에 적용하는 임시 시뮬레이션 간격이다.
-    UpdateMovement(entityManager_.GetEntities(), SimulationTimeStep);
+    UpdateMovement(entityManager_, SimulationTimeStep);
     entityManager_.FlushDestroyed();
 
     const Entity *entity = entityManager_.FindEntity(rectEntityId_);

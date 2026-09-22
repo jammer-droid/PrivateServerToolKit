@@ -125,6 +125,24 @@ template <typename T> class SparseSet
         return &dense_[GetValue(sparse_[handle.index].packed)].value;
     }
 
+    // forwarding reference callback
+    template <typename Func> void ForEach(Func &&func)
+    {
+        for (DenseEntry &entry : dense_)
+        {
+            const SparseHandle &handle = entry.handle;
+            func(handle, entry.value);
+        }
+    }
+
+    template <typename Func> void ForEach(Func &&func) const
+    {
+        for (const DenseEntry &entry : dense_)
+        {
+            func(entry.handle, entry.value);
+        }
+    }
+
     std::uint32_t DenseSize() const
     {
         return static_cast<std::uint32_t>(dense_.size());

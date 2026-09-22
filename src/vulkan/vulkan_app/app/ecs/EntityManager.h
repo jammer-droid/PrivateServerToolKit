@@ -1,8 +1,9 @@
 #pragma once
 
 #include "Entitiy.h"
+#include "SparseSet.h"
 
-#include <vector>
+#include <utility>
 
 class EntityManager
 {
@@ -10,17 +11,22 @@ class EntityManager
     EntityManager() = default;
     ~EntityManager() = default;
 
-    EntityId CreateEntity();
-
-    Entity *FindEntity(EntityId id);
-    const Entity *FindEntity(EntityId id) const;
-
-    void DestroyEntity(EntityId id);
+    SparseHandle CreateEntity();
+    Entity *FindEntity(SparseHandle handle);
+    const Entity *FindEntity(SparseHandle handle) const;
+    void DestroyEntity(SparseHandle handle);
     void FlushDestroyed();
 
-    std::vector<Entity> &GetEntities();
+    template <typename Func> void ForEach(Func &&func)
+    {
+        entities_.ForEach(std::forward<Func>(func));
+    }
+
+    template <typename Func> void ForEach(Func &&func) const
+    {
+        entities_.ForEach(std::forward<Func>(func));
+    }
 
   private:
-    EntityId nextId_{1};
-    std::vector<Entity> entities_;
+    SparseSet<Entity> entities_;
 };

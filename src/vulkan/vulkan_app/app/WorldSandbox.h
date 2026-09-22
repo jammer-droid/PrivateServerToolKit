@@ -4,6 +4,7 @@
 #include "runtime/renderer/DrawData2D.h"
 
 #include "ecs/EntityManager.h"
+#include "ecs/SparseSet.h"
 
 #include <glm/glm.hpp>
 
@@ -28,9 +29,9 @@ class WorldSandbox final : public IGame
 
   private:
     EntityManager entityManager_;
-    EntityId rectEntityId_{0};
+    SparseHandle rectEntityId_{0};
 
-    std::vector<EntityId> sandboxEntities;
+    std::vector<SparseHandle> sandboxEntities;
 
     DrawItem2D rectangle_;
     DrawItem2D circle_;
