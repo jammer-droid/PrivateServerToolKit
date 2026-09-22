@@ -28,14 +28,15 @@ void SetValue(PackedUint &packed, std::uint32_t value)
 SparseSet::SparseSet()
 {
     std::uint32_t initialSize = 1024;
-    sparse_.resize(initialSize, 0);
+    sparse_.resize(initialSize, {0, 0});
     dense_.reserve(initialSize);
 
     for (std::uint32_t i = 0; i < initialSize; i++)
     {
-        PackedUint &packed = sparse_[i];
-        packed = 0;
-        packed |= (i + 1);
+        SparseSlot &slot = sparse_[i];
+        slot.packed = 0;
+        slot.packed |= (i + 1);
+        slot.generation = 1;
     }
 }
 
@@ -47,27 +48,36 @@ SparseHandle SparseSet::Add(EntityId id)
     }
 
     std::uint32_t sparseIdx = head_;
-    PackedUint &packed = sparse_[sparseIdx];
-    std::uint32_t nextSparseIdx = GetValue(packed);
+    SparseSlot &slot = sparse_[sparseIdx];
 
-    dense_.push_back(DenseEntry{id, sparseIdx});
-    packed = 0;
-    packed |= MSB;
-    packed |= (dense_.size() - 1);
+    std::uint32_t nextSparseIdx = GetValue(slot.packed);
+
+    dense_.push_back(DenseEntry{id, {sparseIdx, slot.generation}});
+
+    // update to used
+    slot.packed = 0;
+    slot.packed |= MSB;
+    slot.packed |= (dense_.size() - 1);
 
     head_ = nextSparseIdx;
 
-    return sparseIdx;
+    return {sparseIdx, slot.generation};
 }
 
-bool SparseSet::Contain(SparseHandle handle)
+bool SparseSet::Contain(SparseHandle handle) const
 {
-    if (handle >= (std::uint32_t)sparse_.size())
+    if (handle.index >= (std::uint32_t)sparse_.size())
     {
         return false;
     }
 
-    return IsUsedSlot(sparse_[handle]);
+    const SparseSlot &slot = sparse_[handle.index];
+    if (slot.generation != handle.generation)
+    {
+        return false;
+    }
+
+    return IsUsedSlot(slot.packed) && (dense_[GetValue(slot.packed)].handle.generation == slot.generation);
 }
 
 void SparseSet::Remove(SparseHandle handle)
@@ -77,38 +87,50 @@ void SparseSet::Remove(SparseHandle handle)
         return;
     }
 
-    PackedUint &packed = sparse_[handle];
+    // removed slot
+    SparseSlot &slot = sparse_[handle.index];
 
-    std::uint32_t denseIdx = GetValue(packed);
+    std::uint32_t denseIdx = GetValue(slot.packed);
     std::uint32_t lastDenseIdx = (std::uint32_t)dense_.size() - 1;
     DenseEntry denseEntry = dense_[lastDenseIdx];
 
-    PackedUint &densePacked = sparse_[denseEntry.handle];
-    densePacked &= ~Mask;
-    SetValue(densePacked, denseIdx);
+    SparseSlot &dereferSlot = sparse_[denseEntry.handle.index];
+    dereferSlot.packed &= ~Mask;
+    SetValue(dereferSlot.packed, denseIdx);
 
     dense_[denseIdx] = denseEntry;
     dense_.pop_back();
 
-    packed = 0;
-    SetValue(packed, head_);
+    slot.packed = 0;
+    slot.generation++;
+    SetValue(slot.packed, head_);
 
-    head_ = handle;
+    head_ = handle.index;
 }
 
 void SparseSet::Clear()
 {
     head_ = 0;
-    std::uint32_t initialSize = 1024;
-    sparse_.resize(initialSize, 0);
     dense_.clear();
 
-    for (std::uint32_t i = 0; i < initialSize; i++)
+    for (std::uint32_t i = 0; i < (std::uint32_t)sparse_.size(); i++)
     {
-        PackedUint &packed = sparse_[i];
-        packed = 0;
-        packed |= (i + 1);
+        SparseSlot &slot = sparse_[i];
+        slot.packed = 0;
+        slot.packed |= (i + 1);
+        slot.generation++;
     }
+}
+
+bool SparseSet::TryGet(SparseHandle handle, EntityId *outId) const
+{
+    if (!Contain(handle) || outId == nullptr)
+    {
+        return false;
+    }
+
+    *outId = dense_[GetValue(sparse_[handle.index].packed)].id;
+    return true;
 }
 
 void SparseSet::ResizeSparse()
@@ -123,9 +145,10 @@ void SparseSet::ResizeSparse()
     sparse_.resize(sz * 2);
     for (std::uint32_t i = sz; i < sz * 2; i++)
     {
-        PackedUint &packed = sparse_[i];
-        packed = 0;
-        packed |= i + 1;
+        SparseSlot &slot = sparse_[i];
+        slot.packed = 0;
+        slot.packed |= (i + 1);
+        slot.generation = 1;
     }
     dense_.reserve(sz * 2);
 }
