@@ -2,7 +2,7 @@
 
 ## 범위와 우선순위
 
-이 저장소는 `agent-context`가 설치하는 전역 C++ coding standard와 shared-library coding standard를 기본값으로 사용한다. 이 문서는 공통 규약을 복제하지 않고 PrivateServerToolKit에서 달라지거나 더 구체적인 계약만 기록한다.
+이 저장소는 `agent-context`가 설치하는 전역 C++ coding standard와 shared-library coding standard를 기본값으로 사용한다. 공통 원본은 `agent-context/custom/global/codex/guides/`이고 설치 위치는 `~/.codex/guides/`다. 공통 규약 수정은 원본에서 배포하며, 이 문서는 PrivateServerToolKit의 예외와 추가 계약만 기록한다.
 
 충돌 시 다음 순서로 판단한다.
 
@@ -19,7 +19,7 @@ PrivateServerToolKit의 compiled tool과 runtime component는 기본적으로 sh
 
 - `typedef struct`, `typedef enum`, lowerCamelCase field와 이미 공개된 symbol 및 numeric value를 유지한다.
 - 공개 계약을 `enum class`, reference parameter, constructor 또는 C++ member function으로 바꾸지 않는다.
-- `extern "C"`는 C++ name mangling을 제거해야 하는 exported function declaration에 사용한다. 단순 type declaration 자체에는 필요하지 않다.
+- Exported function에는 `extern "C"`를 사용한다. `struct`와 `enum` 선언 자체에는 필요하지 않지만 callback 함수 타입은 공통 ABI의 language linkage와 calling convention에 맞춘다.
 - 공개 signature와 object layout에는 STL type, exception, RTTI 또는 compiler-dependent C++ class layout을 노출하지 않는다.
 - Export macro는 DLL 밖에서 호출해야 하는 symbol에만 붙이고 나머지 symbol은 기본적으로 숨긴다.
 - 한 module에서 할당한 메모리는 같은 module이 해제한다. Module이 ownership을 넘긴다면 대응하는 destroy/free API를 같은 경계에 제공한다.
