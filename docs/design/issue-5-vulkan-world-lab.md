@@ -2,7 +2,7 @@
 
 - Issue: [Vulkan World Lab: 독립 렌더러와 대규모 투사체·AOI·군중 이동](https://github.com/jammer-droid/PrivateServerToolKit/issues/5)
 - 선행 결과: [#6 Vulkan 2D 렌더러 기반 학습](issue-6-vulkan-2d-foundation.md), S1-1~S1-6 완료.
-- 상태: S2-1 실행 구조 완료. 클라이언트 기반 1/6 완료, 현재 S2-2 수학·ECS에서 GLM 공통 타입과 Entity 저장소 연결을 완료했으며 ComponentPool·View를 진행한다. 상세 구현 계약은 단계 진입 시 확정한다.
+- 상태: S2-1 실행 구조 완료. 클라이언트 기반 1/6 완료, 현재 S2-2 수학·ECS에서 GLM 공통 타입과 Entity 저장소 연결, 독립 ComponentPool 구현을 완료했으며 기본 View 연결을 진행한다. 상세 구현 계약은 단계 진입 시 확정한다.
 - 진행 방식: 사용자가 직접 구현하고 agent가 개념 안내와 코드·실행 검토를 담당한다. 문서 작성은 구현 위임이 아니다.
 
 ## 목표와 범위
@@ -83,13 +83,13 @@ S0의 보존 작업과 S2의 구조 설계는 독립적으로 진행할 수 있�
 - **현재 진행:** GLM을 app/runtime/공개 API의 공통 수학 타입으로 채택했다. DrawData2D의 위치·크기·끝점은 glm::vec2, 색상은 glm::vec4다. WorldSandbox도 같은 DrawItem2D를 보관해 별도 RectState/LineState와 ToDrawItem2D 변환을 제거했다. GPU InstanceData의 48바이트 계약은 유지하며 runtime에서 명시적으로 패킹한다.
 - **이번 검증:** 기존 dev preset의 runtime 빌드·설치와 앱 빌드 통과. CPU 검증에서 초기 도형/색상/두께, 100회 갱신의 위치·중심점·궤적 순서와 최대 63선분, 조회 사이 뷰 유효성을 확인했다. ASan/UBSan 진단 없음. 최종 공통 타입 변경에서는 installed target의 glm::glm 공개 의존성과 Config의 find_dependency(glm CONFIG)를 확인했다. 공개 헤더 소비자의 렌더링·경로 오류·Game 예외 전달 smoke도 통과했으며 VUID 오류는 없었다. 화면 비교·resize는 이번에 재검증하지 않았다.
 - **ECS 현재 상태:** `fe37f07`까지 generation을 가진 `SparseSet<T>`, EntityManager 연결, 지연 삭제, const 순회와 WorldSandbox 이동 연결을 완료했다. 기존 dev 빌드와 ASan/UBSan 검증에서 다중 삭제·삭제 예정 대상 이동 제외·오래된 handle 거부·const 조회 및 120회 갱신 후 위치/궤적 데이터를 확인했다. 이 기록은 앞선 구현 검증이며 이번 설계 갱신에서 재실행한 결과가 아니다. 실제 화면 실행은 해당 검증에서 별도로 확인하지 않았다.
-- **남은 범위:** ComponentPool 분리, 기본 View, 태그와 Cached View, 씬별 등록 및 렌더링 연결을 아래 순서로 진행한다. 방향·0 길이 정규화 정책의 학습/검증도 남아 있다.
+- **남은 범위:** Entity의 optional을 ComponentPool로 분리하고 기본 View, 태그와 Cached View, 씬별 등록 및 렌더링 연결을 아래 순서로 진행한다. 방향·0 길이 정규화 정책의 학습/검증도 남아 있다.
 
 - **선행/학습:** S2-1. 벡터·기하 연산과 Entity 식별·수명, Component 저장, System 갱신을 직접 구현한다.
 - **결과/seam:** CPU 수학 타입, Entity 식별·수명, ComponentPool 원본 저장, System의 View 조회, 씬별 Cached View 등록과 월드 데이터에서 렌더링 입력을 추출하는 경계.
 - **불변식:** ECS가 Vulkan 핸들의 소유자가 되지 않는다. CPU 타입과 GPU 전송 layout을 동일하다고 가정하지 않는다. 생성·제거와 순회 중 변경의 적용 시점을 정의한다.
 - **완료/검증:** ECS로 도형을 생성·이동·제거한다. 0 길이 벡터, 기본 연산, 빈 월드, 제거 후 ID 접근 및 ID 재사용을 확인한다. 여러 View의 겹치는 조건, 생성·태그/컴포넌트 변경·삭제 후 멤버십, 늦은 View 등록과 씬 종료를 검증한다. 동일한 월드 상태에서 기본 View와 Cached View가 같은 Entity 집합을 반환해야 한다.
-- **확정 방향:** GLM 공통 타입, generation 기반 Entity handle, 컴포넌트별 원본 저장과 View/Cached View 조회를 사용한다. 특정 ECS 라이브러리로 직접 구현을 대체하지 않는다. 정확한 API 이름, 중복 컴포넌트 추가의 실패/교체 정책, 씬/World 클래스 배치는 해당 학습 단계에서 확정한다.
+- **확정 방향:** GLM 공통 타입, generation 기반 Entity handle, 컴포넌트별 원본 저장과 View/Cached View 조회를 사용한다. 특정 ECS 라이브러리로 직접 구현을 대체하지 않는다. ComponentPool의 중복 추가는 거부하고 기존 값을 보존한다. View API와 씬/World 클래스 배치는 해당 학습 단계에서 확정한다.
 
 ### S2-2 ECS 저장·View 계약
 
@@ -97,6 +97,7 @@ S0의 보존 작업과 S2의 구조 설계는 독립적으로 진행할 수 있�
 
 - **Entity 저장소:** 현재 이름이 `SparseSet<T>`인 컨테이너는 자체 슬롯과 generation으로 handle을 발급하는 저장소다. EntityManager가 Entity 식별·생존·삭제 예정 상태를 관리한다. handle은 소속 World/저장소 범위에서 유효하며 서로 다른 World 간 혼용 방지는 이번 구현 범위가 아니다. generation overflow 검사는 사용자 결정으로 제외하고, 같은 슬롯의 세대가 순환하지 않는다는 전제를 유지한다.
 - **ComponentPool<T>:** 이미 발급된 Entity handle을 key로 받아 컴포넌트 원본을 저장한다. Entity handle의 index로 sparse 매핑에 접근하고 dense에 저장한 전체 handle의 generation까지 비교한다. pool이 별도의 Entity handle을 발급하지 않는다. handle을 자체 발급하는 기존 컨테이너를 그대로 중첩해 추가 handle 매핑을 만드는 방식을 기본으로 삼지 않는다.
+- **E2 구현 계약:** `ComponentPool<T>`는 `Emplace(handle, args...)`, `Contains`, `TryGet`, `Remove`, `Clear`, const/non-const `ForEach`, `DenseSize`를 제공한다. 점유된 index에는 같은 generation과 다른 generation 모두 `std::invalid_argument`로 추가를 거부하고 기존 값을 보존한다. 다른 generation의 조회는 null, 제거는 no-op이다. pool은 Entity 생존 여부를 알 수 없으므로 소유자가 생존을 검사하고 슬롯 재사용 전에 이전 컴포넌트를 제거한다. T는 nothrow move construction/assignment를 요구하며 컴포넌트 생성 실패 시 기존 값과 멤버십을 보존한다. 구조 변경 후 참조는 다시 조회하고 순회 중 구조 변경은 금지한다. 이 독립 실험은 ToolKit 결과 타입을 도입하지 않고 기존 ECS의 예외 처리 경계를 유지한다.
 - **기본 View:** 필요한 컴포넌트/태그를 모두 가진 Entity를 순회하는 non-owning 조회 계층이다. 요구하지 않은 컴포넌트가 더 있어도 포함한다. 기준 pool의 Entity를 순회하며 다른 pool의 존재 여부를 확인하고 원본 데이터의 참조를 전달한다. 컴포넌트 복제나 pool 재정렬은 하지 않는다. 생성 시에는 작은 pool을 기준으로 삼을 수 있지만 특정 성능 우위를 검증 없이 주장하지 않는다.
 - **Cached View:** 등록된 조건을 만족하는 Entity handle 목록을 유지하는 View다. 컴포넌트 데이터나 장기 유효한 컴포넌트 포인터를 캐시하지 않는다. 하나의 Entity가 여러 View에 포함될 수 있으며 각 View의 목록만 중복되고 원본 데이터는 pool에 하나씩 존재한다. 같은 시점의 기본 View 결과를 멤버십 검증 기준으로 사용한다.
 - **분류 태그:** `PlayerTag`, `NpcTag`, `ObjectTag`처럼 컴포넌트의 존재로 분류를 표현한다. 최초 View 조건은 필요한 타입의 포함 여부로 한정한다. 태그 사이의 배타성은 자동으로 가정하지 않으며 게임 규칙에서 정한다. 위치·속도·색상 값 자체를 조건으로 사용하는 값 기반 필터는 후속 범위다.
@@ -123,11 +124,13 @@ S0의 보존 작업과 S2의 구조 설계는 독립적으로 진행할 수 있�
 | ID | 상태·선행 | 결과와 관련 경계 | 완료 증거 |
 | --- | --- | --- | --- |
 | S2-2-E1 | complete | `app/ecs/SparseSet.h`, EntityManager, MovementSystem, WorldSandbox의 handle 기반 생성·조회·지연 삭제·순회 연결 | `fe37f07`까지의 dev 빌드, ASan/UBSan과 CPU 상태 검증. 컴포넌트는 아직 Entity의 optional에 있음 |
-| S2-2-E2 | next; E1 | `app/ecs/ComponentPool.h`에서 외부 Entity handle을 key로 받는 독립 `ComponentPool<T>` 구현. 기존 EntityManager와 화면 코드는 우선 유지 | 중간 삭제 후 값/매핑 보존, 없는 값 조회·제거, generation 불일치 거부, 확장·재사용. 중복 추가 정책을 실습 진입 시 확정 |
-| S2-2-E3 | pending; E2 | Entity의 optional을 pool로 분리하고 World/Registry 관리 API와 기본 View 연결. MovementSystem과 렌더링 추출이 해당 조회 경계를 사용 | 두 컴포넌트 교집합만 갱신, 없는 컴포넌트 제외, Entity 삭제 시 pool 정리, 기존 이동/궤적 데이터 유지 및 렌더링 순서 확인 |
+| S2-2-E2 | complete; E1 | `app/ecs/ComponentPool.h`에서 외부 Entity handle을 key로 받는 독립 `ComponentPool<T>` 구현. 기존 EntityManager와 화면 코드는 유지 | 2026-10-09 C++17 독립 소비자 실행 및 ASan/UBSan 통과. 중간 삭제 매핑, 없는 값, generation 불일치, 중복 거부·원본 보존, 확장·재사용, const 순회, 생성 예외·move-only 타입과 실제 SparseSet handle을 사용한 10,000회 모델 비교 확인 |
+| S2-2-E3 | next; E2 | Entity의 optional을 pool로 분리하고 World/Registry 관리 API와 기본 View 연결. MovementSystem과 렌더링 추출이 해당 조회 경계를 사용 | 두 컴포넌트 교집합만 갱신, 없는 컴포넌트 제외, Entity 삭제 시 pool 정리, 기존 이동/궤적 데이터 유지 및 렌더링 순서 확인 |
 | S2-2-E4 | pending; E3 | Player/NPC/Object 분류 태그와 생성 규칙으로 Entity 구성. 기본 View의 조건에 태그 포함 | 같은 컴포넌트라도 태그에 따라 조회 구분, 태그 추가·제거 반영, 한 Entity의 여러 View 참여 |
 | S2-2-E5 | pending; E4 | Cached View 등록과 Entity 생성·구조 변경·삭제 시 멤버십 자동 갱신 | 매 적용 지점에서 기본 View와 결과 집합 비교, 중복 멤버 없음, 오래된 handle 제외, 삭제 예정 처리, 늦은 등록 |
 | S2-2-E6 | pending; E5 | 씬별 템플릿 View 선언을 생성 규칙 및 System 실행에 연결하고 등록 수명 정리 | Player 생성 시 관련 복수 View 자동 포함, 씬 종료·재진입 후 이전 멤버 없음, 빈 씬 정상 동작 |
+
+- **E2 검증 범위:** 임시 소비자 소스를 `clang++ -std=c++17 -Wall -Wextra -Wpedantic -fsanitize=address,undefined -fno-omit-frame-pointer -g -I src/vulkan/vulkan_app`로 컴파일하고 실행했다. 컴파일 경고와 sanitizer 진단이 없었다. 임시 소스·실행 파일은 검증 후 제거했다. 아직 앱에서 pool을 사용하지 않으므로 앱 빌드·GUI 실행은 이번 검증에 포함하지 않는다. 앱 연결과 화면 검증은 E3에서 수행한다.
 
 - **이번 방향의 제외 범위:** 실제 archetype 테이블·chunk 저장, owning group의 pool 재정렬, 병렬 System 스케줄러, 범용 쿼리 언어와 값 기반 조건 감지는 지금 구현하지 않는다. 캐시 자동 갱신은 이번 기능 목표지만 query 성능 최적화는 별도의 측정 근거가 필요하다.
 - **향후 저장 전략:** System은 컴포넌트 조합을 요청하는 View 경계를 사용한다. 병목이 확인되면 멤버십 인덱스·특정 group 또는 archetype을 검토할 수 있으나 동일한 내부 구현이나 포인터 안정성을 보장하지 않는다. archetype으로 전환하더라도 Entity handle의 정체성과 수명은 컴포넌트의 테이블 이동과 분리한다.
